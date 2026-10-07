@@ -38,7 +38,7 @@ to translate.
 
 | Upstream source | Rust destination | Status | Notes |
 |---|---|---|---|
-| `lp_types.{h,cc}` | `lp_data/src/lp_types.rs` | not started | Strong indices, dense vectors, statuses |
+| `lp_types.{h,cc}` | `lp_data/src/lp_types.rs` | in progress | Strong indices, typed dense vectors, statuses, and scalar helpers ported and unit-tested; bit vectors and sparse entry iterator remain |
 | `sparse_vector.h` | `lp_data/src/sparse_vector.rs` | not started | Generic sparse vector |
 | `sparse_column.{h,cc}` | `lp_data/src/sparse_column.rs` | not started | Column specialization |
 | `sparse_row.h` | `lp_data/src/sparse_row.rs` | not started | Row specialization |
