@@ -40,6 +40,12 @@ cmake -S . -B build-gloprs-reference -G Ninja \
   -DINSTALL_BUILD_DEPS=OFF
 ```
 
+The MPS-capable generic `solve` reference binary is built separately in
+`../or-tools/build-gloprs-solve` with `BUILD_CXX=ON`, all optional solver
+backends except GLOP disabled, and `USE_GUROBI=ON` only to satisfy generic
+OR-Tools model-builder symbols (the reference invocation explicitly selects
+GLOP and does not load Gurobi).
+
 The `simple_glop_program` target builds successfully. Its CTest entry passes
 and the executable reports the expected optimal objective value `4`. The
 standalone build does not include `mps_reader.cc`; the MPS-capable structured

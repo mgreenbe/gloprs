@@ -60,8 +60,10 @@ Exit criterion:
 
 Status: in progress. OR-Tools 9.15 commit
 `100f66e6242ab8bf8d32feb8f3bf086db66ae2b5` is pinned, the standalone GLOP
-sample builds and passes, and the initial source inventory is in `PORTING.md`.
-The structured MPS reference runner remains to be completed.
+sample builds and passes, the initial source inventory is in `PORTING.md`, and
+`tools/run_glop_reference.py` provides normalized JSON results from a native
+MPS solve. Basis extraction is not exposed by OR-Tools' generic `solve` binary
+and remains to be added through a focused native adapter.
 
 Deliverables:
 
@@ -114,6 +116,12 @@ Exit criteria:
 - The porting table maps upstream modules to workspace crates.
 
 ## Phase 2: create the Netlib test corpus
+
+Status: in progress. `tools/fetch_netlib.py` reproducibly downloads and expands
+93 directly published Netlib problems into `../datasets/netlib`, records source
+and expanded checksums plus catalog metadata, and generates the 10, 25, 50, and
+full subsets. Generated-only instances, a representative numerical subset, and
+full native GLOP baselines remain.
 
 Write a deterministic downloader/indexer that places the Netlib `.mps` files
 under the shared monorepo path `../datasets/netlib/` (that is,
