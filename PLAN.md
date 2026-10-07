@@ -58,6 +58,11 @@ Exit criterion:
 
 ## Phase 0: pin and inventory upstream
 
+Status: in progress. OR-Tools 9.15 commit
+`100f66e6242ab8bf8d32feb8f3bf086db66ae2b5` is pinned, the standalone GLOP
+sample builds and passes, and the initial source inventory is in `PORTING.md`.
+The structured MPS reference runner remains to be completed.
+
 Deliverables:
 
 - Create or clone `../or-tools` from the official Google OR-Tools repository.
