@@ -5,9 +5,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
 import re
+import resource
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -30,8 +33,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mps", type=Path)
     parser.add_argument("--solver", type=Path, default=DEFAULT_SOLVER)
+    parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="omit primal, dual, and reduced-cost vectors",
+    )
     args = parser.parse_args()
 
+    start = time.perf_counter()
     with tempfile.TemporaryDirectory(prefix="gloprs-reference-") as temporary:
         response_stem = Path(temporary) / "response"
         completed = subprocess.run(
@@ -53,6 +62,11 @@ def main() -> None:
             if response_path.exists()
             else None
         )
+    wall_time = time.perf_counter() - start
+    maximum_rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+    peak_resident_set_bytes = (
+        maximum_rss if platform.system() == "Darwin" else maximum_rss * 1024
+    )
 
     result = {
         "input": str(args.mps),
@@ -64,6 +78,8 @@ def main() -> None:
             int(value) if (value := last_match(r"^iterations:\s*(\d+)\s*$", log)) else None
         ),
         "solve_time_seconds": optional_float(rf"^time:\s*({FLOAT})\s*$", log),
+        "wall_time_seconds": wall_time,
+        "peak_resident_set_bytes": peak_resident_set_bytes,
         "deterministic_time": optional_float(
             rf"^deterministic_time:\s*({FLOAT})\s*$", log
         ),
@@ -79,6 +95,9 @@ def main() -> None:
         "basis": None,
         "basis_note": "OR-Tools solve does not expose GLOP basis statuses in its response",
     }
+    if args.summary:
+        for key in ("variable_values", "dual_values", "reduced_costs"):
+            del result[key]
     print(json.dumps(result, indent=2, sort_keys=True))
     if completed.returncode != 0:
         raise SystemExit(completed.returncode)

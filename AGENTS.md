@@ -21,6 +21,14 @@ Translate the pinned upstream source as faithfully as Rust permits:
 Read `PLAN.md` before beginning substantial work and update it when milestones,
 scope, or evidence change.
 
+Keep `PORTING.md` current as the file-level ledger for the port. Add upstream
+files and dependencies when they enter scope; update each row's Rust
+destination, status, test evidence, divergences, and notes in the same change
+that alters the corresponding port. Do not remove completed rows: the table is
+the durable correspondence between the pinned upstream tree and the Rust tree.
+Use `validated` only when the relevant unit tests and, where solver behavior is
+affected, differential evidence against pinned GLOP both exist.
+
 ## Repository layout
 
 The intended Cargo workspace mirrors the relevant part of `ortools/`:
@@ -158,4 +166,6 @@ the shared source corpus.
 - Preserve user changes and unrelated worktree state.
 - Update `PLAN.md` when completing a milestone or discovering a dependency,
   incompatibility, or performance risk.
+- Update the corresponding `PORTING.md` rows whenever port status, destination,
+  dependencies, test evidence, or deliberate divergences change.
 - State what was tested and what remains unverified in every handoff.

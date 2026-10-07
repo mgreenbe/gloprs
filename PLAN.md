@@ -37,146 +37,37 @@ The project is successful when:
 - Store reusable datasets at the monorepo level under `../datasets` rather than
   inside `gloprs`; other packages in `sparse` may consume the same corpora.
 
-## Project bootstrap
-
-Initialize `gloprs` as its own Git repository before downloading or generating
-anything:
-
-- run `git init` in `sparse/gloprs`;
-- configure `origin` as `https://github.com/mgreenbe/gloprs.git` and verify the
-  intended default branch before the first push;
-- add an appropriate `.gitignore` before any build or download step;
-- commit `AGENTS.md`, `PLAN.md`, the project prompt, licensing files, and the
-  initial workspace scaffold as the reproducible project baseline;
-- keep the sibling `../or-tools` checkout, shared `../datasets`, Cargo build
-  output, local profiles, and benchmark scratch data out of this repository.
-
-Exit criterion:
-
-- `gloprs` is an independent Git repository with a clean working tree and an
-  initial baseline commit.
-
 ## Phase 0: pin and inventory upstream
 
-Status: in progress. OR-Tools 9.15 commit
-`100f66e6242ab8bf8d32feb8f3bf086db66ae2b5` is pinned, the standalone GLOP
-sample builds and passes, the initial source inventory is in `PORTING.md`, and
-`tools/run_glop_reference.py` provides normalized JSON results from a native
-MPS solve. Basis extraction is not exposed by OR-Tools' generic `solve` binary
-and remains to be added through a focused native adapter.
+Status: nearly complete. The pinned upstream configuration is recorded in
+`UPSTREAM.md`, and `PORTING.md` contains the initial file inventory. The native
+GLOP builds pass, and `tools/run_glop_reference.py` emits normalized JSON for
+MPS solves.
 
-Deliverables:
+Remaining work:
 
-- Create or clone `../or-tools` from the official Google OR-Tools repository.
-- Record the remote URL, exact commit SHA, branch/tag, OR-Tools version, license,
-  C++ compiler, and build flags in an upstream manifest.
-- Build the native GLOP solver and run its relevant unit tests.
-- Produce an inventory of `ortools/glop`, the required portion of
-  `ortools/lp_data`, and any dependencies in `ortools/base` or utility modules.
-- Create a porting table with one row per upstream source/test file and columns
-  for Rust destination, dependency status, test status, divergences, and notes.
-- Build a minimal reference CLI that accepts an MPS file and emits
-  machine-readable status, objective, iterations, timings, residuals, and basis
-  information.
+- Add a focused native adapter exposing row and column basis statuses, which
+  OR-Tools' generic `solve` response omits.
 
 Exit criteria:
 
-- The upstream SHA is immutable and recorded.
-- The reference CLI solves at least one small LP reproducibly.
-- Every initially relevant GLOP file is accounted for in the porting table.
+- Basis statuses are present in structured reference results.
 
-## Phase 1: establish the Rust workspace
-
-Create a Cargo workspace with:
-
-- `lp_data`: model types, typed indices, sparse vectors/matrices, and readers;
-- `glop`: numerical kernels and solver implementation;
-- `cli`: MPS solving and structured result output;
-- `tools`: dataset and differential-test utilities if these do not fit the CLI;
-- benchmark targets for kernels and end-to-end solves.
-
-Set project-wide policy:
-
-- pinned Rust toolchain and edition;
-- `rustfmt` and strict Clippy;
-- debug and release profiles, including an explicitly documented benchmark
-  profile;
-- CI commands and supported platforms;
-- Apache-2.0 licensing and upstream attribution;
-- deterministic test seeds and floating-point comparison helpers.
-
-Avoid choosing broad frameworks prematurely. Add dependencies only for a clear
-need such as CLI parsing, error reporting, serialization, checksums, or
-benchmarking.
-
-Exit criteria:
-
-- All workspace checks pass in CI and locally.
-- A placeholder CLI and library API compile.
-- The porting table maps upstream modules to workspace crates.
-
-## Phase 2: create the Netlib test corpus
-
-Status: in progress. `tools/fetch_netlib.py` reproducibly downloads and expands
-93 directly published Netlib problems into `../datasets/netlib`, records source
-and expanded checksums plus catalog metadata, and generates the 10, 25, 50, and
-full subsets. Generated-only instances, a representative numerical subset, and
-full native GLOP baselines remain.
-
-Write a deterministic downloader/indexer that places the Netlib `.mps` files
-under the shared monorepo path `../datasets/netlib/` (that is,
-`sparse/datasets/netlib/`) and produces a manifest there containing:
-
-- canonical instance name and relative path;
-- source URL and retrieval date;
-- SHA-256 checksum and compressed/uncompressed byte sizes;
-- row count, column count, and structural nonzero count;
-- objective sense;
-- published best-known status and objective when available;
-- parsing caveats, ranges, integer markers, or unsupported constructs;
-- license and provenance notes.
-
-Generate named subsets from the manifest:
-
-- 10 smallest instances;
-- 25 smallest instances;
-- 50 smallest instances;
-- representative small instances by sparsity and numerical characteristics;
-- full Netlib corpus.
-
-Represent subsets as manifests or ordered identifier lists beneath
-`../datasets/netlib/`; do not copy instances into `gloprs` or duplicate the MPS
-files for each subset. Keep GLOP/gloprs-specific run results and performance
-reports within the `gloprs` project, since those are not shared source data.
-
-Define “smallest” explicitly, initially by uncompressed MPS byte size, and keep
-the derivation script and resulting ordered IDs in version control. Do not make
-duplicate physical copies of an instance merely to form a subset.
-
-Run the pinned GLOP reference CLI over every instance and store normalized
-baseline metadata: status, objective, iterations, residuals, timings, and peak
-memory where practical.
-
-Exit criteria:
-
-- Downloads are checksum-verified and reproducible.
-- The reference GLOP baseline exists for every parseable instance.
-- Smoke subsets can be regenerated exactly from the manifest.
-
-## Phase 3: port `lp_data` foundations
+## Phase 1: port `lp_data` foundations
 
 Port the minimum model and sparse-data layer needed by GLOP:
 
-1. Strong row, column, variable, and constraint index types.
-2. Dense typed vectors and permutations.
-3. Sparse vectors and column-oriented sparse matrices.
-4. Scattered-vector workspaces and nonzero-pattern tracking.
-5. Linear-program model representation: bounds, objective, names, scaling
-   metadata, and basis status.
-6. Model validation and canonicalization.
-7. Fixed/free MPS parsing, including bounds, ranges, objective sense, duplicate
-   entries, and numerical edge cases used in Netlib.
-8. Deterministic model and solution summaries for differential testing.
+1. Complete the remaining `lp_types` facilities, including bit vectors and the
+   sparse entry iterator.
+2. Complete sparse-vector operations, column views, typed permutations, sparse
+   rows, and column-oriented sparse matrices.
+3. Add scattered-vector workspaces and nonzero-pattern tracking.
+4. Add the linear-program model representation: bounds, objective, names,
+   scaling metadata, and basis status.
+5. Add model validation and canonicalization.
+6. Port fixed/free MPS parsing, including bounds, ranges, objective sense,
+   duplicate entries, and numerical edge cases used in Netlib.
+7. Add deterministic model and solution summaries for differential testing.
 
 Port the associated upstream tests before adding solver behavior. Add parser
 golden tests and round-trip or normalization tests where exact text emission is
@@ -188,7 +79,7 @@ Exit criteria:
 - Parsed dimensions, nonzeros, bounds, and objectives agree with GLOP.
 - Sparse primitive tests and microbenchmarks are established.
 
-## Phase 4: port numerical and basis kernels
+## Phase 2: port numerical and basis kernels
 
 Port the hot foundations in dependency order, preserving upstream file
 boundaries where practical:
@@ -217,7 +108,7 @@ Exit criteria:
 - Basis solves and updates agree with fresh factorization.
 - Kernel benchmarks identify no unexplained order-of-magnitude regression.
 
-## Phase 5: port simplex state and pivot mechanics
+## Phase 3: port simplex state and pivot mechanics
 
 Port the components that maintain revised-simplex state:
 
@@ -242,7 +133,7 @@ Exit criteria:
 - Multi-iteration traces agree on deterministic fixtures.
 - Refactorization and incremental basis updates remain numerically consistent.
 
-## Phase 6: port revised simplex end to end
+## Phase 4: port revised simplex end to end
 
 Translate the revised-simplex driver and its immediate orchestration:
 
@@ -273,7 +164,7 @@ Exit criteria:
 - Independent KKT/residual validation passes.
 - Any iteration divergence is understood and recorded.
 
-## Phase 7: port scaling and preprocessing
+## Phase 5: port scaling and preprocessing
 
 Port scaling and preprocessors incrementally, one transformation at a time.
 Each transformation needs:
@@ -300,7 +191,7 @@ Exit criteria:
   solutions.
 - The default preprocessing pipeline agrees with GLOP across Netlib.
 
-## Phase 8: parameters and public API
+## Phase 6: parameters and public API
 
 Replace `parameters.proto` with ordinary Rust types while retaining:
 
@@ -327,7 +218,7 @@ Exit criteria:
 - Public examples solve representative LPs.
 - Warm-start behavior is covered by differential tests.
 
-## Phase 9: full differential validation
+## Phase 7: full differential validation
 
 Build a harness that runs GLOP and `gloprs` with matched parameters and compares:
 
@@ -359,7 +250,7 @@ Exit criteria:
 - No unexplained incorrect status or invalid solution remains.
 - Known divergences have issue references and minimized tests.
 
-## Phase 10: performance parity campaign
+## Phase 8: performance parity campaign
 
 Benchmark native GLOP and `gloprs` on the same machine with pinned compilers and
 equivalent optimized settings. Use repeated runs, warm caches where appropriate,
@@ -413,11 +304,8 @@ Exit criteria:
 
 ## Immediate next actions
 
-1. Initialize `sparse/gloprs` as an independent Git repository and add its
-   baseline `.gitignore`, licensing files, and initial commit.
-2. Initialize the Cargo workspace.
-3. Clone and pin the official OR-Tools reference in `../or-tools`.
-4. Generate the upstream file/dependency inventory and porting table.
-5. Build a small native GLOP reference runner with structured output.
-6. Implement the Netlib downloader and manifest schema.
-7. Port strong indices and sparse `lp_data` primitives with tests.
+1. Complete typed permutations and the remaining sparse-vector and column-view
+   operations, updating `PORTING.md` with tests and representation divergences.
+2. Port sparse rows, sparse matrices, and scattered-vector workspaces.
+3. Add the focused native GLOP basis-status adapter.
+4. Port the core linear-program model and begin the fixed/free MPS parser.
