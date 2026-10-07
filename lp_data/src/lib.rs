@@ -3,3 +3,4 @@
 #![forbid(unsafe_code)]
 
 pub mod lp_types;
+pub mod sparse_vector;

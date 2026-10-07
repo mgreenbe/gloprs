@@ -39,8 +39,8 @@ to translate.
 | Upstream source | Rust destination | Status | Notes |
 |---|---|---|---|
 | `lp_types.{h,cc}` | `lp_data/src/lp_types.rs` | in progress | Strong indices, typed dense vectors, statuses, and scalar helpers ported and unit-tested; bit vectors and sparse entry iterator remain |
-| `sparse_vector.h` | `lp_data/src/sparse_vector.rs` | not started | Generic sparse vector |
-| `sparse_column.{h,cc}` | `lp_data/src/sparse_column.rs` | not started | Column specialization |
+| `sparse_vector.h` | `lp_data/src/sparse_vector.rs` | in progress | Core insertion, cleanup, lookup, dense accumulation, and mutation behavior ported; advanced permutation and sparse-merge operations remain |
+| `sparse_column.{h,cc}` | `lp_data/src/sparse_vector.rs` | in progress | Column alias and random-access sparse column ported; column views remain |
 | `sparse_row.h` | `lp_data/src/sparse_row.rs` | not started | Row specialization |
 | `sparse.{h,cc}` | `lp_data/src/sparse.rs` | not started | Sparse matrix and transpose |
 | `scattered_vector.h` | `lp_data/src/scattered_vector.rs` | not started | Reusable scattered workspace |
