@@ -16,3 +16,6 @@ name = "glop"
 [lints]
 workspace = true
 
+[[bench]]
+name = "basis_kernels"
+harness = false

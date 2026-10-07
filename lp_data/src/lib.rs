@@ -10,3 +10,4 @@ pub mod scattered_vector;
 pub mod sparse;
 pub mod sparse_row;
 pub mod sparse_vector;
+pub mod triangular_matrix;

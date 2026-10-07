@@ -31,6 +31,12 @@ cargo build -p gloprs-cli
 python3 tools/validate_netlib_parse.py
 ```
 
+Run the Phase-2 numerical-kernel benchmark with:
+
+```text
+cargo bench -p gloprs-glop --bench basis_kernels
+```
+
 ## License
 
 Apache-2.0. This project includes translated and derived work from Google

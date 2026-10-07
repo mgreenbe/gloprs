@@ -10,23 +10,23 @@ component affects solver behavior.
 
 | Upstream source | Rust destination | Status | Notes |
 |---|---|---|---|
-| `basis_representation.{h,cc}` | `glop/src/basis_representation.rs` | not started | Basis factorization and updates |
-| `dual_edge_norms.{h,cc}` | `glop/src/dual_edge_norms.rs` | not started | Dual pricing norms |
+| `basis_representation.{h,cc}` | `glop/src/basis_representation.rs` | ported | LU plus product-form eta updates, refactorization, direct/transpose solves, and condition number; update chains agree with fresh factorization |
+| `dual_edge_norms.{h,cc}` | `glop/src/dual_edge_norms.rs` | ported | Exact dual edge squared norms through transpose solves; incremental Phase-3 maintenance remains |
 | `entering_variable.{h,cc}` | `glop/src/entering_variable.rs` | not started | Entering-variable selection |
 | `initial_basis.{h,cc}` | `glop/src/initial_basis.rs` | not started | Crash/initial basis |
 | `lp_solver.{h,cc}` | `glop/src/lp_solver.rs` | not started | Public solver orchestration |
-| `lu_factorization.{h,cc}` | `glop/src/lu_factorization.rs` | not started | Sparse LU kernel |
-| `markowitz.{h,cc}` | `glop/src/markowitz.rs` | not started | Markowitz pivoting |
+| `lu_factorization.{h,cc}` | `glop/src/lu_factorization.rs` | ported | Threshold-Markowitz LU, row/column permutations, direct/transpose solves, determinant, inverse norms, fill count, singularity handling; randomized residual tests pass. Initial implementation uses a packed numerical workspace pending profile-guided sparse-workspace refinement |
+| `markowitz.{h,cc}` | `glop/src/markowitz.rs` | ported | Stable threshold candidate filtering and minimum Markowitz-product selection with deterministic ties |
 | `parameters.proto` | `glop/src/parameters.rs` | not started | Replace protobuf with Rust types and identical defaults |
 | `parameters_validation.{h,cc}` | `glop/src/parameters_validation.rs` | not started | Parameter validation |
 | `preprocessor.{h,cc}` | `glop/src/preprocessor.rs` | not started | Presolve and postsolve stack |
 | `pricing.h` | `glop/src/pricing.rs` | not started | Pricing rules/templates |
-| `primal_edge_norms.{h,cc}` | `glop/src/primal_edge_norms.rs` | not started | Primal pricing norms |
-| `rank_one_update.h` | `glop/src/rank_one_update.rs` | not started | Rank-one update helper |
+| `primal_edge_norms.{h,cc}` | `glop/src/primal_edge_norms.rs` | ported | Exact primal edge squared norms through basis solves; incremental Phase-3 maintenance remains |
+| `rank_one_update.h` | `glop/src/rank_one_update.rs` | ported | Eta right and transpose/left solves used by basis updates |
 | `reduced_costs.{h,cc}` | `glop/src/reduced_costs.rs` | not started | Reduced costs and dual feasibility |
 | `revised_simplex.{h,cc}` | `glop/src/revised_simplex.rs` | not started | Core primal/dual simplex loop |
 | `status.{h,cc}` | `glop/src/status.rs` | not started | Problem and variable statuses |
-| `update_row.{h,cc}` | `glop/src/update_row.rs` | not started | Sparse update-row computation |
+| `update_row.{h,cc}` | `glop/src/update_row.rs` | ported | Computes rows of `B^-1 A` via one transpose solve and sparse column products |
 | `variable_values.{h,cc}` | `glop/src/variable_values.rs` | not started | Primal values and feasibility |
 | `variables_info.{h,cc}` | `glop/src/variables_info.rs` | not started | Bounds and variable state |
 
@@ -42,7 +42,7 @@ to translate.
 | `sparse_vector.h` | `lp_data/src/sparse_vector.rs` | validated | Insertion, cleanup, lookup, dense conversion/accumulation, component-wise operations, mutation, and typed permutation; unit-tested |
 | `sparse_column.{h,cc}` | `lp_data/src/sparse_vector.rs` | validated | Column/view aliases and random-access sparse column with touched-row clearing; unit-tested |
 | `sparse_row.h` | `lp_data/src/sparse_row.rs` | ported | Thin row specialization over the shared sparse-vector representation |
-| `sparse.{h,cc}` | `lp_data/src/sparse.rs` | validated | Phase-1 column matrix, transpose, norms, deletion, and permutation operations; unit-tested |
+| `sparse.{h,cc}` | `lp_data/src/sparse.rs`, `lp_data/src/triangular_matrix.rs` | validated | Column and compact CSC storage, borrowed basis/matrix views, transpose, norms, deletion/permutation, and direct/transpose triangular solves; unit-tested |
 | `scattered_vector.h` | `lp_data/src/scattered_vector.rs` | validated | Reusable dense values plus touched-index pattern; unit-tested |
 | `permutation.h` | `lp_data/src/permutation.rs` | validated | Typed permutations, inverses, signatures, and vector application; unit-tested |
 | `lp_data.{h,cc}` | `lp_data/src/lp_data.rs` | validated | Model, bounds, objective metadata, basis-bearing `ProblemSolution`, validation, and deterministic summaries; all Netlib parser fingerprints agree with native GLOP |

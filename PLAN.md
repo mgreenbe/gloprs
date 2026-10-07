@@ -85,6 +85,17 @@ Exit criteria:
 
 ## Phase 2: port numerical and basis kernels
 
+Status: complete as the correctness baseline. Compact and borrowed sparse
+views, triangular solves, threshold-Markowitz LU, direct and transpose solves,
+product-form basis updates, refactorization, update rows, exact edge norms,
+residual checks, inverse norms, and condition estimates are implemented.
+Deterministically generated randomized systems and adversarial singular and
+badly scaled cases pass; update chains agree with fresh factorization. Kernel
+microbenchmarks are established in `glop/benches/basis_kernels.rs`. The first
+LU implementation deliberately uses a packed numerical workspace; replacing
+that workspace with GLOP's hyper-sparse left-looking representation is a
+recorded performance refinement, not a solver-semantics change.
+
 Port the hot foundations in dependency order, preserving upstream file
 boundaries where practical:
 
@@ -308,8 +319,9 @@ Exit criteria:
 
 ## Immediate next actions
 
-1. Begin Phase 2 with the dense/scattered vector operations and sparse matrix
-   views required by the numerical kernels.
-2. Port triangular solves and transpose solves with dense-reference tests.
-3. Port sparse LU and Markowitz pivot selection with residual tests and
-   microbenchmarks.
+1. Begin Phase 3 with variable bounds, statuses, and boxed-variable
+   transitions.
+2. Port reduced costs, pricing, and primal/dual ratio tests against controlled
+   dictionaries.
+3. Integrate basis changes, update rows, edge-norm maintenance, and
+   refactorization policy into deterministic one-iteration tests.

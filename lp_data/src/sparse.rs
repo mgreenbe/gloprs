@@ -12,6 +12,124 @@ pub struct SparseMatrix {
     num_rows: RowIndex,
 }
 
+#[derive(Clone, Debug)]
+pub struct CompactSparseMatrix {
+    starts: Vec<usize>,
+    rows: Vec<RowIndex>,
+    coefficients: Vec<Fractional>,
+    num_rows: RowIndex,
+}
+
+impl CompactSparseMatrix {
+    #[must_use]
+    pub fn from_sparse(matrix: &SparseMatrix) -> Self {
+        let mut starts = Vec::with_capacity(matrix.num_cols().to_usize() + 1);
+        let mut rows = Vec::with_capacity(matrix.num_entries().value().try_into().unwrap_or(0));
+        let mut coefficients = Vec::with_capacity(rows.capacity());
+        starts.push(0);
+        for column in 0..matrix.num_cols().to_usize() {
+            for entry in matrix.column(ColIndex::from_usize(column)) {
+                rows.push(entry.index());
+                coefficients.push(entry.coefficient());
+            }
+            starts.push(rows.len());
+        }
+        Self {
+            starts,
+            rows,
+            coefficients,
+            num_rows: matrix.num_rows(),
+        }
+    }
+
+    #[must_use]
+    pub const fn num_rows(&self) -> RowIndex {
+        self.num_rows
+    }
+
+    #[must_use]
+    pub fn num_cols(&self) -> ColIndex {
+        ColIndex::from_usize(self.starts.len() - 1)
+    }
+
+    #[must_use]
+    pub fn column(&self, column: ColIndex) -> CompactColumn<'_> {
+        let start = self.starts[column.to_usize()];
+        let end = self.starts[column.to_usize() + 1];
+        CompactColumn {
+            rows: &self.rows[start..end],
+            coefficients: &self.coefficients[start..end],
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct CompactColumn<'a> {
+    rows: &'a [RowIndex],
+    coefficients: &'a [Fractional],
+}
+
+impl<'a> CompactColumn<'a> {
+    pub fn iter(self) -> impl Iterator<Item = (RowIndex, Fractional)> + 'a {
+        self.rows
+            .iter()
+            .copied()
+            .zip(self.coefficients.iter().copied())
+    }
+
+    #[must_use]
+    pub const fn len(self) -> usize {
+        self.rows.len()
+    }
+
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.rows.is_empty()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MatrixView<'a> {
+    columns: Vec<&'a SparseColumn>,
+    num_rows: RowIndex,
+}
+
+impl<'a> MatrixView<'a> {
+    #[must_use]
+    pub fn from_matrix(matrix: &'a SparseMatrix) -> Self {
+        let columns = (0..matrix.num_cols().to_usize())
+            .map(|column| matrix.column(ColIndex::from_usize(column)))
+            .collect();
+        Self {
+            columns,
+            num_rows: matrix.num_rows(),
+        }
+    }
+
+    #[must_use]
+    pub fn from_basis(matrix: &'a SparseMatrix, basis: &[ColIndex]) -> Self {
+        Self {
+            columns: basis.iter().map(|&column| matrix.column(column)).collect(),
+            num_rows: matrix.num_rows(),
+        }
+    }
+
+    #[must_use]
+    pub const fn num_rows(&self) -> RowIndex {
+        self.num_rows
+    }
+
+    #[must_use]
+    pub fn num_cols(&self) -> ColIndex {
+        ColIndex::from_usize(self.columns.len())
+    }
+
+    #[must_use]
+    pub fn column(&self, column: ColIndex) -> &'a SparseColumn {
+        self.columns[column.to_usize()]
+    }
+}
+
 impl SparseMatrix {
     #[must_use]
     pub const fn new() -> Self {
@@ -85,6 +203,10 @@ impl SparseMatrix {
 
     pub fn mutable_column(&mut self, column: ColIndex) -> &mut SparseColumn {
         &mut self.columns[column.to_usize()]
+    }
+
+    pub fn replace_column(&mut self, column: ColIndex, replacement: SparseColumn) {
+        self.columns[column.to_usize()] = replacement;
     }
 
     #[must_use]
@@ -177,5 +299,20 @@ mod tests {
         );
         assert_eq!(matrix.one_norm(), 4.0);
         assert_eq!(matrix.infinity_norm(), 4.0);
+
+        let compact = CompactSparseMatrix::from_sparse(&matrix);
+        assert_eq!(compact.num_rows(), RowIndex::new(3));
+        assert_eq!(compact.num_cols(), ColIndex::new(2));
+        assert_eq!(
+            compact.column(ColIndex::new(0)).iter().collect::<Vec<_>>(),
+            vec![(RowIndex::new(2), 4.0)]
+        );
+        let view = MatrixView::from_basis(&matrix, &[ColIndex::new(1)]);
+        assert_eq!(view.num_cols(), ColIndex::new(1));
+        assert_eq!(
+            view.column(ColIndex::new(0))
+                .look_up_coefficient(RowIndex::new(0)),
+            -3.0
+        );
     }
 }
