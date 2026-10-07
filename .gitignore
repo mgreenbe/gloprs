@@ -1,0 +1,11 @@
+/target/
+**/*.profraw
+*.dSYM/
+.DS_Store
+.idea/
+.vscode/
+
+# Local benchmark and profiling output.
+/benchmark-results/local/
+/profiles/
+

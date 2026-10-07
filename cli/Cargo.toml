@@ -1,0 +1,19 @@
+[package]
+name = "gloprs-cli"
+description = "Command-line tools for gloprs"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+glop = { package = "gloprs-glop", path = "../glop" }
+
+[[bin]]
+name = "gloprs"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+

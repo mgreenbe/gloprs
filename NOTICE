@@ -1,0 +1,6 @@
+gloprs
+Copyright 2026 Matthew Greenberg
+
+This project is a Rust port of portions of Google OR-Tools. OR-Tools is
+Copyright 2010-2026 Google LLC and is licensed under the Apache License 2.0.
+

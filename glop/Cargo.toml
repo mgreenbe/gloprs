@@ -1,0 +1,18 @@
+[package]
+name = "gloprs-glop"
+description = "A Rust port of the GLOP linear-programming solver"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+lp_data = { package = "gloprs-lp-data", path = "../lp_data" }
+
+[lib]
+name = "glop"
+
+[lints]
+workspace = true
+
