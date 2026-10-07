@@ -59,6 +59,7 @@ def main() -> None:
             if response
             else None
         ),
+        "model": response.get("model") if response else None,
         "objective": response.get("objective") if response else None,
         "best_bound": None,
         "iterations": response.get("iterations") if response else None,

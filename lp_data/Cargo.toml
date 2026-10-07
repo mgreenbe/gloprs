@@ -13,3 +13,6 @@ name = "lp_data"
 [lints]
 workspace = true
 
+[[bench]]
+name = "sparse_primitives"
+harness = false

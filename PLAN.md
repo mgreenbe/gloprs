@@ -51,6 +51,14 @@ Exit criteria:
 
 ## Phase 1: port `lp_data` foundations
 
+Status: complete. Typed sparse primitives, permutations, scattered workspaces,
+the linear-program model, validation, deterministic summaries, and fixed/free
+MPS parsing are implemented. All 98 models in the shared Netlib manifest parse,
+and dimensions, nonzeros, bounds, and objective data agree with the pinned
+native GLOP model via `tools/validate_netlib_parse.py`. A dependency-free
+sparse-primitive microbenchmark is available as `cargo bench -p
+gloprs-lp-data --bench sparse_primitives`.
+
 Port the minimum model and sparse-data layer needed by GLOP:
 
 1. Complete the remaining `lp_types` facilities, including bit vectors and the
@@ -300,7 +308,8 @@ Exit criteria:
 
 ## Immediate next actions
 
-1. Complete typed permutations and the remaining sparse-vector and column-view
-   operations, updating `PORTING.md` with tests and representation divergences.
-2. Port sparse rows, sparse matrices, and scattered-vector workspaces.
-3. Port the core linear-program model and begin the fixed/free MPS parser.
+1. Begin Phase 2 with the dense/scattered vector operations and sparse matrix
+   views required by the numerical kernels.
+2. Port triangular solves and transpose solves with dense-reference tests.
+3. Port sparse LU and Markowitz pivot selection with residual tests and
+   microbenchmarks.

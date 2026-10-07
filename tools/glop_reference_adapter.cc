@@ -7,6 +7,8 @@
 
 #include <cstdlib>
 #include <chrono>
+#include <bit>
+#include <cstdint>
 #include <iomanip>
 #include <iostream>
 #include <string>
@@ -18,6 +20,29 @@
 #include "ortools/lp_data/proto_utils.h"
 
 namespace glop = operations_research::glop;
+
+uint64_t ModelDataFingerprint(const glop::LinearProgram& lp) {
+  uint64_t hash = 14695981039346656037ULL;
+  const auto add_byte = [&hash](uint8_t byte) {
+    hash ^= byte;
+    hash *= 1099511628211ULL;
+  };
+  add_byte(lp.IsMaximizationProblem() ? 1 : 0);
+  const auto add_double = [&add_byte](double value) {
+    const uint64_t bits = std::bit_cast<uint64_t>(value);
+    for (int shift = 0; shift < 64; shift += 8) {
+      add_byte(static_cast<uint8_t>(bits >> shift));
+    }
+  };
+  add_double(lp.objective_offset());
+  add_double(lp.objective_scaling_factor());
+  for (const double value : lp.objective_coefficients()) add_double(value);
+  for (const double value : lp.variable_lower_bounds()) add_double(value);
+  for (const double value : lp.variable_upper_bounds()) add_double(value);
+  for (const double value : lp.constraint_lower_bounds()) add_double(value);
+  for (const double value : lp.constraint_upper_bounds()) add_double(value);
+  return hash;
+}
 
 template <typename Vector, typename Convert>
 void PrintStringArray(const Vector& values, Convert convert) {
@@ -65,7 +90,13 @@ int main(int argc, char** argv) {
 
   std::cout << std::setprecision(17);
   std::cout << "{\"status\":\"" << glop::GetProblemStatusString(status)
-            << "\",\"objective\":" << solver.GetObjectiveValue()
+            << "\",\"model\":{\"rows\":" << lp.num_constraints().value()
+            << ",\"columns\":" << lp.num_variables().value()
+            << ",\"nonzeros\":" << lp.num_entries().value()
+            << ",\"data_fingerprint\":\"" << std::hex
+            << std::setw(16) << std::setfill('0') << ModelDataFingerprint(lp)
+            << std::dec << "\"}"
+            << ",\"objective\":" << solver.GetObjectiveValue()
             << ",\"iterations\":" << solver.GetNumberOfSimplexIterations()
             << ",\"solve_time_seconds\":" << solve_time.count()
             << ",\"deterministic_time\":" << solver.DeterministicTime()

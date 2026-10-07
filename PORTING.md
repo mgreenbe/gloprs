@@ -38,23 +38,23 @@ to translate.
 
 | Upstream source | Rust destination | Status | Notes |
 |---|---|---|---|
-| `lp_types.{h,cc}` | `lp_data/src/lp_types.rs` | in progress | Strong indices, typed dense vectors, statuses, and scalar helpers ported and unit-tested; bit vectors and sparse entry iterator remain |
-| `sparse_vector.h` | `lp_data/src/sparse_vector.rs` | in progress | Core insertion, cleanup, lookup, dense accumulation, and mutation behavior ported; advanced permutation and sparse-merge operations remain |
-| `sparse_column.{h,cc}` | `lp_data/src/sparse_vector.rs` | in progress | Column alias and random-access sparse column ported; column views remain |
-| `sparse_row.h` | `lp_data/src/sparse_row.rs` | not started | Row specialization |
-| `sparse.{h,cc}` | `lp_data/src/sparse.rs` | not started | Sparse matrix and transpose |
-| `scattered_vector.h` | `lp_data/src/scattered_vector.rs` | not started | Reusable scattered workspace |
-| `permutation.h` | `lp_data/src/permutation.rs` | not started | Typed permutations |
-| `lp_data.{h,cc}` | `lp_data/src/lp_data.rs` | not started | Linear program model |
-| `lp_data_utils.{h,cc}` | `lp_data/src/lp_data_utils.rs` | not started | Model utilities |
+| `lp_types.{h,cc}` | `lp_data/src/lp_types.rs` | validated | Strong indices, typed dense vectors and bit vectors, statuses, scalar helpers, and idiomatic sparse-entry iteration; unit-tested |
+| `sparse_vector.h` | `lp_data/src/sparse_vector.rs` | validated | Insertion, cleanup, lookup, dense conversion/accumulation, component-wise operations, mutation, and typed permutation; unit-tested |
+| `sparse_column.{h,cc}` | `lp_data/src/sparse_vector.rs` | validated | Column/view aliases and random-access sparse column with touched-row clearing; unit-tested |
+| `sparse_row.h` | `lp_data/src/sparse_row.rs` | ported | Thin row specialization over the shared sparse-vector representation |
+| `sparse.{h,cc}` | `lp_data/src/sparse.rs` | validated | Phase-1 column matrix, transpose, norms, deletion, and permutation operations; unit-tested |
+| `scattered_vector.h` | `lp_data/src/scattered_vector.rs` | validated | Reusable dense values plus touched-index pattern; unit-tested |
+| `permutation.h` | `lp_data/src/permutation.rs` | validated | Typed permutations, inverses, signatures, and vector application; unit-tested |
+| `lp_data.{h,cc}` | `lp_data/src/lp_data.rs` | validated | Model, bounds, objective metadata, basis-bearing `ProblemSolution`, validation, and deterministic summaries; all Netlib parser fingerprints agree with native GLOP |
+| `lp_data_utils.{h,cc}` | integrated into `lp_data/src/lp_data.rs` | ported | Phase-1 validation and summary subset; remaining transformation utilities stay deferred until consumers enter scope |
 | `lp_utils.{h,cc}` | `lp_data/src/lp_utils.rs` | not started | Solver/model utilities |
 | `matrix_utils.{h,cc}` | `lp_data/src/matrix_utils.rs` | not started | Matrix transformations/checks |
 | `matrix_scaler.{h,cc}` | `lp_data/src/matrix_scaler.rs` | not started | Scaling algorithms |
-| `mps_reader_template.{h,cc}` | `lp_data/src/mps_reader.rs` | not started | Core MPS parser; merge wrapper/template where appropriate |
-| `mps_reader.{h,cc}` | `lp_data/src/mps_reader.rs` | not started | File/model adapters |
+| `mps_reader_template.{h,cc}` | `lp_data/src/mps_reader.rs` | validated | Fixed/free scanner, rows, columns, RHS, ranges, bounds, objective sense, markers, duplicate entries, and numerical errors; 98/98 Netlib models agree with native GLOP dimensions, nonzeros, bounds, and objectives |
+| `mps_reader.{h,cc}` | `lp_data/src/mps_reader.rs` | validated | File and string adapters; unit and full-Netlib differential tests |
 | `lp_parser.{h,cc}` | `lp_data/src/lp_parser.rs` | not started | LP text parser |
 | `sol_reader.{h,cc}` | `lp_data/src/sol_reader.rs` | not started | Solution files |
-| `lp_print_utils.{h,cc}` | `lp_data/src/lp_print_utils.rs` | not started | Deterministic formatting |
+| `lp_print_utils.{h,cc}` | integrated into `lp_data/src/lp_data.rs` and `cli/src/main.rs` | ported | Deterministic Phase-1 model summary and data fingerprint; full upstream LP emission remains deferred |
 | `lp_decomposer.{h,cc}` | `lp_data/src/lp_decomposer.rs` | not started | Independent component decomposition |
 | `proto_utils.{h,cc}` | focused model conversion, if needed | not started | Do not reproduce protobuf infrastructure |
 

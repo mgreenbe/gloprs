@@ -4,7 +4,8 @@
 //! `sparse_column.{h,cc}`. Entries retain insertion order until cleanup;
 //! cleanup sorts by index, removes zeros, and makes the last duplicate win.
 
-use crate::lp_types::{DenseColumn, Fractional, RowIndex, TypedVec, VectorIndex};
+use crate::lp_types::{ColIndex, DenseColumn, Fractional, RowIndex, TypedVec, VectorIndex};
+use crate::permutation::Permutation;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SparseEntry<I> {
@@ -48,6 +49,10 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
         *self = Self::new();
     }
 
+    pub fn swap(&mut self, other: &mut Self) {
+        std::mem::swap(self, other);
+    }
+
     pub fn reserve(&mut self, additional: usize) {
         self.entries.reserve(additional);
     }
@@ -63,6 +68,16 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
     }
 
     pub fn set_coefficient(&mut self, index: I, value: Fractional) {
+        let _ = index.to_usize();
+        self.entries.push(SparseEntry {
+            index,
+            coefficient: value,
+        });
+        self.may_contain_duplicates = true;
+    }
+
+    /// Appends an entry without searching for an existing index.
+    pub fn add_entry(&mut self, index: I, value: Fractional) {
         let _ = index.to_usize();
         self.entries.push(SparseEntry {
             index,
@@ -140,15 +155,93 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
             .retain(|entry| entry.coefficient.abs() > threshold);
     }
 
+    pub fn remove_near_zero_entries_with_weights(
+        &mut self,
+        threshold: Fractional,
+        weights: &TypedVec<I, Fractional>,
+    ) {
+        debug_assert!(self.check_no_duplicates());
+        self.entries
+            .retain(|entry| entry.coefficient.abs() * weights[entry.index] > threshold);
+    }
+
     pub fn multiply_by_constant(&mut self, factor: Fractional) {
         for entry in &mut self.entries {
             entry.coefficient *= factor;
         }
     }
 
+    pub fn component_wise_multiply(&mut self, factors: &TypedVec<I, Fractional>) {
+        for entry in &mut self.entries {
+            entry.coefficient *= factors[entry.index];
+        }
+    }
+
     pub fn divide_by_constant(&mut self, factor: Fractional) {
         for entry in &mut self.entries {
             entry.coefficient /= factor;
+        }
+    }
+
+    pub fn component_wise_divide(&mut self, factors: &TypedVec<I, Fractional>) {
+        for entry in &mut self.entries {
+            entry.coefficient /= factors[entry.index];
+        }
+    }
+
+    pub fn populate_from_dense(&mut self, dense: &TypedVec<I, Fractional>) {
+        self.clear();
+        for (position, &value) in dense.as_slice().iter().enumerate() {
+            if value != 0.0 {
+                self.add_entry(I::from_usize(position), value);
+            }
+        }
+        self.may_contain_duplicates = false;
+    }
+
+    /// Appends entries after shifting their logical indices.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a shifted index is negative or cannot be represented.
+    pub fn append_entries_with_offset(&mut self, source: &Self, offset: i32) {
+        for entry in &source.entries {
+            let shifted =
+                i64::from(i32::try_from(entry.index.to_usize()).expect("sparse index exceeds i32"))
+                    + i64::from(offset);
+            let shifted = usize::try_from(shifted).expect("shifted sparse index is negative");
+            self.set_coefficient(I::from_usize(shifted), entry.coefficient);
+        }
+    }
+
+    #[must_use]
+    pub fn scalar_product(&self, dense: &TypedVec<I, Fractional>) -> Fractional {
+        self.entries
+            .iter()
+            .map(|entry| entry.coefficient * dense[entry.index])
+            .sum()
+    }
+
+    #[must_use]
+    pub fn first(&self) -> Option<SparseEntry<I>> {
+        self.entries.first().copied()
+    }
+
+    #[must_use]
+    pub fn last(&self) -> Option<SparseEntry<I>> {
+        self.entries.last().copied()
+    }
+
+    pub fn move_entry_to_first_position(&mut self, index: I) {
+        if let Some(position) = self.entries.iter().position(|entry| entry.index == index) {
+            self.entries.swap(0, position);
+        }
+    }
+
+    pub fn move_entry_to_last_position(&mut self, index: I) {
+        if let Some(position) = self.entries.iter().position(|entry| entry.index == index) {
+            let last = self.entries.len() - 1;
+            self.entries.swap(last, position);
         }
     }
 
@@ -184,6 +277,91 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
     pub fn iter(&self) -> std::slice::Iter<'_, SparseEntry<I>> {
         self.entries.iter()
     }
+
+    pub fn apply_index_permutation(&mut self, permutation: &Permutation<I>) {
+        if permutation.is_empty() {
+            return;
+        }
+        for entry in &mut self.entries {
+            entry.index = permutation[entry.index];
+        }
+        self.may_contain_duplicates = true;
+    }
+
+    /// Adds a clean sparse vector into this clean vector in linear time.
+    pub fn add_multiple_to_sparse_vector(
+        &self,
+        multiplier: Fractional,
+        drop_tolerance: Fractional,
+        accumulator: &mut Self,
+    ) {
+        debug_assert!(self.is_cleaned_up());
+        debug_assert!(accumulator.is_cleaned_up());
+        let mut merged = Vec::with_capacity(self.entries.len() + accumulator.entries.len());
+        let (mut left, mut right) = (0, 0);
+        while left < accumulator.entries.len() || right < self.entries.len() {
+            let entry = if right == self.entries.len()
+                || (left < accumulator.entries.len()
+                    && accumulator.entries[left].index < self.entries[right].index)
+            {
+                let entry = accumulator.entries[left];
+                left += 1;
+                entry
+            } else if left == accumulator.entries.len()
+                || self.entries[right].index < accumulator.entries[left].index
+            {
+                let mut entry = self.entries[right];
+                entry.coefficient *= multiplier;
+                right += 1;
+                entry
+            } else {
+                let entry = SparseEntry {
+                    index: accumulator.entries[left].index,
+                    coefficient: accumulator.entries[left].coefficient
+                        + multiplier * self.entries[right].coefficient,
+                };
+                left += 1;
+                right += 1;
+                entry
+            };
+            if entry.coefficient.abs() > drop_tolerance {
+                merged.push(entry);
+            }
+        }
+        accumulator.entries = merged;
+        accumulator.may_contain_duplicates = false;
+    }
+
+    pub fn apply_partial_index_permutation(&mut self, mapping: &TypedVec<I, Option<I>>) {
+        self.entries = self
+            .entries
+            .iter()
+            .filter_map(|entry| {
+                mapping[entry.index].map(|index| SparseEntry {
+                    index,
+                    coefficient: entry.coefficient,
+                })
+            })
+            .collect();
+        self.may_contain_duplicates = true;
+    }
+
+    pub fn move_tagged_entries_to(&mut self, tagged: &TypedVec<I, bool>, output: &mut Self) {
+        let mut retained = Vec::with_capacity(self.entries.len());
+        for entry in self.entries.drain(..) {
+            if tagged[entry.index] {
+                output.set_coefficient(entry.index, entry.coefficient);
+            } else {
+                retained.push(entry);
+            }
+        }
+        self.entries = retained;
+    }
+
+    #[must_use]
+    pub fn entries(&self) -> &[SparseEntry<I>] {
+        &self.entries
+    }
 }
 
 impl<'a, I> IntoIterator for &'a SparseVector<I> {
@@ -196,6 +374,8 @@ impl<'a, I> IntoIterator for &'a SparseVector<I> {
 }
 
 pub type SparseColumn = SparseVector<RowIndex>;
+pub type ColumnView<'a> = &'a [SparseEntry<RowIndex>];
+pub type RowView<'a> = &'a [SparseEntry<ColIndex>];
 
 #[derive(Clone, Debug)]
 pub struct RandomAccessSparseColumn {
@@ -317,5 +497,21 @@ mod tests {
             column.coefficient(RowIndex::new(3)).to_bits(),
             0.0_f64.to_bits()
         );
+    }
+
+    #[test]
+    fn sparse_merge_is_linear_ordered_and_drops_small_results() {
+        let mut source = SparseColumn::new();
+        source.set_coefficient(RowIndex::new(0), 2.0);
+        source.set_coefficient(RowIndex::new(2), -1.0);
+        source.clean_up();
+        let mut accumulator = SparseColumn::new();
+        accumulator.set_coefficient(RowIndex::new(1), 3.0);
+        accumulator.set_coefficient(RowIndex::new(2), 1.0);
+        accumulator.clean_up();
+        source.add_multiple_to_sparse_vector(1.0, 0.0, &mut accumulator);
+        assert_eq!(accumulator.num_entries(), 2);
+        assert_eq!(accumulator.entries()[0].index(), RowIndex::new(0));
+        assert_eq!(accumulator.entries()[1].index(), RowIndex::new(1));
     }
 }

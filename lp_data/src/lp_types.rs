@@ -123,6 +123,14 @@ impl<I: VectorIndex, T> TypedVec<I, T> {
         self.values.push(value);
     }
 
+    pub fn clear(&mut self) {
+        self.values.clear();
+    }
+
+    pub fn truncate(&mut self, size: I) {
+        self.values.truncate(size.to_usize());
+    }
+
     pub fn iter(&self) -> std::slice::Iter<'_, T> {
         self.values.iter()
     }
@@ -130,6 +138,11 @@ impl<I: VectorIndex, T> TypedVec<I, T> {
     #[must_use]
     pub fn as_slice(&self) -> &[T] {
         &self.values
+    }
+
+    #[must_use]
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        &mut self.values
     }
 }
 
@@ -166,6 +179,75 @@ impl<I: VectorIndex, T> IndexMut<I> for TypedVec<I, T> {
         &mut self.values[index.to_usize()]
     }
 }
+
+impl<I: VectorIndex, T> FromIterator<T> for TypedVec<I, T> {
+    fn from_iter<It: IntoIterator<Item = T>>(iter: It) -> Self {
+        Self::from_vec(iter.into_iter().collect())
+    }
+}
+
+/// A compact typed bit vector used for row and column masks.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct BitVec<I> {
+    words: Vec<u64>,
+    len: usize,
+    index: PhantomData<fn(I) -> I>,
+}
+
+impl<I: VectorIndex> BitVec<I> {
+    #[must_use]
+    pub fn new(size: I) -> Self {
+        let len = size.to_usize();
+        Self {
+            words: vec![0; len.div_ceil(64)],
+            len,
+            index: PhantomData,
+        }
+    }
+
+    #[must_use]
+    pub fn len(&self) -> I {
+        I::from_usize(self.len)
+    }
+
+    #[must_use]
+    pub fn contains(&self, index: I) -> bool {
+        let position = index.to_usize();
+        self.words[position / 64] & (1_u64 << (position % 64)) != 0
+    }
+
+    pub fn set(&mut self, index: I) {
+        let position = index.to_usize();
+        self.words[position / 64] |= 1_u64 << (position % 64);
+    }
+
+    pub fn clear_bit(&mut self, index: I) {
+        let position = index.to_usize();
+        self.words[position / 64] &= !(1_u64 << (position % 64));
+    }
+
+    pub fn clear(&mut self) {
+        self.words.fill(0);
+    }
+
+    pub fn resize(&mut self, size: I) {
+        self.len = size.to_usize();
+        self.words.resize(self.len.div_ceil(64), 0);
+        if !self.len.is_multiple_of(64)
+            && let Some(last) = self.words.last_mut()
+        {
+            *last &= (1_u64 << (self.len % 64)) - 1;
+        }
+    }
+
+    #[must_use]
+    pub fn is_all_false(&self) -> bool {
+        self.words.iter().all(|word| *word == 0)
+    }
+}
+
+pub type RowBitVec = BitVec<RowIndex>;
+pub type ColBitVec = BitVec<ColIndex>;
 
 pub type DenseRow = TypedVec<ColIndex, Fractional>;
 pub type DenseBooleanRow = TypedVec<ColIndex, bool>;
@@ -329,5 +411,18 @@ mod tests {
             deterministic_time_for_fp_operations(500_000_000).to_bits(),
             1.0_f64.to_bits()
         );
+    }
+
+    #[test]
+    fn typed_bit_vectors_resize_and_clear() {
+        let mut bits = RowBitVec::new(RowIndex::new(70));
+        bits.set(RowIndex::new(65));
+        assert!(bits.contains(RowIndex::new(65)));
+        bits.clear_bit(RowIndex::new(65));
+        assert!(bits.is_all_false());
+        bits.resize(RowIndex::new(130));
+        bits.set(RowIndex::new(129));
+        bits.clear();
+        assert!(bits.is_all_false());
     }
 }

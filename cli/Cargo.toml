@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 glop = { package = "gloprs-glop", path = "../glop" }
+lp_data = { package = "gloprs-lp-data", path = "../lp_data" }
 
 [[bin]]
 name = "gloprs"
@@ -16,4 +17,3 @@ path = "src/main.rs"
 
 [lints]
 workspace = true
-
