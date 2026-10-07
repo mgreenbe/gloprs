@@ -39,15 +39,11 @@ The project is successful when:
 
 ## Phase 0: pin and inventory upstream
 
-Status: nearly complete. The pinned upstream configuration is recorded in
+Status: complete. The pinned upstream configuration is recorded in
 `UPSTREAM.md`, and `PORTING.md` contains the initial file inventory. The native
 GLOP builds pass, and `tools/run_glop_reference.py` emits normalized JSON for
-MPS solves.
-
-Remaining work:
-
-- Add a focused native adapter exposing row and column basis statuses, which
-  OR-Tools' generic `solve` response omits.
+MPS solves, including variable and constraint basis statuses supplied by the
+focused native adapter in `tools/glop_reference_adapter.cc`.
 
 Exit criteria:
 
@@ -307,5 +303,4 @@ Exit criteria:
 1. Complete typed permutations and the remaining sparse-vector and column-view
    operations, updating `PORTING.md` with tests and representation divergences.
 2. Port sparse rows, sparse matrices, and scattered-vector workspaces.
-3. Add the focused native GLOP basis-status adapter.
-4. Port the core linear-program model and begin the fixed/free MPS parser.
+3. Port the core linear-program model and begin the fixed/free MPS parser.

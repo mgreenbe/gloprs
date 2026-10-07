@@ -12,8 +12,10 @@ python3 tools/generate_netlib_baselines.py
 
 Each result is tied to the expanded MPS checksum and records status, objective,
 iterations, feasibility residuals, deterministic time, elapsed times, and peak
-resident memory. Wall-clock and memory measurements describe the platform
-recorded in the file and are expected to change on another machine. Published
-Netlib objectives are retained for comparison; differences are not silently
-treated as failures because the Netlib documentation records solver- and
-tolerance-dependent alternatives for several instances.
+resident memory. Each result also contains the final status of every structural
+variable and constraint slack in `basis.variables` and `basis.constraints`.
+Wall-clock and memory measurements describe the platform recorded in the file
+and are expected to change on another machine. Published Netlib objectives are
+retained for comparison; differences are not silently treated as failures
+because the Netlib documentation records solver- and tolerance-dependent
+alternatives for several instances.

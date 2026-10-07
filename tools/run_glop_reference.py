@@ -6,33 +6,30 @@ from __future__ import annotations
 import argparse
 import json
 import platform
-import re
 import resource
 import subprocess
-import tempfile
+import sys
 import time
 from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SOLVER = PROJECT_ROOT.parent / "or-tools" / "build-gloprs-solve" / "bin" / "solve"
-FLOAT = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
-
-
-def last_match(pattern: str, text: str) -> str | None:
-    matches = re.findall(pattern, text, flags=re.MULTILINE)
-    return matches[-1] if matches else None
-
-
-def optional_float(pattern: str, text: str) -> float | None:
-    value = last_match(pattern, text)
-    return float(value) if value is not None else None
+DEFAULT_ADAPTER = PROJECT_ROOT / "target" / "native" / "glop_reference_adapter"
+MPSOLVER_STATUS = {
+    "OPTIMAL": "MPSOLVER_OPTIMAL",
+    "PRIMAL_INFEASIBLE": "MPSOLVER_INFEASIBLE",
+    "INFEASIBLE_OR_UNBOUNDED": "MPSOLVER_INFEASIBLE",
+    "PRIMAL_UNBOUNDED": "MPSOLVER_UNBOUNDED",
+    "INVALID_PROBLEM": "MPSOLVER_MODEL_INVALID",
+    "ABNORMAL": "MPSOLVER_ABNORMAL",
+    "IMPRECISE": "MPSOLVER_ABNORMAL",
+}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mps", type=Path)
-    parser.add_argument("--solver", type=Path, default=DEFAULT_SOLVER)
+    parser.add_argument("--adapter", type=Path, default=DEFAULT_ADAPTER)
     parser.add_argument(
         "--summary",
         action="store_true",
@@ -41,27 +38,13 @@ def main() -> None:
     args = parser.parse_args()
 
     start = time.perf_counter()
-    with tempfile.TemporaryDirectory(prefix="gloprs-reference-") as temporary:
-        response_stem = Path(temporary) / "response"
-        completed = subprocess.run(
-            [
-                str(args.solver),
-                f"--input={args.mps.resolve()}",
-                "--solver=glop",
-                f"--dump_response={response_stem}",
-                "--dump_format=json",
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        log = completed.stdout + completed.stderr
-        response_path = response_stem.with_suffix(".json")
-        response = (
-            json.loads(response_path.read_text(encoding="utf-8"))
-            if response_path.exists()
-            else None
-        )
+    completed = subprocess.run(
+        [str(args.adapter), str(args.mps.resolve())],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    response = json.loads(completed.stdout) if completed.returncode == 0 else None
     wall_time = time.perf_counter() - start
     maximum_rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
     peak_resident_set_bytes = (
@@ -71,35 +54,36 @@ def main() -> None:
     result = {
         "input": str(args.mps),
         "exit_code": completed.returncode,
-        "status": response.get("status") if response else None,
-        "objective": response.get("objective_value") if response else None,
-        "best_bound": response.get("best_objective_bound") if response else None,
-        "iterations": (
-            int(value) if (value := last_match(r"^iterations:\s*(\d+)\s*$", log)) else None
+        "status": (
+            MPSOLVER_STATUS.get(response["status"], response["status"])
+            if response
+            else None
         ),
-        "solve_time_seconds": optional_float(rf"^time:\s*({FLOAT})\s*$", log),
+        "objective": response.get("objective") if response else None,
+        "best_bound": None,
+        "iterations": response.get("iterations") if response else None,
+        "solve_time_seconds": response.get("solve_time_seconds") if response else None,
         "wall_time_seconds": wall_time,
         "peak_resident_set_bytes": peak_resident_set_bytes,
-        "deterministic_time": optional_float(
-            rf"^deterministic_time:\s*({FLOAT})\s*$", log
+        "deterministic_time": response.get("deterministic_time") if response else None,
+        "maximum_primal_infeasibility": (
+            response.get("maximum_primal_infeasibility") if response else None
         ),
-        "maximum_primal_infeasibility": optional_float(
-            rf"^Max\. primal infeasibility = ({FLOAT})\s*$", log
+        "maximum_dual_infeasibility": (
+            response.get("maximum_dual_infeasibility") if response else None
         ),
-        "maximum_dual_infeasibility": optional_float(
-            rf"^Max\. dual infeasibility = ({FLOAT})\s*$", log
-        ),
-        "variable_values": response.get("variable_value") if response else None,
-        "dual_values": response.get("dual_value") if response else None,
-        "reduced_costs": response.get("reduced_cost") if response else None,
-        "basis": None,
-        "basis_note": "OR-Tools solve does not expose GLOP basis statuses in its response",
+        "basis": response.get("basis") if response else None,
     }
-    if args.summary:
-        for key in ("variable_values", "dual_values", "reduced_costs"):
-            del result[key]
+    if not args.summary:
+        result.update(
+            variable_values=response.get("variable_values") if response else None,
+            dual_values=response.get("dual_values") if response else None,
+            reduced_costs=response.get("reduced_costs") if response else None,
+        )
     print(json.dumps(result, indent=2, sort_keys=True))
     if completed.returncode != 0:
+        if completed.stderr:
+            print(completed.stderr, end="", file=sys.stderr)
         raise SystemExit(completed.returncode)
 
 

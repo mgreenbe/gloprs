@@ -46,10 +46,23 @@ backends except GLOP disabled, and `USE_GUROBI=ON` only to satisfy generic
 OR-Tools model-builder symbols (the reference invocation explicitly selects
 GLOP and does not load Gurobi).
 
+The generic response omits basis statuses. Build the project-owned focused
+adapter against that pinned build, then run it through the normalized wrapper:
+
+```text
+python3 tools/build_glop_reference_adapter.py
+python3 tools/run_glop_reference.py --summary ../datasets/netlib/mps/afiro.mps
+```
+
+The adapter calls `glop::LPSolver` directly and reports GLOP's variable and
+constraint status arrays under `basis.variables` and `basis.constraints`.
+Both use the upstream names `BASIC`, `FIXED_VALUE`, `AT_LOWER_BOUND`,
+`AT_UPPER_BOUND`, and `FREE`.
+
 The `simple_glop_program` target builds successfully. Its CTest entry passes
 and the executable reports the expected optimal objective value `4`. The
 standalone build does not include `mps_reader.cc`; the MPS-capable structured
-reference runner therefore remains a separate Phase 0 deliverable.
+reference runner therefore uses the separate `build-gloprs-solve` build.
 
 ## Scope notes
 
