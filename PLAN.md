@@ -440,6 +440,9 @@ basic variable values when the Harris-scaled feasibility tolerance is exceeded.
 Exact steepest-edge initialization calls the LU-specific sparse squared-norm
 solve directly for every relevant problem column, rather than allocating a
 dense right-hand side and routing through the general basis solve.
+Dual steepest-edge initialization likewise calls GLOP's specialized
+row-indexed LU squared-norm kernel instead of allocating a dense unit vector
+and routing every row through the general transpose solve.
 Maximization objective coordinates and primal objective limits follow GLOP's
 offset/scaling sign convention and strict stopping test.
 

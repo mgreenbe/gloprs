@@ -5,6 +5,7 @@ use glop::numerical::relative_residual;
 use glop::primal_edge_norms::{PrimalEdgeNorms, compute_primal_edge_squared_norms};
 use glop::update_row::{UpdateRow, UpdateRowAlgorithm, compute_update_row};
 use lp_data::lp_types::{ColBitVec, ColIndex, RowIndex, VectorIndex};
+use lp_data::permutation::ColumnPermutation;
 use lp_data::sparse::SparseMatrix;
 use lp_data::sparse_vector::SparseColumn;
 
@@ -223,9 +224,26 @@ fn incremental_dual_edge_norms_agree_with_exact_recomputation() {
             .unwrap();
         basis.replace_column(leaving_row, entering).unwrap();
 
+        // Exact edge-norm recomputation is deliberately restricted to a
+        // refactorized basis, as in GLOP.  Absorb the LU column permutation
+        // into the row-indexed maintained norms before comparing.
+        basis.force_refactorization().unwrap();
+        let permutation = ColumnPermutation::from_vec(
+            basis
+                .column_permutation()
+                .iter()
+                .copied()
+                .map(ColIndex::from_usize)
+                .collect(),
+        );
+        norms.update_data_on_basis_permutation(&permutation);
+        basis.set_column_permutation_to_identity();
         let exact = compute_dual_edge_squared_norms(&basis).unwrap();
         for (&maintained, expected) in norms.edge_squared_norms(&basis).unwrap().iter().zip(exact) {
-            assert!((maintained - expected).abs() < 1e-10);
+            assert!(
+                (maintained - expected).abs() < 1e-10,
+                "maintained={maintained:.17e} expected={expected:.17e}"
+            );
         }
     }
 }

@@ -187,9 +187,7 @@ impl DualEdgeNorms {
         self.edge_squared_norms.resize(n, 1.0);
         let test_limit = self.time_limit.is_some() && basis.number_of_entries_in_lu() > 10_000;
         for row in 0..n {
-            let mut unit = vec![0.0; n];
-            unit[row] = 1.0;
-            self.edge_squared_norms[row] = squared_norm(&basis.transpose_solve(&unit)?);
+            self.edge_squared_norms[row] = basis.dual_edge_squared_norm(row)?;
             if test_limit
                 && self
                     .time_limit
