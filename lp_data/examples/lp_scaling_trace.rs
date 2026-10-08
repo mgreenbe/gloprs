@@ -1,6 +1,6 @@
 use std::io::{self, Read};
 
-use lp_data::lp_data::LinearProgram;
+use lp_data::lp_data::{CostScalingAlgorithm, LinearProgram};
 use lp_data::lp_data_utils::LpScalingHelper;
 use lp_data::lp_types::{ColIndex, RowIndex, VectorIndex};
 
@@ -46,9 +46,16 @@ fn main() {
         let upper = fields.next().unwrap().parse().unwrap();
         lp.set_constraint_bounds(row, lower, upper);
     }
+    let cost_scaling = match fields.next().unwrap().parse::<i32>().unwrap() {
+        0 => CostScalingAlgorithm::NoCostScaling,
+        1 => CostScalingAlgorithm::ContainOneCostScaling,
+        2 => CostScalingAlgorithm::MeanCostScaling,
+        3 => CostScalingAlgorithm::MedianCostScaling,
+        value => panic!("unknown cost scaling algorithm {value}"),
+    };
     lp.clean_up();
     let mut helper = LpScalingHelper::new();
-    helper.scale(&mut lp);
+    helper.scale_with_cost_algorithm(&mut lp, cost_scaling);
     print("objective", lp.objective_coefficients().as_slice());
     print("variable_lower", lp.variable_lower_bounds().as_slice());
     print("variable_upper", lp.variable_upper_bounds().as_slice());

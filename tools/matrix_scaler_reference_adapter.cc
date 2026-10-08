@@ -39,5 +39,48 @@ int main() {
                 << entry.coefficient();
     }
   }
+  std::cout << "\nrow_factors";
+  for (int row = 0; row <= rows + 1; ++row) {
+    std::cout << ' ' << scaler.RowScalingFactor(RowIndex(row)) << ' '
+              << scaler.RowUnscalingFactor(RowIndex(row));
+  }
+  std::cout << "\ncolumn_factors";
+  for (int col = 0; col <= columns + 1; ++col) {
+    std::cout << ' ' << scaler.ColScalingFactor(ColIndex(col)) << ' '
+              << scaler.ColUnscalingFactor(ColIndex(col));
+  }
+  DenseRow row_vector(ColIndex(columns + 2), 0.0);
+  for (int col = 0; col < columns + 2; ++col) {
+    row_vector[ColIndex(col)] = col + 0.25;
+  }
+  scaler.ScaleRowVector(true, &row_vector);
+  std::cout << "\nrow_up";
+  for (double value : row_vector) std::cout << ' ' << value;
+  scaler.ScaleRowVector(false, &row_vector);
+  std::cout << "\nrow_roundtrip";
+  for (double value : row_vector) std::cout << ' ' << value;
+  DenseColumn column_vector(RowIndex(rows + 2), 0.0);
+  for (int row = 0; row < rows + 2; ++row) {
+    column_vector[RowIndex(row)] = row - 0.75;
+  }
+  scaler.ScaleColumnVector(true, &column_vector);
+  std::cout << "\ncolumn_up";
+  for (double value : column_vector) std::cout << ' ' << value;
+  scaler.ScaleColumnVector(false, &column_vector);
+  std::cout << "\ncolumn_roundtrip";
+  for (double value : column_vector) std::cout << ' ' << value;
+
+  // The pinned Init() implementation uses resize(), whose actual behavior is
+  // to retain factors when the dimensions are unchanged.
+  scaler.Init(&matrix);
+  std::cout << "\nreinit_rows";
+  for (double value : scaler.row_scales()) std::cout << ' ' << value;
+  std::cout << "\nreinit_columns";
+  for (double value : scaler.col_scales()) std::cout << ' ' << value;
+  scaler.Clear();
+  std::cout << "\nclear " << scaler.row_scales().size().value() << ' '
+            << scaler.col_scales().size().value() << ' '
+            << scaler.RowUnscalingFactor(RowIndex(rows + 1)) << ' '
+            << scaler.ColUnscalingFactor(ColIndex(columns + 1));
   std::cout << '\n';
 }

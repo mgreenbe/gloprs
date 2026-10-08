@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def generate(generator: random.Random) -> str:
+def generate(generator: random.Random, case: int) -> str:
     rows = generator.randint(0, 25)
     columns = generator.randint(0, 25)
     possible = [(r, c) for c in range(columns) for r in range(rows)]
@@ -32,6 +32,7 @@ def generate(generator: random.Random) -> str:
         lower = generator.uniform(-100, 0)
         upper = generator.uniform(0, 100)
         lines.append(f"{lower:.17g} {upper:.17g}")
+    lines.append(str(case % 4))
     return "\n".join(lines) + "\n"
 
 
@@ -60,7 +61,7 @@ def main() -> None:
     native = ROOT / "target/native/lp_scaling_reference_adapter"
     rust = ROOT / "target/debug/examples/lp_scaling_trace"
     for case in range(args.cases):
-        data = generate(generator)
+        data = generate(generator, case)
         expected = run(native, data)
         actual = run(rust, data)
         if len(expected) != len(actual) or any(

@@ -129,7 +129,9 @@ GLOP's total-capacity contract, restored the signed-sentinel
 `IndexPermutation` API used by partial permutations and tagged moves, and
 preserves duplicate-state knowledge across bijective and partial index
 permutations. The row-specialized wrapper now exposes the complete naming and
-permutation surface from `sparse_row.h`. Typed bit vectors now carry the
+permutation surface from `sparse_row.h`; a dedicated 1,000-case native trace
+agrees exactly on its accessors, iterator, permutations, coefficient bits, and
+typed row-major storage. Typed bit vectors now carry the
 pinned bucket, paired-bit, resize, content-copy, intersection, and union
 semantics used by GLOP's solver state.
 The remaining `lp_types` span/vector surface is now present, including borrowed
@@ -237,14 +239,19 @@ bound, structural, and nonzero-statistics strings as well as complete LP and
 solution text emission. Generated parser traces compare all of that text
 byte-for-byte, and a separate 10,000-case floating-point bit-pattern trace
 agrees exactly on decimal and monomial formatting.
-The default sparse matrix scaler is now a direct port of GLOP's geometric
-passes and final equilibration. One thousand native traces agree on accumulated
-row/column factors and every scaled sparse coefficient, including empty,
-rectangular, and extreme-dynamic-range matrices. `LpScalingHelper` likewise
-agrees on 1,000 traces covering scalar domain conversions, dense and sparse
-solve unscaling, and cost/bound normalization. The default whole-model scaling
-path agrees on a further 500 native traces covering every model bound,
-objective coefficient, sparse matrix entry, and retained helper factor. The optional `LINEAR_PROGRAM`
+The ordinary sparse matrix scaler is a direct port of GLOP's geometric passes
+and final equilibration. A strengthened 1,000-case native trace covers every
+public factor getter and vector operation, null and explicit-zero matrices,
+identity magnitudes, geometric and dynamic-range-cutoff branches, empty rows
+and columns, extreme ranges, clearing, and repeated-`Init()` state. That audit
+exposed and corrected Rust's reset-on-`Init()` behavior to match the pinned
+implementation's factor-retaining `resize()`. `LpScalingHelper` likewise
+agrees on 1,000 traces covering every scalar conversion, dense and sparse solve
+unscaling, ordinary and slack variables, clearing, infinities, and degenerate
+cost/bound normalization. Whole-model equilibration agrees on a further 1,000
+native traces spanning all four objective cost-scaling algorithms and covering
+every model bound, objective coefficient, sparse matrix entry, and retained
+helper factor. The optional `LINEAR_PROGRAM`
 matrix-scaling branch intentionally remains open because it calls the revised
 simplex itself; a different optimizer would not be a faithful Phase-1
 replacement.

@@ -6,6 +6,7 @@
 
 #include "ortools/lp_data/lp_data.h"
 #include "ortools/lp_data/lp_data_utils.h"
+#include "ortools/glop/parameters.pb.h"
 
 template <typename Vector>
 void Print(const char* name, const Vector& values) {
@@ -44,9 +45,14 @@ int main() {
     std::cin >> lower >> upper;
     lp.SetConstraintBounds(RowIndex(row), lower, upper);
   }
+  int cost_scaling;
+  std::cin >> cost_scaling;
   lp.CleanUp();
   LpScalingHelper helper;
-  helper.Scale(&lp);
+  GlopParameters params;
+  params.set_cost_scaling(
+      static_cast<GlopParameters::CostScalingAlgorithm>(cost_scaling));
+  helper.Scale(params, &lp);
   std::cout << std::setprecision(17);
   Print("objective", lp.objective_coefficients());
   Print("variable_lower", lp.variable_lower_bounds());

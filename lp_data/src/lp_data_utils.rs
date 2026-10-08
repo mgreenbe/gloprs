@@ -41,11 +41,21 @@ impl LpScalingHelper {
 
     /// Scales a model with GLOP's default matrix, bound, and cost algorithms.
     pub fn scale(&mut self, lp: &mut LinearProgram) {
+        self.scale_with_cost_algorithm(lp, CostScalingAlgorithm::ContainOneCostScaling);
+    }
+
+    /// Scales a model with GLOP's equilibration matrix scaling and the given
+    /// objective-cost scaling algorithm. This is the non-protobuf equivalent
+    /// of the corresponding fields consumed by `Scale(GlopParameters, ...)`.
+    pub fn scale_with_cost_algorithm(
+        &mut self,
+        lp: &mut LinearProgram,
+        cost_scaling: CostScalingAlgorithm,
+    ) {
         let mut scaler = SparseMatrixScaler::new();
         lp.scale(&mut scaler);
         self.bound_scaling_factor = 1.0 / lp.scale_bounds();
-        self.objective_scaling_factor =
-            1.0 / lp.scale_objective(CostScalingAlgorithm::ContainOneCostScaling);
+        self.objective_scaling_factor = 1.0 / lp.scale_objective(cost_scaling);
         self.matrix_is_scaled = true;
         self.row_unscaling_factors = scaler.row_scales().as_slice().to_vec();
         self.col_unscaling_factors = scaler.col_scales().as_slice().to_vec();

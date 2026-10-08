@@ -13,16 +13,29 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def generate(generator: random.Random) -> str:
+def generate(generator: random.Random, case: int) -> str:
     rows = generator.randint(0, 40)
     columns = generator.randint(0, 40)
     possible = [(r, c) for c in range(columns) for r in range(rows)]
     count = generator.randint(0, min(len(possible), 4 * (rows + columns)))
+    if case % 8 == 0:
+        count = 0
     positions = generator.sample(possible, count)
     entries = []
     for row, column in positions:
-        exponent = generator.uniform(-40.0, 40.0)
-        value = math.copysign(10.0**exponent, generator.choice([-1.0, 1.0]))
+        if case % 8 == 1:
+            value = generator.choice([-1.0, 1.0])
+        elif case % 8 in (2, 3):
+            exponent = generator.uniform(-5.0, 5.0)
+            value = math.copysign(10.0**exponent, generator.choice([-1.0, 1.0]))
+        elif case % 8 == 4 and entries:
+            exponent = generator.choice([-40.0, 40.0])
+            value = math.copysign(10.0**exponent, generator.choice([-1.0, 1.0]))
+        elif case % 8 == 5:
+            value = 0.0
+        else:
+            exponent = generator.uniform(-40.0, 40.0)
+            value = math.copysign(10.0**exponent, generator.choice([-1.0, 1.0]))
         entries.append((row, column, value))
     lines = [f"{rows} {columns} {len(entries)}"]
     lines.extend(f"{row} {column} {value:.17g}" for row, column, value in entries)
@@ -55,7 +68,7 @@ def main() -> None:
     native = ROOT / "target/native/matrix_scaler_reference_adapter"
     rust = ROOT / "target/debug/examples/matrix_scaler_trace"
     for case in range(args.cases):
-        data = generate(generator)
+        data = generate(generator, case)
         expected = run(native, data)
         actual = run(rust, data)
         if len(expected) != len(actual) or any(

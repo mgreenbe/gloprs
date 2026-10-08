@@ -13,15 +13,31 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def generate(generator: random.Random) -> str:
+def number(value: float) -> str:
+    if value == float("inf"):
+        return "inf"
+    if value == float("-inf"):
+        return "-inf"
+    return f"{value:.17g}"
+
+
+def generate(generator: random.Random, case: int) -> str:
     n = generator.randint(1, 60)
     positive = lambda: 10.0 ** generator.uniform(-12.0, 12.0)
     row_factors = [positive() for _ in range(n)]
     col_factors = [positive() for _ in range(n)]
     objective = [generator.choice([0.0, generator.uniform(-100.0, 100.0)]) for _ in range(n)]
-    bounds = [0.0]
-    lower = [generator.choice(bounds + [generator.uniform(-100.0, 100.0)]) for _ in range(n)]
-    upper = [generator.choice(bounds + [generator.uniform(-100.0, 100.0)]) for _ in range(n)]
+    if case % 10 == 0:
+        objective = [0.0] * n
+    bound_pool = [0.0, -float("inf"), float("inf")]
+    lower = [generator.choice(bound_pool + [generator.uniform(-100.0, 100.0)]) for _ in range(n)]
+    upper = [generator.choice(bound_pool + [generator.uniform(-100.0, 100.0)]) for _ in range(n)]
+    if case % 10 == 1:
+        lower = [-generator.uniform(2.0, 100.0) for _ in range(n)]
+        upper = [generator.uniform(2.0, 100.0) for _ in range(n)]
+    elif case % 10 == 2:
+        lower = [-generator.uniform(1e-6, 0.5) for _ in range(n)]
+        upper = [generator.uniform(1e-6, 0.5) for _ in range(n)]
     values = [generator.uniform(-100.0, 100.0) for _ in range(n)]
     if generator.random() < 0.7:
         pattern = generator.sample(range(n), generator.randint(1, n))
@@ -32,7 +48,7 @@ def generate(generator: random.Random) -> str:
     selected = generator.randrange(n)
     lines = [str(n)]
     for vector in (row_factors, col_factors, objective, lower, upper, values):
-        lines.append(" ".join(f"{value:.17g}" for value in vector))
+        lines.append(" ".join(number(value) for value in vector))
     lines.append(f"{len(pattern)} " + " ".join(map(str, pattern)))
     lines.append(" ".join(map(str, basis)))
     lines.append(str(selected))
@@ -65,7 +81,7 @@ def main() -> None:
     native = ROOT / "target/native/lp_data_utils_scaling_reference_adapter"
     rust = ROOT / "target/debug/examples/lp_data_utils_scaling_trace"
     for case in range(args.cases):
-        data = generate(generator)
+        data = generate(generator, case)
         expected = run(native, data)
         actual = run(rust, data)
         if len(expected) != len(actual) or any(

@@ -23,8 +23,11 @@ impl SparseMatrixScaler {
     }
 
     pub fn init(&mut self, matrix: &SparseMatrix) {
-        self.row_scales = DenseColumn::filled(matrix.num_rows(), 1.0);
-        self.col_scales = DenseRow::filled(matrix.num_cols(), 1.0);
+        // Preserve the pinned implementation's actual resize semantics. In
+        // particular, reinitializing at the same size retains existing scale
+        // values even though the upstream API comment says they are reset.
+        self.row_scales.resize(matrix.num_rows(), 1.0);
+        self.col_scales.resize(matrix.num_cols(), 1.0);
     }
 
     pub fn clear(&mut self) {
@@ -270,5 +273,29 @@ mod tests {
         scaler.scale(&mut matrix);
         assert_eq!(matrix.infinity_norm(), 1.0);
         assert_eq!(matrix.one_norm(), 2.0);
+    }
+
+    #[test]
+    fn reinitializing_same_dimensions_retains_pinned_resize_state() {
+        let mut matrix = SparseMatrix::new();
+        matrix.populate_from_zero(RowIndex::new(1), ColIndex::new(1));
+        matrix
+            .mutable_column(ColIndex::new(0))
+            .add_entry(RowIndex::new(0), 4.0);
+        let mut scaler = SparseMatrixScaler::new();
+        scaler.init(&matrix);
+        scaler.scale(&mut matrix);
+        let row_scale = scaler.row_scales()[RowIndex::new(0)];
+        let col_scale = scaler.col_scales()[ColIndex::new(0)];
+        assert_ne!(row_scale, 1.0);
+
+        scaler.init(&matrix);
+        assert_eq!(scaler.row_scales()[RowIndex::new(0)], row_scale);
+        assert_eq!(scaler.col_scales()[ColIndex::new(0)], col_scale);
+
+        scaler.clear();
+        scaler.init(&matrix);
+        assert_eq!(scaler.row_scales()[RowIndex::new(0)], 1.0);
+        assert_eq!(scaler.col_scales()[ColIndex::new(0)], 1.0);
     }
 }

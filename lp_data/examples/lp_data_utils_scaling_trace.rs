@@ -23,6 +23,7 @@ fn print(name: &str, values: &[f64]) {
     println!();
 }
 
+#[allow(clippy::too_many_lines)]
 fn main() {
     let mut input = String::new();
     io::stdin().read_to_string(&mut input).unwrap();
@@ -55,36 +56,60 @@ fn main() {
         let col = ColIndex::from_usize(index);
         let value = solve_values[row];
         print!(
-            " {:.17e} {:.17e} {:.17e} {:.17e} {:.17e} {:.17e}",
+            " {:.17e} {:.17e} {:.17e} {:.17e} {:.17e} {:.17e} {:.17e} {:.17e} {:.17e} {:.17e} {:.17e}",
             helper.scale_variable_value(col, value),
+            helper.unscale_variable_value(col, value),
             helper.scale_reduced_cost(col, value),
+            helper.unscale_reduced_cost(col, value),
             helper.scale_dual_value(row, value),
+            helper.unscale_dual_value(row, value),
             helper.scale_constraint_activity(row, value),
+            helper.unscale_constraint_activity(row, value),
+            helper.unscale_left_solve_value(row, value),
             helper.variable_scaling_factor(col),
             helper.variable_scaling_factor_with_slack(ColIndex::from_usize(n + index)),
         );
     }
     println!();
 
-    let mut left = ScatteredRow::new(ColIndex::from_usize(n));
-    for index in 0..n {
-        left.values_mut()[ColIndex::from_usize(index)] = solve_values[RowIndex::from_usize(index)];
+    for sparse in [false, true] {
+        let mut left = ScatteredRow::new(ColIndex::from_usize(n));
+        for index in 0..n {
+            left.values_mut()[ColIndex::from_usize(index)] =
+                solve_values[RowIndex::from_usize(index)];
+        }
+        if sparse {
+            left.non_zeros_mut()
+                .extend(pattern.iter().copied().map(ColIndex::from_usize));
+        }
+        helper.unscale_unit_row_left_solve(selected, &mut left);
+        print(
+            if sparse { "left_sparse" } else { "left_dense" },
+            left.values().as_slice(),
+        );
     }
-    left.non_zeros_mut()
-        .extend(pattern.iter().copied().map(ColIndex::from_usize));
-    helper.unscale_unit_row_left_solve(selected, &mut left);
-    print("left", left.values().as_slice());
 
-    let mut right = ScatteredColumn::new(RowIndex::from_usize(n));
-    right
-        .values_mut()
-        .as_mut_slice()
-        .copy_from_slice(solve_values.as_slice());
-    right
-        .non_zeros_mut()
-        .extend(pattern.iter().copied().map(RowIndex::from_usize));
-    helper.unscale_column_right_solve(&basis, selected, &mut right);
-    print("right", right.values().as_slice());
+    for sparse in [false, true] {
+        let mut right = ScatteredColumn::new(RowIndex::from_usize(n));
+        right
+            .values_mut()
+            .as_mut_slice()
+            .copy_from_slice(solve_values.as_slice());
+        if sparse {
+            right
+                .non_zeros_mut()
+                .extend(pattern.iter().copied().map(RowIndex::from_usize));
+        }
+        helper.unscale_column_right_solve(&basis, selected, &mut right);
+        print(
+            if sparse {
+                "right_sparse"
+            } else {
+                "right_dense"
+            },
+            right.values().as_slice(),
+        );
+    }
 
     helper.average_cost_scaling(&mut objective);
     print("objective", objective.as_slice());
@@ -96,4 +121,17 @@ fn main() {
     print("lower", lower.as_slice());
     print("upper", upper.as_slice());
     println!("bound_factor {:.17e}", helper.bounds_scaling_factor());
+    helper.clear();
+    let selected_row = RowIndex::from_usize(selected.to_usize());
+    println!(
+        "cleared {:.17e} {:.17e} {:.17e} {:.17e} {:.17e} {:.17e} {:.17e} {:.17e}",
+        helper.bounds_scaling_factor(),
+        helper.objective_scaling_factor(),
+        helper.variable_scaling_factor(selected),
+        helper.variable_scaling_factor_with_slack(ColIndex::from_usize(n + selected.to_usize())),
+        helper.scale_variable_value(selected, 3.0),
+        helper.scale_reduced_cost(selected, 3.0),
+        helper.scale_dual_value(selected_row, 3.0),
+        helper.scale_constraint_activity(selected_row, 3.0),
+    );
 }
