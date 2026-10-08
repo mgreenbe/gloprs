@@ -433,23 +433,35 @@ GLOP's order (edge norms, reduced costs, prices), use the same update-row sparse
 support, and retry after the precise entering reduced cost invalidates the
 selected candidate. Imprecise edge norms and bound flips now use GLOP's local
 heap maintenance rather than unconditional price rebuilds. Full recomputation
-is retained after refactorization and in
-the current phase-I driver, whose feasibility objective changes during the
-iteration.
+is retained after refactorization and in the current phase-I driver, whose
+feasibility objective changes during the iteration.
 As in GLOP, a refactorized basis also triggers a residual check and recomputes
 basic variable values when the Harris-scaled feasibility tolerance is exceeded.
+Exact steepest-edge initialization calls the LU-specific sparse squared-norm
+solve directly for every relevant problem column, rather than allocating a
+dense right-hand side and routing through the general basis solve.
 Maximization objective coordinates and primal objective limits follow GLOP's
 offset/scaling sign convention and strict stopping test.
 
 This is not yet a validated Phase-4 port. The primal phase-I objective update is
 not yet connected to GLOP's incremental `ReducedCosts` orchestration; the dual
-phase-I/phase-II loop, perturbation and cost-shift orchestration, full
+phase-I/phase-II loop,
+perturbation and cost-shift orchestration, full
 termination/reoptimization checks, and complete incremental warm-start cases
 remain to be translated. The reproducible `tools/validate_netlib_solve.py`
 gate passes status, objective, and independent primal/dual feasibility checks
-on the 50 smallest Netlib models. Native iteration counts still diverge,
-sometimes substantially, so neither file is marked ported or validated in
-`PORTING.md`.
+on the 50 smallest Netlib models. With a 60-second per-model limit, all 96
+completed models in the full 98-model Netlib set pass the same checks;
+`dfl001` and `qap15` time out. Native iteration counts still diverge, sometimes
+substantially, so neither file is marked ported or validated in `PORTING.md`.
+With the shorter 10-second development gate, 95 models complete and pass while
+`dfl001`, `qap12`, and `qap15` time out. An audit of GLOP's degenerate-pivot
+path also confirmed that faithful Phase-II bound shifts depend on the
+post-optimization cleanup and dual-simplex reoptimization loop: enabling the
+shift alone makes `grow7` primal-imprecise after cleanup. Until that loop is
+ported, the provisional primal-only driver continues snapping the leaving
+variable to its target bound; this deliberate scaffolding divergence must be
+removed with the dual driver.
 
 Translate the revised-simplex driver and its immediate orchestration:
 

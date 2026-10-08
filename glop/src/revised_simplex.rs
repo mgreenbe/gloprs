@@ -611,36 +611,36 @@ impl RevisedSimplex {
             };
             let direction = self.direction(entering)?;
             final_check_performed = false;
-            if !self
+            let entering_edge_norm_is_precise = self
                 .primal_edge_norms
                 .as_mut()
                 .unwrap()
                 .test_entering_edge_norm_precision(
                     entering.to_usize(),
                     direction.values().as_slice(),
-                )
+                );
+            if self
+                .primal_edge_norms
+                .as_ref()
+                .unwrap()
+                .needs_basis_refactorization()
             {
-                if self
-                    .primal_edge_norms
-                    .as_ref()
-                    .unwrap()
-                    .needs_basis_refactorization()
-                {
-                    self.primal_prices.force_recomputation();
-                    refactorize_for_precision = true;
-                } else {
-                    let norms = self.primal_edge_norms.as_mut().unwrap().squared_norms(
-                        self.basis_factorization.as_ref().unwrap(),
-                        self.variables_info.as_ref().unwrap().relevance(),
-                    )?;
-                    self.primal_prices.recompute_price_at_from_values(
-                        entering,
-                        self.variables_info.as_ref().unwrap(),
-                        self.reduced_costs.as_slice(),
-                        norms,
-                        self.parameters.dual_feasibility_tolerance,
-                    );
-                }
+                self.primal_prices.force_recomputation();
+                refactorize_for_precision = true;
+                continue;
+            }
+            if !entering_edge_norm_is_precise {
+                let norms = self.primal_edge_norms.as_mut().unwrap().squared_norms(
+                    self.basis_factorization.as_ref().unwrap(),
+                    self.variables_info.as_ref().unwrap().relevance(),
+                )?;
+                self.primal_prices.recompute_price_at_from_values(
+                    entering,
+                    self.variables_info.as_ref().unwrap(),
+                    self.reduced_costs.as_slice(),
+                    norms,
+                    self.parameters.dual_feasibility_tolerance,
+                );
                 continue;
             }
             let precise_reduced = phase_objective[entering]

@@ -268,11 +268,9 @@ impl PrimalEdgeNorms {
         let test_limit = self.time_limit.is_some() && basis.number_of_entries_in_lu() > 10_000;
         for typed_column in relevant.iter_ones() {
             let column = typed_column.to_usize();
-            let mut dense = vec![0.0; basis.dimension()];
-            for entry in self.matrix.column(ColIndex::from_usize(column)) {
-                dense[entry.index().to_usize()] = entry.coefficient();
-            }
-            self.edge_squared_norms[column] = 1.0 + squared_norm(&basis.solve(&dense)?);
+            self.edge_squared_norms[column] = 1.0
+                + basis
+                    .right_solve_squared_norm(self.matrix.column(ColIndex::from_usize(column)))?;
             if test_limit
                 && self
                     .time_limit
