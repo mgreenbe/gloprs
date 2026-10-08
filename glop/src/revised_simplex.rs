@@ -562,6 +562,9 @@ impl RevisedSimplex {
                 refactorize_for_precision = true;
                 continue;
             }
+            if self.basis_factorization.as_ref().unwrap().is_refactorized() {
+                self.correct_errors_on_variable_values()?;
+            }
             let phase_objective = self.phase_objective(phase);
             if !incremental_reduced_costs || recompute_reduced_costs {
                 self.compute_reduced_costs(&phase_objective)?;
@@ -1011,6 +1014,39 @@ impl RevisedSimplex {
                     .max(0.0),
             )
         })
+    }
+
+    fn correct_errors_on_variable_values(&mut self) -> Result<(), FactorizationError> {
+        let mut residual = vec![0.0; self.num_rows.to_usize()];
+        for column in 0..self.num_cols.to_usize() {
+            let column = ColIndex::from_usize(column);
+            let value = self.variable_values[column];
+            for entry in self.matrix.column(column) {
+                residual[entry.index().to_usize()] += entry.coefficient() * value;
+            }
+        }
+        let maximum = residual
+            .into_iter()
+            .fold(0.0_f64, |value, entry| value.max(entry.abs()));
+        if maximum
+            < self.parameters.harris_tolerance_ratio * self.parameters.primal_feasibility_tolerance
+        {
+            return Ok(());
+        }
+
+        let info = self.variables_info.as_ref().unwrap();
+        let mut rhs = vec![0.0; self.num_rows.to_usize()];
+        for column in info.not_basic().iter_ones() {
+            let value = self.variable_values[column];
+            for entry in self.matrix.column(column) {
+                rhs[entry.index().to_usize()] -= entry.coefficient() * value;
+            }
+        }
+        let basic = self.basis_factorization.as_ref().unwrap().solve(&rhs)?;
+        for (row, &value) in basic.iter().enumerate() {
+            self.variable_values[self.basis[RowIndex::from_usize(row)]] = value;
+        }
+        Ok(())
     }
 
     fn internal_objective(&self) -> f64 {

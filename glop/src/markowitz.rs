@@ -409,6 +409,17 @@ fn input_column(matrix: MatrixView<'_>, column: usize) -> SparseColumn {
     result
 }
 
+fn structural_singleton_row(
+    residual: &SparseColumn,
+    pattern: &MatrixNonZeroPattern,
+    column: usize,
+) -> Option<usize> {
+    residual
+        .iter()
+        .map(|entry| entry.index().to_usize())
+        .find(|&row| pattern.row_nonzeros[row].contains(&column))
+}
+
 #[allow(clippy::too_many_arguments)]
 fn compute_column<'a>(
     matrix: MatrixView<'_>,
@@ -516,9 +527,9 @@ fn find_pivot(
             pattern.column_degree[column],
             num_fp_operations,
         );
-        if let Some(entry) = residual.first() {
+        if let Some(row) = structural_singleton_row(residual, pattern, column) {
             return Some(Pivot {
-                row: entry.index().to_usize(),
+                row,
                 column,
                 markowitz: 0,
             });
@@ -1072,5 +1083,22 @@ mod tests {
         pattern.remove_column(0, &residual, &mut singletons);
 
         assert_eq!(pattern.row_degree, [0, 0, 1]);
+    }
+
+    #[test]
+    fn residual_singleton_ignores_a_reachability_overestimate_stored_first() {
+        let pattern = MatrixNonZeroPattern {
+            row_nonzeros: vec![Vec::new(), vec![2]],
+            row_degree: vec![0, 1],
+            column_degree: vec![0, 0, 1],
+            deleted_columns: vec![false; 3],
+            scratchpad: vec![false; 3],
+            non_deleted_columns: 3,
+        };
+        let mut residual = SparseColumn::new();
+        residual.add_entry(RowIndex::new(0), 0.0);
+        residual.add_entry(RowIndex::new(1), 3.0);
+
+        assert_eq!(structural_singleton_row(&residual, &pattern, 2), Some(1));
     }
 }
