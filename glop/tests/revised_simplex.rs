@@ -103,3 +103,95 @@ fn maximization_and_primal_objective_limit_use_external_objective_coordinates() 
     assert!(simplex.objective_limit_reached());
     assert!((simplex.objective_value() - 14.0).abs() < 1e-9);
 }
+
+#[test]
+fn dual_phase_two_repairs_a_dual_feasible_primal_infeasible_basis() {
+    // min x; x >= 1; x >= 0.  The all-slack basis is dual feasible, but its
+    // slack value violates the row bound, so dual Phase II performs one pivot.
+    let mut lp = LinearProgram::default();
+    let x = lp.create_new_variable();
+    let row = lp.create_new_constraint();
+    lp.set_variable_bounds(x, 0.0, f64::INFINITY);
+    lp.set_constraint_bounds(row, 1.0, f64::INFINITY);
+    lp.set_coefficient(row, x, 1.0);
+    lp.set_objective_coefficient(x, 1.0);
+    lp.clean_up();
+
+    let parameters = GlopParameters {
+        use_dual_simplex: true,
+        ..GlopParameters::default()
+    };
+    let mut simplex = RevisedSimplex::new();
+    simplex.set_parameters(&parameters);
+    simplex.set_trace_enabled(true);
+    simplex
+        .solve(&lp, &mut TimeLimit::new(f64::INFINITY, f64::INFINITY))
+        .unwrap();
+
+    assert_eq!(simplex.problem_status(), ProblemStatus::Optimal);
+    assert!((simplex.variable_value(x) - 1.0).abs() < 1e-9);
+    assert!((simplex.objective_value() - 1.0).abs() < 1e-9);
+    assert_eq!(simplex.number_of_iterations(), 1);
+    assert_eq!(simplex.trace().len(), 1);
+}
+
+#[test]
+fn dual_phase_two_handles_successive_pivots() {
+    // min x + y; x + y >= 2; x + 2y >= 3; x,y >= 0.
+    let mut lp = LinearProgram::default();
+    let x = lp.create_new_variable();
+    let y = lp.create_new_variable();
+    let first = lp.create_new_constraint();
+    let second = lp.create_new_constraint();
+    lp.set_variable_bounds(x, 0.0, f64::INFINITY);
+    lp.set_variable_bounds(y, 0.0, f64::INFINITY);
+    lp.set_constraint_bounds(first, 2.0, f64::INFINITY);
+    lp.set_constraint_bounds(second, 3.0, f64::INFINITY);
+    lp.set_coefficient(first, x, 1.0);
+    lp.set_coefficient(first, y, 1.0);
+    lp.set_coefficient(second, x, 1.0);
+    lp.set_coefficient(second, y, 2.0);
+    lp.set_objective_coefficient(x, 1.0);
+    lp.set_objective_coefficient(y, 1.0);
+    lp.clean_up();
+
+    let mut simplex = RevisedSimplex::new();
+    simplex.set_parameters(&GlopParameters {
+        use_dual_simplex: true,
+        ..GlopParameters::default()
+    });
+    simplex
+        .solve(&lp, &mut TimeLimit::new(f64::INFINITY, f64::INFINITY))
+        .unwrap();
+
+    assert_eq!(simplex.problem_status(), ProblemStatus::Optimal);
+    assert!((simplex.objective_value() - 2.0).abs() < 1e-9);
+    assert!(simplex.maximum_equation_residual() < 1e-9);
+    assert!(simplex.number_of_iterations() >= 2);
+}
+
+#[test]
+fn dual_objective_limit_uses_external_objective_coordinates() {
+    let mut lp = LinearProgram::default();
+    let x = lp.create_new_variable();
+    let row = lp.create_new_constraint();
+    lp.set_variable_bounds(x, 0.0, f64::INFINITY);
+    lp.set_constraint_bounds(row, 1.0, f64::INFINITY);
+    lp.set_coefficient(row, x, 1.0);
+    lp.set_objective_coefficient(x, 1.0);
+    lp.clean_up();
+
+    let mut simplex = RevisedSimplex::new();
+    simplex.set_parameters(&GlopParameters {
+        use_dual_simplex: true,
+        objective_upper_limit: 0.5,
+        ..GlopParameters::default()
+    });
+    simplex
+        .solve(&lp, &mut TimeLimit::new(f64::INFINITY, f64::INFINITY))
+        .unwrap();
+
+    assert_eq!(simplex.problem_status(), ProblemStatus::DualFeasible);
+    assert!(simplex.objective_limit_reached());
+    assert!((simplex.objective_value() - 1.0).abs() < 1e-9);
+}

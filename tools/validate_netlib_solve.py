@@ -31,6 +31,11 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--objective-tolerance", type=float, default=1e-7)
     parser.add_argument("--feasibility-tolerance", type=float, default=1e-6)
     parser.add_argument(
+        "--dual",
+        action="store_true",
+        help="run gloprs with its dual-simplex driver",
+    )
+    parser.add_argument(
         "--timeout",
         type=float,
         default=None,
@@ -55,8 +60,12 @@ def main() -> int:
     )
     for name in names:
         try:
+            command = [str(args.binary), "solve"]
+            if args.dual:
+                command.append("--dual")
+            command.append(str(DATASET_ROOT / "mps" / f"{name}.mps"))
             completed = subprocess.run(
-                [str(args.binary), "solve", str(DATASET_ROOT / "mps" / f"{name}.mps")],
+                command,
                 check=False,
                 capture_output=True,
                 text=True,

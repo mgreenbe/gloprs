@@ -6,7 +6,7 @@ use lp_data::mps_reader::parse_mps_file;
 
 fn usage(program: &std::ffi::OsStr) -> ExitCode {
     eprintln!(
-        "usage: {} inspect [--tsv] MODEL.mps\n       {} solve MODEL.mps",
+        "usage: {} inspect [--tsv] MODEL.mps\n       {} solve [--dual] MODEL.mps",
         program.to_string_lossy(),
         program.to_string_lossy()
     );
@@ -23,7 +23,8 @@ fn main() -> ExitCode {
         return usage(&program);
     };
     let tab_separated = command == "inspect" && path == "--tsv";
-    if tab_separated {
+    let dual_simplex = command == "solve" && path == "--dual";
+    if tab_separated || dual_simplex {
         let Some(actual_path) = arguments.next() else {
             return usage(&program);
         };
@@ -59,6 +60,7 @@ fn main() -> ExitCode {
         let mut solver = LPSolver::new();
         solver.parameters_mut().use_preprocessing = false;
         solver.parameters_mut().use_scaling = false;
+        solver.parameters_mut().use_dual_simplex = dual_simplex;
         let status = solver.solve(&model);
         println!(
             "status={} objective={:.17e} iterations={} primal_infeasibility={:.17e} dual_infeasibility={:.17e}",

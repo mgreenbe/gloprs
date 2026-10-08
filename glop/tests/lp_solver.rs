@@ -1,4 +1,5 @@
 use glop::lp_solver::LPSolver;
+use glop::parameters::GlopParameters;
 use lp_data::lp_data::{LinearProgram, ProblemSolution};
 use lp_data::lp_types::{ConstraintStatus, ProblemStatus, VariableStatus, VectorIndex};
 
@@ -144,4 +145,27 @@ fn primal_unbounded_ray_is_exposed_only_for_the_current_solve() {
     assert!(solver.primal_ray().is_empty());
     assert!(solver.constraints_dual_ray().is_empty());
     assert!(solver.variable_bounds_dual_ray().is_empty());
+}
+
+#[test]
+fn dual_unbounded_ray_has_public_certificate_signs() {
+    // x is fixed at zero but must satisfy x >= 1.
+    let mut lp = LinearProgram::default();
+    let x = lp.create_new_variable();
+    let row = lp.create_new_constraint();
+    lp.set_variable_bounds(x, 0.0, 0.0);
+    lp.set_constraint_bounds(row, 1.0, f64::INFINITY);
+    lp.set_coefficient(row, x, 1.0);
+    lp.clean_up();
+
+    let mut solver = LPSolver::new();
+    solver.set_parameters(&GlopParameters {
+        use_dual_simplex: true,
+        ..GlopParameters::default()
+    });
+    assert_eq!(solver.solve(&lp), ProblemStatus::DualUnbounded);
+    assert_eq!(solver.constraints_dual_ray().len().to_usize(), 1);
+    assert_eq!(solver.variable_bounds_dual_ray().len().to_usize(), 1);
+    assert!((solver.constraints_dual_ray()[row] - 1.0).abs() < 1e-15);
+    assert!((solver.variable_bounds_dual_ray()[x] + 1.0).abs() < 1e-15);
 }
