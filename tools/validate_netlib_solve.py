@@ -30,6 +30,12 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--binary", type=Path, default=DEFAULT_BINARY)
     parser.add_argument("--objective-tolerance", type=float, default=1e-7)
     parser.add_argument("--feasibility-tolerance", type=float, default=1e-6)
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=None,
+        help="maximum wall-clock seconds per model",
+    )
     return parser.parse_args()
 
 
@@ -43,14 +49,23 @@ def main() -> int:
         for result in json.loads(args.baseline.read_text())["results"]
     }
     failures: list[str] = []
-    print("model\tstatus\tobjective_error\titerations\tnative_iterations\tprimal\tdual")
+    print(
+        "model\tstatus\tobjective_error\titerations\tnative_iterations\tprimal\tdual",
+        flush=True,
+    )
     for name in names:
-        completed = subprocess.run(
-            [str(args.binary), "solve", str(DATASET_ROOT / "mps" / f"{name}.mps")],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        try:
+            completed = subprocess.run(
+                [str(args.binary), "solve", str(DATASET_ROOT / "mps" / f"{name}.mps")],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=args.timeout,
+            )
+        except subprocess.TimeoutExpired:
+            failures.append(f"{name}: timed out after {args.timeout:g} seconds")
+            print(f"{name}\tTIMEOUT\t-\t-\t{native[name]['iterations']}\t-\t-", flush=True)
+            continue
         match = RESULT.fullmatch(completed.stdout.strip())
         if completed.returncode != 0 or match is None:
             failures.append(f"{name}: solver failed: {completed.stderr.strip()}")
@@ -76,7 +91,8 @@ def main() -> int:
             )
         print(
             f"{name}\t{status}\t{objective_error:.3e}\t{fields['iterations']}\t"
-            f"{reference['iterations']}\t{primal:.3e}\t{dual:.3e}"
+            f"{reference['iterations']}\t{primal:.3e}\t{dual:.3e}",
+            flush=True,
         )
     if failures:
         print("\nFAILURES")
