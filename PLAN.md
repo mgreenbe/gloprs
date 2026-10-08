@@ -460,6 +460,12 @@ constraint requirements, and the required number of basic variables.  Its
 optimality validation also computes the compensated dual objective and GLOP's
 expected primal-objective error bound before accepting the primal/dual gap,
 and multiple-solution detection covers both variable and constraint facets.
+Primal-unbounded results now receive GLOP's final refactorization check before
+a certificate is accepted.  The public solver clears certificates between
+solves, exposes rays only for the matching terminal status, removes internal
+slack coordinates from primal rays, and establishes the dual-certificate
+identity `variable_bounds_ray = -A^T constraints_ray` with GLOP's
+minimization/maximization sign convention.
 
 This is not yet a validated Phase-4 port. The primal phase-I objective update is
 not yet connected to GLOP's incremental `ReducedCosts` orchestration; the dual

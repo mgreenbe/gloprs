@@ -95,6 +95,11 @@ impl LPSolver {
             self.resize_solution(lp.num_constraints(), lp.num_variables());
             return ProblemStatus::InvalidProblem;
         }
+        // Rays are populated outside `ProblemSolution`, so clear certificates
+        // retained from a previous solve before launching revised simplex.
+        self.primal_ray.clear();
+        self.constraints_dual_ray.clear();
+        self.variable_bounds_dual_ray.clear();
         self.revised_simplex.set_parameters(&self.parameters);
         if self.revised_simplex.solve(lp, time_limit).is_err() {
             self.resize_solution(lp.num_constraints(), lp.num_variables());
@@ -113,8 +118,30 @@ impl LPSolver {
             solution.dual_values[row] = self.revised_simplex.dual_value(row);
             solution.constraint_statuses[row] = self.revised_simplex.constraint_status(row);
         }
-        self.primal_ray = self.revised_simplex.primal_ray().clone();
-        self.constraints_dual_ray = self.revised_simplex.dual_ray().clone();
+        match solution.status {
+            ProblemStatus::PrimalUnbounded => {
+                self.primal_ray = self.revised_simplex.primal_ray().clone();
+                self.primal_ray.truncate(lp.num_variables());
+            }
+            ProblemStatus::DualUnbounded => {
+                self.constraints_dual_ray = self.revised_simplex.dual_ray().clone();
+                if !lp.is_maximization_problem() {
+                    for value in self.constraints_dual_ray.as_mut_slice() {
+                        *value = -*value;
+                    }
+                }
+                self.variable_bounds_dual_ray = DenseRow::filled(lp.num_variables(), 0.0);
+                for column in 0..lp.num_variables().to_usize() {
+                    let column = ColIndex::from_usize(column);
+                    self.variable_bounds_dual_ray[column] = -lp
+                        .sparse_column(column)
+                        .iter()
+                        .map(|entry| self.constraints_dual_ray[entry.index()] * entry.coefficient())
+                        .sum::<f64>();
+                }
+            }
+            _ => {}
+        }
         self.load_and_verify_solution(lp, &solution)
     }
 

@@ -740,6 +740,19 @@ impl RevisedSimplex {
                 LeavingChoice::Refactorize => unreachable!(),
             };
             if step_length.is_infinite() {
+                // As in PrimalMinimize(), confirm an infinite ratio-test step
+                // against a freshly factorized basis before exposing a ray.
+                if !self.basis_factorization.as_ref().unwrap().is_refactorized() {
+                    self.basis_factorization
+                        .as_mut()
+                        .unwrap()
+                        .force_refactorization()?;
+                    self.incorporate_basis_permutation();
+                    self.update_row.as_mut().unwrap().invalidate();
+                    self.primal_prices.force_recomputation();
+                    recompute_reduced_costs = true;
+                    continue;
+                }
                 self.problem_status = if phase == SimplexPhase::Feasibility {
                     ProblemStatus::Abnormal
                 } else {

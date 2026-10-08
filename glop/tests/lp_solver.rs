@@ -118,3 +118,30 @@ fn rejects_an_optimal_solution_with_a_large_objective_gap() {
         ProblemStatus::Imprecise
     );
 }
+
+#[test]
+fn primal_unbounded_ray_is_exposed_only_for_the_current_solve() {
+    // min -x over x >= 0 has the improving ray d = 1.
+    let mut unbounded = LinearProgram::default();
+    let x = unbounded.create_new_variable();
+    unbounded.set_variable_bounds(x, 0.0, f64::INFINITY);
+    unbounded.set_objective_coefficient(x, -1.0);
+    unbounded.clean_up();
+
+    let mut solver = LPSolver::new();
+    assert_eq!(solver.solve(&unbounded), ProblemStatus::PrimalUnbounded);
+    assert_eq!(solver.primal_ray().len().to_usize(), 1);
+    assert!((solver.primal_ray()[x] - 1.0).abs() < 1e-15);
+    assert!(solver.constraints_dual_ray().is_empty());
+    assert!(solver.variable_bounds_dual_ray().is_empty());
+
+    let mut bounded = LinearProgram::default();
+    let y = bounded.create_new_variable();
+    bounded.set_variable_bounds(y, 0.0, 1.0);
+    bounded.set_objective_coefficient(y, -1.0);
+    bounded.clean_up();
+    assert_eq!(solver.solve(&bounded), ProblemStatus::Optimal);
+    assert!(solver.primal_ray().is_empty());
+    assert!(solver.constraints_dual_ray().is_empty());
+    assert!(solver.variable_bounds_dual_ray().is_empty());
+}
