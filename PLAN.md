@@ -448,6 +448,12 @@ update now also consumes the scattered BTRAN result already owned by
 scan on every dual pivot.
 Maximization objective coordinates and primal objective limits follow GLOP's
 offset/scaling sign convention and strict stopping test.
+Final objective values now use GLOP's compensated `AccurateSum` recurrence in
+both `RevisedSimplex` and `LPSolver`.  The revised-simplex solution snapshot
+also changes the signs of dual values and reduced costs for maximization before
+exposing them, as upstream does, and final primal/dual residual classification
+uses GLOP's coordinate-scaled allowed errors while retaining the unscaled
+maximum residuals for reporting.
 
 This is not yet a validated Phase-4 port. The primal phase-I objective update is
 not yet connected to GLOP's incremental `ReducedCosts` orchestration; the dual

@@ -12,6 +12,7 @@ use lp_data::lp_types::{
     ColIndex, ConstraintStatus, ConstraintStatusColumn, DenseColumn, DenseRow, ProblemStatus,
     RowIndex, VariableStatus, VariableStatusRow, VectorIndex,
 };
+use lp_data::lp_utils::precise_scalar_product;
 
 use crate::parameters::GlopParameters;
 use crate::revised_simplex::RevisedSimplex;
@@ -163,20 +164,20 @@ impl LPSolver {
         self.compute_constraint_activities(lp);
         self.problem_objective_value =
             lp.objective_scaling_factor() * (self.compute_objective(lp) + lp.objective_offset());
-        self.compute_infeasibilities(lp);
+        let (primal_infeasibility_is_too_large, dual_infeasibility_is_too_large) =
+            self.compute_infeasibilities(lp);
 
         let mut status = solution.status;
         if matches!(
             status,
             ProblemStatus::Optimal | ProblemStatus::PrimalFeasible
-        ) && self.max_absolute_primal_infeasibility
-            > self.parameters.solution_feasibility_tolerance
+        ) && primal_infeasibility_is_too_large
             && self.parameters.change_status_to_imprecise
         {
             status = ProblemStatus::Imprecise;
         }
         if matches!(status, ProblemStatus::Optimal | ProblemStatus::DualFeasible)
-            && self.max_absolute_dual_infeasibility > self.parameters.solution_feasibility_tolerance
+            && dual_infeasibility_is_too_large
             && self.parameters.change_status_to_imprecise
         {
             status = ProblemStatus::Imprecise;
@@ -213,7 +214,7 @@ impl LPSolver {
                         .iter()
                         .map(|entry| self.dual_values[entry.index()] * entry.coefficient())
                         .sum::<f64>();
-                    lp.objective_coefficient_for_minimization(column) - matrix_dual
+                    lp.objective_coefficients()[column] - matrix_dual
                 })
                 .collect(),
         );
@@ -231,45 +232,88 @@ impl LPSolver {
     }
 
     fn compute_objective(&self, lp: &LinearProgram) -> f64 {
-        (0..lp.num_variables().to_usize())
-            .map(|column| {
-                let column = ColIndex::from_usize(column);
-                lp.objective_coefficients()[column] * self.primal_values[column]
-            })
-            .sum()
+        precise_scalar_product(
+            lp.objective_coefficients().as_slice(),
+            self.primal_values.as_slice(),
+        )
     }
 
-    fn compute_infeasibilities(&mut self, lp: &LinearProgram) {
+    fn compute_infeasibilities(&mut self, lp: &LinearProgram) -> (bool, bool) {
+        let tolerance = self.parameters.solution_feasibility_tolerance;
+        let allowed_error = |value: f64| tolerance * value.abs().max(1.0);
+        let mut primal_is_too_large = false;
         self.max_absolute_primal_infeasibility = 0.0;
         for column in 0..lp.num_variables().to_usize() {
             let column = ColIndex::from_usize(column);
-            self.max_absolute_primal_infeasibility = self.max_absolute_primal_infeasibility.max(
-                (lp.variable_lower_bounds()[column] - self.primal_values[column])
-                    .max(self.primal_values[column] - lp.variable_upper_bounds()[column])
-                    .max(0.0),
-            );
+            let lower = lp.variable_lower_bounds()[column];
+            let upper = lp.variable_upper_bounds()[column];
+            let value = self.primal_values[column];
+            let (error, reference) = if lower == upper {
+                ((value - upper).abs(), upper)
+            } else if value > upper {
+                (value - upper, upper)
+            } else if value < lower {
+                (lower - value, lower)
+            } else {
+                (0.0, 0.0)
+            };
+            self.max_absolute_primal_infeasibility =
+                self.max_absolute_primal_infeasibility.max(error);
+            primal_is_too_large |= error > allowed_error(reference);
         }
         for row in 0..lp.num_constraints().to_usize() {
             let row = RowIndex::from_usize(row);
-            self.max_absolute_primal_infeasibility = self.max_absolute_primal_infeasibility.max(
-                (lp.constraint_lower_bounds()[row] - self.constraint_activities[row])
-                    .max(self.constraint_activities[row] - lp.constraint_upper_bounds()[row])
-                    .max(0.0),
-            );
+            let lower = lp.constraint_lower_bounds()[row];
+            let upper = lp.constraint_upper_bounds()[row];
+            let activity = self.constraint_activities[row];
+            let (error, reference) = if lower == upper {
+                ((activity - upper).abs(), upper)
+            } else if activity > upper {
+                (activity - upper, upper)
+            } else if activity < lower {
+                (lower - activity, lower)
+            } else {
+                (0.0, 0.0)
+            };
+            self.max_absolute_primal_infeasibility =
+                self.max_absolute_primal_infeasibility.max(error);
+            primal_is_too_large |= error > allowed_error(reference);
         }
         self.max_absolute_dual_infeasibility = 0.0;
+        let mut dual_is_too_large = false;
+        let optimization_sign = if lp.is_maximization_problem() {
+            -1.0
+        } else {
+            1.0
+        };
+        for row in 0..lp.num_constraints().to_usize() {
+            let row = RowIndex::from_usize(row);
+            let value = optimization_sign * self.dual_values[row];
+            let mut error = 0.0_f64;
+            if lp.constraint_lower_bounds()[row] == f64::NEG_INFINITY {
+                error = error.max(value);
+            }
+            if lp.constraint_upper_bounds()[row] == f64::INFINITY {
+                error = error.max(-value);
+            }
+            self.max_absolute_dual_infeasibility = self.max_absolute_dual_infeasibility.max(error);
+            dual_is_too_large |= error > tolerance;
+        }
         for column in 0..lp.num_variables().to_usize() {
             let column = ColIndex::from_usize(column);
-            let reduced = self.reduced_costs[column];
-            let violation = match self.variable_statuses[column] {
-                VariableStatus::AtLowerBound => (-reduced).max(0.0),
-                VariableStatus::AtUpperBound => reduced.max(0.0),
-                VariableStatus::Basic | VariableStatus::Free => reduced.abs(),
-                VariableStatus::FixedValue => 0.0,
-            };
+            let reduced = optimization_sign * self.reduced_costs[column];
+            let mut violation = 0.0_f64;
+            if lp.variable_lower_bounds()[column] == f64::NEG_INFINITY {
+                violation = violation.max(reduced);
+            }
+            if lp.variable_upper_bounds()[column] == f64::INFINITY {
+                violation = violation.max(-reduced);
+            }
             self.max_absolute_dual_infeasibility =
                 self.max_absolute_dual_infeasibility.max(violation);
+            dual_is_too_large |= violation > allowed_error(lp.objective_coefficients()[column]);
         }
+        (primal_is_too_large, dual_is_too_large)
     }
 
     #[must_use]

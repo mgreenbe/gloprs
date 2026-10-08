@@ -18,6 +18,7 @@ use lp_data::lp_types::{
     ColIndex, ConstraintStatus, DenseColumn, DenseRow, INVALID_COL, ProblemStatus, RowIndex,
     RowToColMapping, VariableStatus, VectorIndex,
 };
+use lp_data::lp_utils::precise_scalar_product;
 use lp_data::scattered_vector::ScatteredColumn;
 use lp_data::sparse::{CompactSparseMatrix, SparseMatrix};
 
@@ -69,6 +70,9 @@ pub struct RevisedSimplex {
     variable_values: DenseRow,
     reduced_costs: DenseRow,
     dual_values: DenseColumn,
+    solution_reduced_costs: DenseRow,
+    solution_dual_values: DenseColumn,
+    is_maximization_problem: bool,
     primal_edge_norms: Option<PrimalEdgeNorms>,
     primal_prices: PrimalPrices,
     update_row: Option<UpdateRow>,
@@ -110,6 +114,9 @@ impl RevisedSimplex {
             variable_values: DenseRow::new(),
             reduced_costs: DenseRow::new(),
             dual_values: DenseColumn::new(),
+            solution_reduced_costs: DenseRow::new(),
+            solution_dual_values: DenseColumn::new(),
+            is_maximization_problem: false,
             primal_edge_norms: None,
             primal_prices: PrimalPrices::new(1),
             update_row: None,
@@ -186,6 +193,7 @@ impl RevisedSimplex {
         self.first_slack_col = equation_lp
             .first_slack_variable()
             .unwrap_or(equation_lp.num_variables());
+        self.is_maximization_problem = equation_lp.is_maximization_problem();
         self.matrix = equation_lp.matrix().clone();
         self.compact_matrix = CompactSparseMatrix::from_sparse(&self.matrix);
         self.objective = DenseRow::from_vec(
@@ -1050,17 +1058,22 @@ impl RevisedSimplex {
     }
 
     fn internal_objective(&self) -> f64 {
-        (0..self.num_cols.to_usize())
-            .map(|column| {
-                self.objective[ColIndex::from_usize(column)]
-                    * self.variable_values.as_slice()[column]
-            })
-            .sum()
+        precise_scalar_product(self.objective.as_slice(), self.variable_values.as_slice())
     }
 
     fn finish_solution(&mut self) -> Result<(), FactorizationError> {
         let objective = self.objective.clone();
         self.compute_reduced_costs(&objective)?;
+        self.solution_reduced_costs = self.reduced_costs.clone();
+        self.solution_dual_values = self.dual_values.clone();
+        if self.is_maximization_problem {
+            for value in self.solution_reduced_costs.as_mut_slice() {
+                *value = -*value;
+            }
+            for value in self.solution_dual_values.as_mut_slice() {
+                *value = -*value;
+            }
+        }
         self.solution_state.statuses = self
             .variables_info
             .as_ref()
@@ -1100,15 +1113,16 @@ impl RevisedSimplex {
     }
     #[must_use]
     pub fn reduced_cost(&self, column: ColIndex) -> f64 {
-        self.reduced_costs[column]
+        self.solution_reduced_costs[column]
     }
     #[must_use]
+    #[allow(clippy::misnamed_getters)] // Mirrors GLOP's final-solution getter.
     pub const fn reduced_costs(&self) -> &DenseRow {
-        &self.reduced_costs
+        &self.solution_reduced_costs
     }
     #[must_use]
     pub fn dual_value(&self, row: RowIndex) -> f64 {
-        self.dual_values[row]
+        self.solution_dual_values[row]
     }
     #[must_use]
     pub fn constraint_activity(&self, row: RowIndex) -> f64 {
