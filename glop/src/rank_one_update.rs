@@ -188,6 +188,9 @@ impl RankOneUpdateFactorization {
         }
         values.repopulate_sparse_mask();
         let mut use_dense = values.should_use_dense_iteration(self.hypersparse_ratio);
+        if use_dense {
+            values.non_zeros_mut().clear();
+        }
         for matrix in &self.elementary_matrices {
             let multiplier = -sparse_scalar_product(
                 &self.entries[matrix.v_start..matrix.v_end],
@@ -206,6 +209,9 @@ impl RankOneUpdateFactorization {
                     values.add(RowIndex::from_usize(index), multiplier * value);
                 }
                 use_dense = values.should_use_dense_iteration(self.hypersparse_ratio);
+                if use_dense {
+                    values.non_zeros_mut().clear();
+                }
             }
         }
         values.clear_sparse_mask();
@@ -220,6 +226,9 @@ impl RankOneUpdateFactorization {
         }
         values.repopulate_sparse_mask();
         let mut use_dense = values.should_use_dense_iteration(self.hypersparse_ratio);
+        if use_dense {
+            values.non_zeros_mut().clear();
+        }
         for matrix in self.elementary_matrices.iter().rev() {
             let multiplier = -sparse_scalar_product(
                 &self.entries[matrix.u_start..matrix.u_end],
@@ -238,6 +247,9 @@ impl RankOneUpdateFactorization {
                     values.add(ColIndex::from_usize(index), multiplier * value);
                 }
                 use_dense = values.should_use_dense_iteration(self.hypersparse_ratio);
+                if use_dense {
+                    values.non_zeros_mut().clear();
+                }
             }
         }
         values.clear_sparse_mask();

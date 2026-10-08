@@ -484,6 +484,7 @@ impl RevisedSimplex {
         phase: SimplexPhase,
         time_limit: &mut TimeLimit,
     ) -> Result<(), FactorizationError> {
+        let mut final_check_performed = false;
         loop {
             if time_limit.limit_reached()
                 || self.num_iterations
@@ -499,6 +500,19 @@ impl RevisedSimplex {
             let phase_objective = self.phase_objective(phase);
             self.compute_reduced_costs(&phase_objective)?;
             let Some(entering) = self.choose_entering() else {
+                // GLOP accepts an empty pricing set only after its FINAL_CHECK
+                // has both precise reduced costs and a refactorized basis.
+                // This provisional driver does not yet retain that precision
+                // state, so perform the check once explicitly and price again.
+                if !final_check_performed {
+                    self.basis_factorization
+                        .as_mut()
+                        .unwrap()
+                        .force_refactorization()?;
+                    self.incorporate_basis_permutation();
+                    final_check_performed = true;
+                    continue;
+                }
                 if phase == SimplexPhase::Feasibility {
                     let infeasibility = self.maximum_primal_infeasibility();
                     self.problem_status =
@@ -513,6 +527,7 @@ impl RevisedSimplex {
                 return Ok(());
             };
             let direction = self.direction(entering)?;
+            final_check_performed = false;
             let direction_norm = direction
                 .values()
                 .as_slice()
@@ -602,15 +617,39 @@ impl RevisedSimplex {
                     .as_ref()
                     .unwrap()
                     .left_solve_for_unit_row(row.to_usize(), &mut unit_left_inverse)?;
-                self.basis_factorization
-                    .as_mut()
-                    .unwrap()
-                    .replace_column_after_solve(
-                        entering.to_usize(),
-                        row.to_usize(),
-                        &direction,
-                        self.matrix.column(entering).clone(),
-                    )?;
+                let pivot_from_update_row = self
+                    .matrix
+                    .column(entering)
+                    .iter()
+                    .map(|entry| {
+                        unit_left_inverse.value(ColIndex::from_usize(entry.index().to_usize()))
+                            * entry.coefficient()
+                    })
+                    .sum::<f64>();
+                let pivot_from_direction = direction.value(row);
+                let pivot_difference = (pivot_from_update_row - pivot_from_direction).abs();
+                let imprecise_pivot = pivot_difference
+                    > self.parameters.refactorization_threshold
+                        * (1.0 + pivot_from_update_row.abs().min(pivot_from_direction.abs()));
+                if imprecise_pivot {
+                    self.basis_factorization
+                        .as_mut()
+                        .unwrap()
+                        .replace_column_and_refactorize(
+                            row.to_usize(),
+                            self.matrix.column(entering).clone(),
+                        )?;
+                } else {
+                    self.basis_factorization
+                        .as_mut()
+                        .unwrap()
+                        .replace_column_after_solve(
+                            entering.to_usize(),
+                            row.to_usize(),
+                            &direction,
+                            self.matrix.column(entering).clone(),
+                        )?;
+                }
                 self.incorporate_basis_permutation();
             } else {
                 let info = self.variables_info.as_mut().unwrap();

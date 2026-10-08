@@ -592,6 +592,11 @@ impl BasisRepresentation {
             return Ok(());
         }
         result.clear();
+        // `clear()` only resets positions recorded by the preceding solve.
+        // The membership bitset is a temporary cache and can retain unrelated
+        // stale bits, so clear it while the empty position list selects the
+        // dense bucket reset before scattering the next problem column.
+        result.clear_sparse_mask();
         for entry in column {
             if entry.index().to_usize() >= self.dimension() {
                 return Err(FactorizationError::DimensionMismatch);
@@ -743,6 +748,29 @@ impl BasisRepresentation {
         self.finish_column_replacement(leaving_column, entering_column, right_update, &left_update)
     }
 
+    /// Installs a replacement basis column and rebuilds the LU factors.
+    ///
+    /// This is the branch used by `RevisedSimplex::UpdateAndPivot()` when the
+    /// pivot computed by FTRAN disagrees with the independently computed
+    /// update-row pivot. No eta or middle-product update is retained.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension error or a factorization failure.
+    pub fn replace_column_and_refactorize(
+        &mut self,
+        leaving_column: usize,
+        mut entering_column: SparseColumn,
+    ) -> Result<(), FactorizationError> {
+        if leaving_column >= self.dimension() {
+            return Err(FactorizationError::DimensionMismatch);
+        }
+        entering_column.clean_up();
+        self.basis
+            .replace_column(ColIndex::from_usize(leaving_column), entering_column);
+        self.force_refactorization()
+    }
+
     /// Consumes partial solves previously produced for a problem column and
     /// leaving row, matching GLOP's `Update()`/middle-product protocol.
     ///
@@ -817,6 +845,14 @@ impl BasisRepresentation {
         }
 
         let right_update_is_dense = right_update.non_zeros().is_empty();
+        if !right_update_is_dense {
+            // The partial solve deliberately leaves the scattered membership
+            // mask cleared. Rebuild it before accumulating `-U[:, p]`; unlike
+            // GLOP's AddAndClearColumnWithNonZeros() storage path, the Rust
+            // packed update is formed directly from the position list and
+            // therefore must not admit duplicate positions here.
+            right_update.repopulate_sparse_mask();
+        }
         for (row, value) in self.factorization.column_of_upper(leaving_column) {
             right_update.add(lp_data::lp_types::RowIndex::from_usize(row), -value);
         }

@@ -314,6 +314,7 @@ impl ColumnPriorityQueue {
 #[derive(Clone, Debug, Default)]
 struct CandidateColumn {
     needs_solve: bool,
+    contains_zero: bool,
 }
 
 /// GLOP's logical-column repository backed by a small reusable physical pool.
@@ -407,12 +408,13 @@ fn compute_column<'a>(
             row_permutation,
             permuted_upper.mutable_column(column),
         );
+        candidates[column].contains_zero = residual.iter().any(|entry| entry.coefficient() == 0.0);
         *num_fp_operations += lower_factor.num_fp_operations_in_last_permuted_lower_sparse_solve();
     } else {
         // GLOP performs this test before populating a column seen for the
         // first time. In particular, an empty residual column is returned
         // immediately when its structural degree is zero.
-        if residual.num_entries() == residual_degree {
+        if residual.num_entries() == residual_degree && !candidates[column].contains_zero {
             permuted_lower.restore_column(column, residual);
             return permuted_lower.column(column);
         }
@@ -431,6 +433,13 @@ fn compute_column<'a>(
     }
     candidates[column].needs_solve = false;
     permuted_lower.restore_column(column, residual);
+    debug_assert!(
+        permuted_lower
+            .column(column)
+            .iter()
+            .all(|entry| row_permutation[entry.index().to_usize()] == INVALID),
+        "computed candidate column {column} retained a pivoted row"
+    );
     permuted_lower.column(column)
 }
 
@@ -982,6 +991,51 @@ mod tests {
                 .look_up_coefficient(RowIndex::new(1))
                 .to_bits(),
             (-2.0_f64).to_bits()
+        );
+    }
+
+    #[test]
+    fn exact_cancellation_disables_the_cardinality_only_split_shortcut() {
+        let mut matrix = SparseMatrix::new();
+        matrix.populate_from_zero(RowIndex::new(3), lp_data::lp_types::ColIndex::new(1));
+        let mut lower_factor = TriangularMatrix::empty(Triangle::Lower, true);
+        lower_factor.reset(3, 3);
+        let row_permutation = [INVALID, 0, INVALID];
+        let mut candidates = vec![CandidateColumn {
+            needs_solve: false,
+            contains_zero: true,
+        }];
+        let mut permuted_lower = ReusableColumnMemory::new(1);
+        permuted_lower
+            .mutable_column(0)
+            .add_entry(RowIndex::new(1), 2.0);
+        permuted_lower
+            .mutable_column(0)
+            .add_entry(RowIndex::new(2), 0.0);
+        let mut permuted_upper = ReusableColumnMemory::new(1);
+        let mut operations = 0;
+
+        let lower = compute_column(
+            MatrixView::full(&matrix),
+            0,
+            &row_permutation,
+            &mut lower_factor,
+            &mut candidates,
+            &mut permuted_lower,
+            &mut permuted_upper,
+            2,
+            &mut operations,
+        );
+
+        assert_eq!(lower.num_entries(), 1);
+        assert_eq!(lower.entry(0).index(), RowIndex::new(2));
+        assert_eq!(lower.entry(0).coefficient().to_bits(), 0.0_f64.to_bits());
+        assert_eq!(
+            permuted_upper
+                .column(0)
+                .look_up_coefficient(RowIndex::new(1))
+                .to_bits(),
+            2.0_f64.to_bits()
         );
     }
 }

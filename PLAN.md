@@ -418,16 +418,24 @@ test, primal optimization, Harris ratio tests, bound flips, product-form basis
 updates, initial-basis crashes and condition rejection, warm-basis input,
 solution/ray extraction, independent residual checks, and opt-in normalized
 iteration events. The public CLI can run an unscaled, unpreprocessed solve.
+The pivot path now also performs GLOP's independent BTRAN/update-row versus
+FTRAN pivot comparison and refactorizes instead of retaining an imprecise
+middle-product update. Basis-update refactorizations leave their LU column
+permutation visible until the revised-simplex owner applies it to the external
+basis mapping, matching `PermuteBasis()`. The optimality path also performs
+GLOP's precise final check by refactorizing, recomputing reduced costs, and
+pricing again before accepting an empty candidate set.
 
 This is not yet a validated Phase-4 port. The current entering-column scan is
 temporary and must be replaced by the already ported `PrimalPrices`/
 `PrimalEdgeNorms` path; the dual phase-I/phase-II loop, perturbation and cost
-shift orchestration, precise final checks, objective limits, and complete
+shift orchestration, full termination/reoptimization checks, objective limits, and complete
 incremental warm-start cases remain to be translated. Nine smallest-Netlib
-models reach the published objective in exploratory release runs, but native
-iteration traces diverge and `sc105`/`sc205` expose unresolved numerical-state
-issues. Consequently neither file is marked ported or validated in
-`PORTING.md`, and none of the dataset gates below is complete.
+models reach the published objective in exploratory release runs, and the
+previous `sc105`/`sc205` numerical-state discrepancies are covered by targeted
+regressions and now terminate `OPTIMAL` at their published objectives. Native
+iteration traces still diverge. Consequently neither file is marked ported or
+validated in `PORTING.md`, and none of the dataset gates below is complete.
 
 Translate the revised-simplex driver and its immediate orchestration:
 

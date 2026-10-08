@@ -631,6 +631,11 @@ impl LuFactorization {
         if destination_by_source.is_empty() {
             return;
         }
+        // The sparse membership mask is a temporary cache keyed by the
+        // current coordinates. Clear its source-coordinate buckets before
+        // permuting the recorded positions; otherwise stale source bits can
+        // suppress positions introduced by a later rank-one update.
+        vector.clear_sparse_mask();
         let n = destination_by_source.len();
         let mut scratch = self.dense_zero_scratchpad.borrow_mut();
         scratch.resize(n, 0.0);
@@ -1008,6 +1013,27 @@ mod tests {
                     .all(|(left, right)| (left - right).abs() < 1e-12)
             );
         }
+    }
+
+    #[test]
+    fn scattered_permutation_invalidates_source_coordinate_membership_bits() {
+        let factorization = LuFactorization::new();
+        let mut vector = ScatteredColumn::new(RowIndex::new(3));
+        vector.set(RowIndex::new(0), 1.0);
+
+        factorization.permute_scattered(&mut vector, &[1, 0, 2]);
+        vector.add(RowIndex::new(0), 2.0);
+
+        assert_eq!(vector.value(RowIndex::new(0)).to_bits(), 2.0_f64.to_bits());
+        assert_eq!(vector.value(RowIndex::new(1)).to_bits(), 1.0_f64.to_bits());
+        assert_eq!(
+            vector
+                .non_zeros()
+                .iter()
+                .map(|index| index.to_usize())
+                .collect::<Vec<_>>(),
+            [1, 0]
+        );
     }
 
     #[test]
