@@ -20,9 +20,14 @@ def main() -> None:
     parser.add_argument("--upstream", type=Path, default=DEFAULT_UPSTREAM)
     parser.add_argument("--build", type=Path, default=DEFAULT_BUILD)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--source",
+        type=Path,
+        default=PROJECT_ROOT / "tools" / "glop_reference_adapter.cc",
+    )
     args = parser.parse_args()
 
-    source = PROJECT_ROOT / "tools" / "glop_reference_adapter.cc"
+    source = args.source
     library_dir = args.build / "lib"
     # libortools' public headers instantiate some Abseil templates in the
     # adapter, so those symbols are direct link dependencies too.  Keep one
@@ -38,6 +43,10 @@ def main() -> None:
         "c++",
         "-std=c++20",
         "-O2",
+        # The pinned OR-Tools library is a release build.  This is also an ABI
+        # requirement for public classes whose debug-only fields are guarded
+        # by NDEBUG (notably TimeLimit).
+        "-DNDEBUG",
         '-DOR_PROTO_DLL=',
         "-DPROTOBUF_USE_DLLS",
         f"-I{args.upstream}",

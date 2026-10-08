@@ -8,10 +8,16 @@ use std::ops::{Index, IndexMut};
 
 /// Scalar used for all numerical LP computations.
 pub type Fractional = f64;
+pub type GlopIndex = i32;
 
 pub const RANGE_MAX: Fractional = Fractional::MAX;
 pub const INFINITY: Fractional = Fractional::INFINITY;
 pub const EPSILON: Fractional = Fractional::EPSILON;
+
+#[must_use]
+pub const fn to_double(value: Fractional) -> f64 {
+    value
+}
 
 #[must_use]
 pub fn is_finite(value: Fractional) -> bool {
@@ -61,6 +67,16 @@ pub const fn col_to_row_index(column: ColIndex) -> RowIndex {
     RowIndex::new(column.value())
 }
 
+#[must_use]
+pub const fn col_to_int_index(column: ColIndex) -> GlopIndex {
+    column.value()
+}
+
+#[must_use]
+pub const fn row_to_int_index(row: RowIndex) -> GlopIndex {
+    row.value()
+}
+
 /// A vector that can only be indexed with its logical LP index type.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TypedVec<I, T> {
@@ -71,6 +87,137 @@ pub struct TypedVec<I, T> {
 pub trait VectorIndex: Copy {
     fn to_usize(self) -> usize;
     fn from_usize(value: usize) -> Self;
+    fn value_i64(self) -> i64;
+}
+
+/// Borrowed counterpart of upstream `StrictITISpan`.
+#[derive(Clone, Copy, Debug)]
+pub struct TypedSlice<'a, I, T> {
+    values: &'a [T],
+    index: PhantomData<fn(I) -> I>,
+}
+
+impl<'a, I: VectorIndex, T> TypedSlice<'a, I, T> {
+    #[must_use]
+    pub fn new(values: &'a [T]) -> Self {
+        let _ = I::from_usize(values.len());
+        Self {
+            values,
+            index: PhantomData,
+        }
+    }
+
+    #[must_use]
+    pub fn len(self) -> I {
+        I::from_usize(self.values.len())
+    }
+
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.values.is_empty()
+    }
+
+    #[must_use]
+    pub const fn as_slice(self) -> &'a [T] {
+        self.values
+    }
+
+    pub fn iter(self) -> std::slice::Iter<'a, T> {
+        self.values.iter()
+    }
+}
+
+impl<I: VectorIndex, T> Index<I> for TypedSlice<'_, I, T> {
+    type Output = T;
+
+    fn index(&self, index: I) -> &Self::Output {
+        &self.values[index.to_usize()]
+    }
+}
+
+impl<'a, I: VectorIndex, T> IntoIterator for TypedSlice<'a, I, T> {
+    type Item = &'a T;
+    type IntoIter = std::slice::Iter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.values.iter()
+    }
+}
+
+#[derive(Debug)]
+pub struct TypedSliceMut<'a, I, T> {
+    values: &'a mut [T],
+    index: PhantomData<fn(I) -> I>,
+}
+
+impl<'a, I: VectorIndex, T> TypedSliceMut<'a, I, T> {
+    #[must_use]
+    pub fn new(values: &'a mut [T]) -> Self {
+        let _ = I::from_usize(values.len());
+        Self {
+            values,
+            index: PhantomData,
+        }
+    }
+
+    #[must_use]
+    pub fn len(&self) -> I {
+        I::from_usize(self.values.len())
+    }
+
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+
+    #[must_use]
+    pub fn as_slice(&self) -> &[T] {
+        self.values
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        self.values
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, T> {
+        self.values.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
+        self.values.iter_mut()
+    }
+}
+
+impl<I: VectorIndex, T> Index<I> for TypedSliceMut<'_, I, T> {
+    type Output = T;
+
+    fn index(&self, index: I) -> &Self::Output {
+        &self.values[index.to_usize()]
+    }
+}
+
+impl<I: VectorIndex, T> IndexMut<I> for TypedSliceMut<'_, I, T> {
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        &mut self.values[index.to_usize()]
+    }
+}
+
+impl<'b, I: VectorIndex, T> IntoIterator for &'b TypedSliceMut<'_, I, T> {
+    type Item = &'b T;
+    type IntoIter = std::slice::Iter<'b, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.values.iter()
+    }
+}
+
+impl<'b, I: VectorIndex, T> IntoIterator for &'b mut TypedSliceMut<'_, I, T> {
+    type Item = &'b mut T;
+    type IntoIter = std::slice::IterMut<'b, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.values.iter_mut()
+    }
 }
 
 macro_rules! vector_index {
@@ -82,6 +229,10 @@ macro_rules! vector_index {
 
             fn from_usize(value: usize) -> Self {
                 Self::new(i32::try_from(value).expect("vector is too large for its index type"))
+            }
+
+            fn value_i64(self) -> i64 {
+                i64::from(self.value())
             }
         }
     };
@@ -127,12 +278,47 @@ impl<I: VectorIndex, T> TypedVec<I, T> {
         self.values.clear();
     }
 
+    #[must_use]
+    pub fn capacity(&self) -> I {
+        I::from_usize(self.values.capacity())
+    }
+
+    pub fn reserve(&mut self, capacity: I) {
+        let requested = capacity.to_usize();
+        if self.values.capacity() < requested {
+            self.values.reserve(requested - self.values.len());
+        }
+    }
+
     pub fn truncate(&mut self, size: I) {
+        self.values.truncate(size.to_usize());
+    }
+
+    /// # Panics
+    ///
+    /// Panics if `size` is larger than the current logical size.
+    pub fn resize_down(&mut self, size: I) {
+        assert!(size.to_usize() <= self.values.len());
         self.values.truncate(size.to_usize());
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, T> {
         self.values.iter()
+    }
+
+    #[must_use]
+    pub fn view(&self) -> TypedSlice<'_, I, T> {
+        TypedSlice::new(&self.values)
+    }
+
+    #[must_use]
+    pub fn view_mut(&mut self) -> TypedSliceMut<'_, I, T> {
+        TypedSliceMut::new(&mut self.values)
+    }
+
+    #[must_use]
+    pub fn back(&self) -> Option<&T> {
+        self.values.last()
     }
 
     #[must_use]
@@ -164,6 +350,23 @@ impl<I: VectorIndex, T: Clone> TypedVec<I, T> {
     pub fn resize(&mut self, size: I, value: T) {
         self.values.resize(size.to_usize(), value);
     }
+
+    pub fn assign(&mut self, size: I, value: T) {
+        self.values.clear();
+        self.values.resize(size.to_usize(), value);
+    }
+
+    pub fn assign_from_view(&mut self, view: TypedSlice<'_, I, T>) {
+        self.values.clear();
+        self.values.extend_from_slice(view.as_slice());
+    }
+}
+
+impl<I: VectorIndex, T: Default + Clone> TypedVec<I, T> {
+    pub fn assign_to_zero(&mut self, size: I) {
+        self.values.clear();
+        self.values.resize(size.to_usize(), T::default());
+    }
 }
 
 impl<I: VectorIndex, T> Index<I> for TypedVec<I, T> {
@@ -194,6 +397,79 @@ pub struct BitVec<I> {
     index: PhantomData<fn(I) -> I>,
 }
 
+#[derive(Clone, Debug)]
+pub struct BitOnesIter<'a, I> {
+    words: &'a [u64],
+    word_index: usize,
+    current: u64,
+    index: PhantomData<fn(I) -> I>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct BitSlice<'a, I> {
+    words: &'a [u64],
+    index: PhantomData<fn(I) -> I>,
+}
+
+impl<I: VectorIndex> BitSlice<'_, I> {
+    #[must_use]
+    pub fn contains(self, index: I) -> bool {
+        let position = index.to_usize();
+        self.words[position / 64] & (1_u64 << (position % 64)) != 0
+    }
+}
+
+#[derive(Debug)]
+pub struct BitSliceMut<'a, I> {
+    words: &'a mut [u64],
+    index: PhantomData<fn(I) -> I>,
+}
+
+impl<I: VectorIndex> BitSliceMut<'_, I> {
+    #[must_use]
+    pub fn contains(&self, index: I) -> bool {
+        let position = index.to_usize();
+        self.words[position / 64] & (1_u64 << (position % 64)) != 0
+    }
+
+    pub fn set(&mut self, index: I) {
+        let position = index.to_usize();
+        self.words[position / 64] |= 1_u64 << (position % 64);
+    }
+
+    pub fn clear(&mut self, index: I) {
+        let position = index.to_usize();
+        self.words[position / 64] &= !(1_u64 << (position % 64));
+    }
+}
+
+impl<I: VectorIndex> BitOnesIter<'_, I> {
+    fn new(words: &[u64]) -> BitOnesIter<'_, I> {
+        BitOnesIter {
+            words,
+            word_index: 0,
+            current: words.first().copied().unwrap_or(0),
+            index: PhantomData,
+        }
+    }
+}
+
+impl<I: VectorIndex> Iterator for BitOnesIter<'_, I> {
+    type Item = I;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if self.current != 0 {
+                let bit = self.current.trailing_zeros() as usize;
+                self.current &= self.current - 1;
+                return Some(I::from_usize(64 * self.word_index + bit));
+            }
+            self.word_index += 1;
+            self.current = *self.words.get(self.word_index)?;
+        }
+    }
+}
+
 impl<I: VectorIndex> BitVec<I> {
     #[must_use]
     pub fn new(size: I) -> Self {
@@ -211,6 +487,22 @@ impl<I: VectorIndex> BitVec<I> {
     }
 
     #[must_use]
+    pub fn view(&self) -> BitSlice<'_, I> {
+        BitSlice {
+            words: &self.words,
+            index: PhantomData,
+        }
+    }
+
+    #[must_use]
+    pub fn view_mut(&mut self) -> BitSliceMut<'_, I> {
+        BitSliceMut {
+            words: &mut self.words,
+            index: PhantomData,
+        }
+    }
+
+    #[must_use]
     pub fn contains(&self, index: I) -> bool {
         let position = index.to_usize();
         self.words[position / 64] & (1_u64 << (position % 64)) != 0
@@ -221,9 +513,41 @@ impl<I: VectorIndex> BitVec<I> {
         self.words[position / 64] |= 1_u64 << (position % 64);
     }
 
+    pub fn set_to(&mut self, index: I, value: bool) {
+        if value {
+            self.set(index);
+        } else {
+            self.clear_bit(index);
+        }
+    }
+
+    pub fn push(&mut self, value: bool) {
+        let position = self.len;
+        self.len += 1;
+        self.words.resize(self.len.div_ceil(64), 0);
+        self.set_to(I::from_usize(position), value);
+    }
+
     pub fn clear_bit(&mut self, index: I) {
         let position = index.to_usize();
         self.words[position / 64] &= !(1_u64 << (position % 64));
+    }
+
+    pub fn clear_bucket(&mut self, index: I) {
+        self.words[index.to_usize() / 64] = 0;
+    }
+
+    pub fn clear_two_bits(&mut self, index: I) {
+        let position = index.to_usize();
+        let first = position & !1;
+        self.words[first / 64] &= !(3_u64 << (first % 64));
+    }
+
+    #[must_use]
+    pub fn are_one_of_two_bits_set(&self, index: I) -> bool {
+        let position = index.to_usize();
+        let first = position & !1;
+        self.words[first / 64] & (3_u64 << (first % 64)) != 0
     }
 
     pub fn clear(&mut self) {
@@ -240,9 +564,80 @@ impl<I: VectorIndex> BitVec<I> {
         }
     }
 
+    pub fn clear_and_resize(&mut self, size: I) {
+        self.len = size.to_usize();
+        self.words.clear();
+        self.words.resize(self.len.div_ceil(64), 0);
+    }
+
+    pub fn intersection(&mut self, other: &Self) {
+        let common = self.words.len().min(other.words.len());
+        for position in 0..common {
+            self.words[position] &= other.words[position];
+        }
+        self.words[common..].fill(0);
+    }
+
+    pub fn union(&mut self, other: &Self) {
+        for (left, right) in self.words.iter_mut().zip(&other.words) {
+            *left |= *right;
+        }
+    }
+
+    pub fn set_to_intersection_of(&mut self, left: &Self, right: &Self) {
+        debug_assert_eq!(left.len, right.len);
+        self.resize(I::from_usize(left.len));
+        for position in 0..left.words.len() {
+            self.words[position] = left.words[position] & right.words[position];
+        }
+    }
+
+    pub fn copy_bucket_from(&mut self, other: &Self, index: I) {
+        let bucket = index.to_usize() / 64;
+        self.words[bucket] = other.words[bucket];
+    }
+
+    /// Copies the overlapping content without resizing. Bits above a shorter
+    /// source's logical end remain unchanged, matching GLOP's `Bitset64`.
+    pub fn set_content_from(&mut self, other: &Self) {
+        let common = self.words.len().min(other.words.len());
+        if common == 0 {
+            return;
+        }
+        let saved_last = self.words[common - 1];
+        self.words[..common].copy_from_slice(&other.words[..common]);
+        if self.words.len() >= other.words.len() && !other.len.is_multiple_of(64) {
+            let low_bits = (1_u64 << (other.len % 64)) - 1;
+            self.words[common - 1] = (self.words[common - 1] & low_bits) | (saved_last & !low_bits);
+        }
+    }
+
+    pub fn set_content_from_same_size(&mut self, other: &Self) {
+        debug_assert_eq!(self.len, other.len);
+        self.words.copy_from_slice(&other.words);
+    }
+
+    #[must_use]
+    pub fn iter_ones(&self) -> BitOnesIter<'_, I> {
+        BitOnesIter::new(&self.words)
+    }
+
     #[must_use]
     pub fn is_all_false(&self) -> bool {
         self.words.iter().all(|word| *word == 0)
+    }
+
+    #[must_use]
+    pub fn debug_string(&self) -> String {
+        (0..self.len)
+            .map(|position| {
+                if self.words[position / 64] & (1_u64 << (position % 64)) != 0 {
+                    '1'
+                } else {
+                    '0'
+                }
+            })
+            .collect()
     }
 }
 
@@ -252,6 +647,8 @@ pub type ColBitVec = BitVec<ColIndex>;
 pub type DenseRow = TypedVec<ColIndex, Fractional>;
 pub type DenseBooleanRow = TypedVec<ColIndex, bool>;
 pub type ColMapping = TypedVec<ColIndex, ColIndex>;
+pub type ColIndexVector = Vec<ColIndex>;
+pub type RowIndexVector = Vec<RowIndex>;
 pub type ColToRowMapping = TypedVec<ColIndex, RowIndex>;
 pub type VariableTypeRow = TypedVec<ColIndex, VariableType>;
 pub type VariableStatusRow = TypedVec<ColIndex, VariableStatus>;
@@ -261,8 +658,11 @@ pub type DenseBooleanColumn = TypedVec<RowIndex, bool>;
 pub type RowMapping = TypedVec<RowIndex, RowIndex>;
 pub type RowToColMapping = TypedVec<RowIndex, ColIndex>;
 pub type ConstraintStatusColumn = TypedVec<RowIndex, ConstraintStatus>;
+pub type DenseBitRow = BitVec<ColIndex>;
+pub type DenseBitColumn = BitVec<RowIndex>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(i8)]
 pub enum ProblemStatus {
     Optimal,
     PrimalInfeasible,
@@ -279,6 +679,7 @@ pub enum ProblemStatus {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(i8)]
 pub enum VariableType {
     Unconstrained,
     LowerBounded,
@@ -288,6 +689,7 @@ pub enum VariableType {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(i8)]
 pub enum VariableStatus {
     Basic,
     FixedValue,
@@ -297,6 +699,7 @@ pub enum VariableStatus {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(i8)]
 pub enum ConstraintStatus {
     Basic,
     FixedValue,
@@ -386,6 +789,23 @@ mod tests {
         row[ColIndex::new(1)] = 2.5;
         assert_eq!(row[ColIndex::new(1)].to_bits(), 2.5_f64.to_bits());
         assert_eq!(row.len(), ColIndex::new(3));
+
+        row.reserve(ColIndex::new(20));
+        assert!(row.capacity() >= ColIndex::new(20));
+        let view = row.view();
+        assert_eq!(view.len(), ColIndex::new(3));
+        assert_eq!(view[ColIndex::new(1)].to_bits(), 2.5_f64.to_bits());
+
+        {
+            let mut view = row.view_mut();
+            view[ColIndex::new(2)] = -4.0;
+        }
+        let mut copy = DenseRow::new();
+        copy.assign_from_view(row.view());
+        copy.resize_down(ColIndex::new(2));
+        assert_eq!(copy.as_slice(), &[0.0, 2.5]);
+        copy.assign_to_zero(ColIndex::new(4));
+        assert_eq!(copy.as_slice(), &[0.0; 4]);
     }
 
     #[test]
@@ -424,5 +844,44 @@ mod tests {
         bits.set(RowIndex::new(129));
         bits.clear();
         assert!(bits.is_all_false());
+
+        {
+            let mut view = bits.view_mut();
+            view.set(RowIndex::new(4));
+            assert!(view.contains(RowIndex::new(4)));
+            view.clear(RowIndex::new(4));
+        }
+        assert!(!bits.view().contains(RowIndex::new(4)));
+    }
+
+    #[test]
+    fn bit_vector_bulk_operations_match_bitset64_semantics() {
+        let mut left = RowBitVec::new(RowIndex::new(130));
+        left.set(RowIndex::new(1));
+        left.set(RowIndex::new(65));
+        left.set(RowIndex::new(129));
+        let mut short = RowBitVec::new(RowIndex::new(66));
+        short.set(RowIndex::new(1));
+        short.set(RowIndex::new(64));
+
+        let mut intersection = left.clone();
+        intersection.intersection(&short);
+        assert_eq!(
+            intersection.iter_ones().collect::<Vec<_>>(),
+            [RowIndex::new(1)]
+        );
+
+        let mut copied = left.clone();
+        copied.set_content_from(&short);
+        assert!(copied.contains(RowIndex::new(1)));
+        assert!(copied.contains(RowIndex::new(64)));
+        assert!(!copied.contains(RowIndex::new(65)));
+        assert!(copied.contains(RowIndex::new(129)));
+
+        short.push(true);
+        assert!(short.contains(RowIndex::new(66)));
+        short.clear_two_bits(RowIndex::new(65));
+        assert!(!short.are_one_of_two_bits_set(RowIndex::new(64)));
+        assert_eq!(&short.debug_string()[..2], "01");
     }
 }

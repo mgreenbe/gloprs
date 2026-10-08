@@ -3,8 +3,11 @@
 ## Mission
 
 `gloprs` is a Rust port of GLOP, the simplex-based linear-programming solver in
-Google OR-Tools. The objective is a working, understandable port with
-performance parity, not a new solver inspired by GLOP.
+Google OR-Tools. The objective is a faithful port with performance parity, not
+a new solver inspired by GLOP. Matching the answers produced by GLOP is
+necessary but not sufficient: preserve its algorithms, sparse representations,
+asymptotic complexity, numerical safeguards, and performance architecture as
+far as Rust permits.
 
 The canonical project repository is <https://github.com/mgreenbe/gloprs.git>.
 
@@ -26,8 +29,14 @@ files and dependencies when they enter scope; update each row's Rust
 destination, status, test evidence, divergences, and notes in the same change
 that alters the corresponding port. Do not remove completed rows: the table is
 the durable correspondence between the pinned upstream tree and the Rust tree.
+Use `ported` only when the material upstream algorithms and data structures
+have been translated, including the sparse or incremental implementation used
+in performance-critical code. A dense, simplified, or from-scratch reference
+implementation with similar observable results is not a completed port; mark
+the row `in progress` and describe the missing upstream machinery explicitly.
 Use `validated` only when the relevant unit tests and, where solver behavior is
-affected, differential evidence against pinned GLOP both exist.
+affected, differential evidence against pinned GLOP both exist. Validation does
+not excuse an algorithmic or complexity divergence.
 
 ## Repository layout
 
@@ -50,6 +59,21 @@ Likewise, datasets belong under the shared monorepo directory `../datasets`,
 not under `gloprs/`, because other packages may consume the same corpora.
 
 ## Upstream fidelity
+
+Faithfulness applies to implementation strategy as well as API and mathematical
+results. In particular, do not replace a sparse or hyper-sparse GLOP kernel
+with a packed dense algorithm, an incrementally maintained structure with a
+full recomputation, or a complexity-sensitive traversal with a less efficient
+one and call the file ported. Such implementations may be useful temporary
+correctness references, but they must be labeled as scaffolding, kept out of
+the completion criteria, and followed by the actual upstream-style port.
+
+Depart from the upstream design only when Rust or an unavailable dependency
+makes a direct translation impractical, or when measured evidence supports a
+better Rust representation without losing GLOP's semantics or complexity.
+Document the reason, the exact behavioral or performance consequences, and the
+validation evidence in `PORTING.md` and, when milestone scope changes, in
+`PLAN.md`.
 
 Before porting a file:
 

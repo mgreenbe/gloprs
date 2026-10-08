@@ -51,13 +51,14 @@ Exit criteria:
 
 ## Phase 1: port `lp_data` foundations
 
-Status: complete. Typed sparse primitives, permutations, scattered workspaces,
-the linear-program model, validation, deterministic summaries, and fixed/free
-MPS parsing are implemented. All 98 models in the shared Netlib manifest parse,
-and dimensions, nonzeros, bounds, and objective data agree with the pinned
-native GLOP model via `tools/validate_netlib_parse.py`. A dependency-free
-sparse-primitive microbenchmark is available as `cargo bench -p
-gloprs-lp-data --bench sparse_primitives`.
+Status: complete. The typed sparse primitives, model, readers, and supporting
+utilities required by GLOP's numerical kernels have been reconciled with the
+pinned implementations at the level of storage, traversal, mutation, and
+numerical order. All 98 Netlib models agree on parse fingerprints, and the
+component-level generated native traces recorded below cover the translated
+surface. Protobuf-only wrappers and the revised-simplex-dependent
+`LINEAR_PROGRAM` scaling path remain assigned to their later infrastructure and
+scaling phases; they are not substitutes or hidden Phase-1 implementations.
 
 Port the minimum model and sparse-data layer needed by GLOP:
 
@@ -85,16 +86,249 @@ Exit criteria:
 
 ## Phase 2: port numerical and basis kernels
 
-Status: complete as the correctness baseline. Compact and borrowed sparse
-views, triangular solves, threshold-Markowitz LU, direct and transpose solves,
-product-form basis updates, refactorization, update rows, exact edge norms,
-residual checks, inverse norms, and condition estimates are implemented.
-Deterministically generated randomized systems and adversarial singular and
-badly scaled cases pass; update chains agree with fresh factorization. Kernel
-microbenchmarks are established in `glop/benches/basis_kernels.rs`. The first
-LU implementation deliberately uses a packed numerical workspace; replacing
-that workspace with GLOP's hyper-sparse left-looking representation is a
-recorded performance refinement, not a solver-semantics change.
+Status: complete. The compact views, triangular solves, threshold-Markowitz
+LU, direct and transpose solves, both basis-update forms, update rows, edge
+norms, and numerical checks now use the corresponding sparse GLOP algorithms
+and data structures and have focused native differential coverage. The
+original packed-dense LU was replaced by a sparse implementation with
+an incremental residual nonzero pattern, GLOP's two-stage singleton ordering, a
+Zlatev degree queue, sparse candidate columns, DFS-restricted left-looking
+solves, contiguous triangular storage, and both directions of each
+permutation. A 1,000-case generated differential trace agrees on pivot
+permutations, factor entry counts, deterministic operation time, determinants,
+and solves. Another 300 dense 40–100-dimensional traces agree, including the
+contracted multiply-add ordering that controls cancellation-sensitive pivot
+ties. A 500-case rectangular native trace also agrees on initial-basis
+completion and exact pivot sequences. A separate large, low-density trace exercises the scattered and
+hypersparse direct and transpose paths against GLOP, including their reported
+nonzero positions. The factorization-time permuted lower solve now lives on
+`TriangularMatrix`, as it does upstream, and operates on Markowitz's actual
+in-progress L rather than a parallel graph copy. Its DFS performs GLOP's
+persistent dependency-graph pruning with the same LIFO root and edge traversal
+order and the same in-place row/coefficient swaps used by later numerical
+substitution and retained in the completed factor. Cached candidate columns use GLOP's
+logical-to-physical reusable allocation pool, and LU/basis solves now carry
+typed scattered nonzero sets through GLOP's 2.5%/5% hypersparse switching
+rules and explicitly stored triangular transposes.
+The Phase-2 numerical controls now originate in a shared `GlopParameters`
+value containing the complete pinned 59-field protobuf schema and all five
+enums with their upstream defaults and signed scalar types. Validation follows
+`parameters_validation.cc` in source order, including its distinct finite,
+not-NaN, nonnegative, integer, and magnitude checks; 124 dedicated native
+boundary cases agree byte-for-byte on the first diagnostic. Five hundred
+native LU traces also agree under nondefault pivot thresholds and Zlatev
+candidate counts.
+The Phase-1 numerical utility layer now includes GLOP's dense, sparse, and
+scattered scalar products and norms, accurate reductions, resetting reductions,
+threshold/support helpers, and restricted norms. A 1,000-case native trace
+agrees within expected cross-compiler ulps and verifies exact reset side effects.
+Sparse-vector cleanup, threshold filtering, weighted filtering, partial
+permutation, and tagged-entry movement now agree entry-for-entry with GLOP on
+1,000 generated native traces. The audit also corrected `Reserve()` to use
+GLOP's total-capacity contract, restored the signed-sentinel
+`IndexPermutation` API used by partial permutations and tagged moves, and
+preserves duplicate-state knowledge across bijective and partial index
+permutations. The row-specialized wrapper now exposes the complete naming and
+permutation surface from `sparse_row.h`. Typed bit vectors now carry the
+pinned bucket, paired-bit, resize, content-copy, intersection, and union
+semantics used by GLOP's solver state.
+The remaining `lp_types` span/vector surface is now present, including borrowed
+typed immutable and mutable views, capacity/reserve/assign/zero/resize-down
+operations, pinned enum representation, and scalar helpers. A 1,000-case native
+trace validates statuses, constants, and `Bitset64` operations. It exposed and
+corrected a subtle iterator mismatch: GLOP traverses populated padding bits in
+allocated buckets after cross-size operations, so Rust now uses the same
+bucket/trailing-zero iteration rather than scanning only the logical range.
+Sparse-vector storage has also been changed from an array of entry structs to
+GLOP's structure-of-arrays organization: indices and coefficients occupy
+separate contiguous regions, and iteration constructs lightweight entry views.
+The stable temporary-pair cleanup algorithm and entry order remain unchanged.
+The remaining logical resize and indexed/mutable entry surface is now present;
+the 1,000-case native transformation trace plus downstream matrix and LU traces
+cover the resulting representation. Safe Rust retains two typed allocations
+instead of GLOP's manually split untyped block without changing traversal or
+complexity.
+The `SparseColumn` specialization now includes GLOP's row-named accessors and
+permutation methods, a borrowed parallel-slice `ColumnView`, and the touched-row
+`RandomAccessSparseColumn`. The sparse-vector native trace covers view order,
+last-duplicate lookup behavior, random-access mutation, explicit zeros, and
+sparse extraction as well as the inherited transformations.
+Scattered vectors now expose GLOP-style allocation-free entries with specialized
+row/column names and a safe O(1) borrowed transpose view in place of C++'s
+layout-dependent `reinterpret_cast`. A dedicated 1,000-case native trace agrees
+on sparse-mask state transitions, position order and duplication, sorting,
+density switching, estimates, values, and transpose traversal.
+The previously absent `matrix_utils` module now includes both proportional-
+column algorithms with GLOP's exact fingerprint hash and normalization order,
+leading-rectangle equality, and rightmost-identity recognition. All recorded
+outputs agree exactly on 1,000 generated native traces.
+`CompactSparseMatrix` now follows GLOP's explicit-dimension representation and
+supports its incremental builders, dense/nonzero builders, slack augmentation,
+stable-order transpose, four-accumulator column product, scattered updates,
+copy paths, and borrowed compact basis views. Borrowed sparse matrix views also
+cover matrix pairs and basis subsets. Generated native traces agree on
+dimensions, entry order, coefficients, transpose/slack storage, products,
+selected-view storage, entry counts, and norms. Permutation validity also
+returns false for negative destinations instead of panicking. Random
+population, cross-strong-index forward/inverse application, and the specialized
+column-permutation path are present; a dedicated 1,000-case native trace agrees
+on deterministic permutation behavior, while Rust's uniform `rand` shuffle
+replaces `absl::BitGen`.
+Triangular matrices now expose GLOP's separate-diagonal incremental builders,
+normalized-column construction, identity-prefix bookkeeping, row-permutation
+and copy paths, lower solves from a known starting column, both symbolic
+closure algorithms, all four ordered hypersparse solve variants, triangularity
+checks, and exact and estimated inverse infinity norms. Dense transpose solves
+use GLOP's four-term accumulation groups, reverse storage traversal for lower
+factors, and the same trailing-zero skip (including signed-zero behavior). A
+1,000-case native trace agrees on stored entries, symbolic order and filtering,
+norms, and dense and hypersparse direct/transpose solves.
+General sparse matrices now preserve GLOP's construction and traversal order
+for reserved transpose, row/column permutations, linear combinations, and
+matrix products; the port also includes partial deletion, row append,
+duplicate-aware equality, and magnitude diagnostics. A further 1,000 native
+traces agree on entry order and numerical results. In particular, row
+permutation no longer performs the non-upstream per-column sort that had added
+both behavioral and logarithmic-complexity differences.
+The Phase-1 model layer now also carries GLOP's integer/binary predicates,
+solution-feasibility checks, objective translations, bound intersections,
+slack injection/removal and equation-form invariants, plus metadata-preserving
+row and column deletion. Its transpose and integer-variable classifications
+use GLOP's lazy caches with matching invalidation, adoption, and incremental
+deletion behavior rather than rebuilding temporary data on every query. A
+500-case native trace agrees on the resulting decisions, bounds, sparse entry
+order, and slack values. The same trace now also covers constraint-block
+append, full and variables-only copying, row/column-permuted population, and
+primal-to-dual construction, including exact variable grouping, duplicate-row
+mapping, bounds, and sparse entry order. All four objective-scaling algorithms,
+bound scaling, and magnitude-limited model validation are covered by the same
+native comparison.
+The MPS reader now uses GLOP's whole-input fixed-then-free auto-detection
+rather than a line-by-line hybrid, and exposes both forced formats. A direct
+native harness compares the complete parsed LinearProgram, including names,
+integrality, sparse entry order, and numeric bit patterns. One thousand free
+and one thousand fixed generated models agree in all three format modes, as do
+focused malformed/numerical cases and all 98 Netlib model fingerprints. This
+audit corrected integer-marker default bounds, vector-name handling,
+feasibility-only models, later free rows, model-validation timing, missing
+ENDATA behavior, case-sensitive section parsing, and signed-zero suppression.
+The SOL reader's LinearProgram entry points are now ported as well, including
+GLOP's comment/token diagnostics, generated fallback names, overwrite rules,
+and `strtod` leading-value behavior. Its hexadecimal path performs explicit
+round-to-nearest-even conversion and reproduces the pinned platform's exact
+subnormal/overflow decisions. A 1,265-case native trace compares result bits
+and diagnostics, including randomized ordinary and hexadecimal inputs. The
+protobuf-only overload remains an infrastructure omission.
+Independent LP decomposition now uses the same union-by-size/root-tie
+partitioning, first-node component numbering, sorted global-column clusters,
+and first-touch sparse constraint ordering as GLOP. Local model extraction and
+both assignment projection directions agree byte-for-byte with native GLOP on
+1,000 randomized models. Rust's shared source-model borrow replaces the C++ raw
+pointer and mutex while enforcing the same no-mutation lifetime contract.
+The LP text parser now follows GLOP's lexer/state machine directly, including
+its permissive sign and multiplication syntax, prefix-matched integer/binary
+keywords, exact name patterns, bound intersection, duplicate rejection, and
+partial-model-on-error behavior. A 2,024-case native trace agrees on complete
+canonical model dumps, parsed constraint fields and coefficient bits, and exact
+diagnostics; focused malformed, overflow, underflow, and keyword-prefix probes
+also agree. The protobuf conversion wrapper remains an infrastructure omission.
+The associated model diagnostics now include GLOP's dimension, coefficient,
+bound, structural, and nonzero-statistics strings as well as complete LP and
+solution text emission. Generated parser traces compare all of that text
+byte-for-byte, and a separate 10,000-case floating-point bit-pattern trace
+agrees exactly on decimal and monomial formatting.
+The default sparse matrix scaler is now a direct port of GLOP's geometric
+passes and final equilibration. One thousand native traces agree on accumulated
+row/column factors and every scaled sparse coefficient, including empty,
+rectangular, and extreme-dynamic-range matrices. `LpScalingHelper` likewise
+agrees on 1,000 traces covering scalar domain conversions, dense and sparse
+solve unscaling, and cost/bound normalization. The default whole-model scaling
+path agrees on a further 500 native traces covering every model bound,
+objective coefficient, sparse matrix entry, and retained helper factor. The optional `LINEAR_PROGRAM`
+matrix-scaling branch intentionally remains open because it calls the revised
+simplex itself; a different optimizer would not be a faithful Phase-1
+replacement.
+The basis now uses
+GLOP's middle-product-form rank-one updates and the same identity-basis,
+fixed-period, and deterministic-time-adjusted refactorization policy. The
+ordering around a scheduled rebuild also matches upstream: the iteration's
+entering/leaving solves are charged first, the new basis column is visible to
+the rebuild, and no rank-one update is appended. Update-row has the cached
+column/row/hypersparse kernel selection, and primal and dual edge norms have
+their incremental GLOP recurrences and reset policies. Their regression tests
+agree with fresh factorization or exact recomputation, and both primal and dual
+edge-norm implementations have 500-case native traces. Their expensive full
+recomputations now use GLOP's `TimeLimit` threshold and stop point; separate
+large traces prove the greater-than-10,000-LU-entry branch and partial-result
+semantics, while the primal trace also covers recomputation watchers and
+deterministic-time accounting. The supporting time-limit implementation has a
+native differential trace for deterministic, external, merge, history-reset,
+and sticky wall-limit behavior. GLOP's always-enabled distribution statistics,
+Welford accumulation, merge/reset behavior, ordering, and formatting are also
+ported; byte-level native traces now cover Markowitz, repeated basis
+refactorizations, edge norms, and the empty default-release `UpdateRow`
+statistics surface. That audit exposed and corrected the dedicated
+rightmost-slack scalar-product path in the primal edge update. Integration with
+the future revised-simplex driver, including end-to-end implicit-slack traces,
+belongs to Phase 3; the canonical implicit-slack kernel behavior itself is
+already covered here.
+`VariablesInfo` now supplies GLOP's bound,
+status, movement, basic/nonbasic, relevance, boxed-variable, relevant-entry,
+and dual phase-I state, so the update-row and norm kernels consume the same
+typed relevance bitset used by the upstream architecture. Its advanced
+zero-copy mutable-bound API and allocation-free incremental structural/slack
+loader are also ported with upstream's changed-column type recomputation and
+unchanged fast path. An expanded 500-case generated native trace agrees on all
+recorded `VariablesInfo` transitions, including mutated-state reconstruction.
+A separate 500-case native trace agrees on update-row positions and
+coefficients for the column-wise, row-wise, and hypersparse row-wise kernels.
+Dual steepest-edge recomputation, precision checks, adaptive cached tau solves,
+and Koberstein updates agree on a 500-case native trace over independently
+row- and column-permuted sparse triangular bases.
+Primal matrix norms, steepest-edge recomputation and updates, precise-sum Devex
+weights, update-row integration, and entering-edge precision checks likewise
+agree on 500 native traces using GLOP's canonical structural-plus-trailing-basis
+layout with independently row- and column-permuted sparse triangular bases.
+The middle-product-form basis update is covered by 300 generated multi-pivot
+native traces that compare right and left solves, update sparsity, norms,
+condition estimates, and deterministic time after every update. Separate
+300-case traces cover exact fixed-period and dynamically adjusted
+refactorization decisions. This exposed and corrected a contraction-sensitive
+structural difference in rank-one updates: explicit fused multiply-adds now
+retain the same machine-scale nonzeros as the optimized native build.
+The rank-one scalar products now also use the four independent accumulators and
+remainder order of `CompactSparseMatrix::ColumnScalarProduct`, rather than a
+generic sequential iterator sum.
+An additional 1,000-case isolated native trace covers elementary rank-one
+multiply/inverse operations and packed dense and scattered factorization
+solves, including sparse-mask transitions, entry accounting, clearing, and
+deterministic time. The optimized native build contracts the scalar-product
+accumulations as well as dense vector updates, so the Rust kernels explicitly
+retain those contractions. GLOP's scattered helper instead materializes each
+product before `ScatteredVector::Add`; the Rust sparse path preserves that
+separate rounding too.
+The alternate product-form eta update selected when
+`use_middle_product_form_update` is false is now ported as well. Three matching
+300-case native suites cover its ordinary, fixed-period, and dynamically
+adjusted policies. They also verify GLOP's subtle representation convention:
+an empty sparse eta column means that the populated dense direction is
+authoritative, rather than that the eta column has no off-diagonal entries.
+All six suites also force a final refactorization and compare GLOP's
+specialized primal and dual squared-norm solves, temporary unit-row solves, and
+their exact deterministic-time charges. The specialized Rust paths retain
+scattered/hypersparse traversal rather than falling back to dense solves.
+Repeated unit-row solves also reuse their pre-update triangular result from a
+compact sparse column pool with the same refactorization lifetime as GLOP.
+Problem-column solves now retain the complementary pre-upper intermediate in a
+second compact pool, and middle-product updates consume the two cached columns
+through the same explicit solve-then-update protocol as the C++ implementation.
+Sampling localized roughly 75% of Rust factorization time to sparse candidate-
+column solves. Removing non-upstream candidate/pattern copies and duplicate
+scattered-workspace clearing improved the in-process release LU benchmark.
+Against pinned GLOP on Apple arm64, the latest three-trial Rust/native ratios
+are 1.79x, 1.83x, and 1.98x at dimensions 500, 750, and 1000 for 2%-density generated matrices.
+This is not yet performance parity, but it rules out an unexplained order-of-
+magnitude regression and provides a reproducible optimization gate.
 
 Port the hot foundations in dependency order, preserving upstream file
 boundaries where practical:
@@ -319,9 +553,9 @@ Exit criteria:
 
 ## Immediate next actions
 
-1. Begin Phase 3 with variable bounds, statuses, and boxed-variable
-   transitions.
-2. Port reduced costs, pricing, and primal/dual ratio tests against controlled
-   dictionaries.
-3. Integrate basis changes, update rows, edge-norm maintenance, and
-   refactorization policy into deterministic one-iteration tests.
+1. Begin Phase 3 with the remaining simplex-state components, preserving the
+   same side-by-side source correspondence and native trace discipline.
+2. Profile and reduce the measured roughly 1.8x--2.0x LU factorization gap, and
+   add equivalent allocation/traversal/runtime benchmarks for basis updates.
+3. Implement the revised-simplex-dependent `LINEAR_PROGRAM` scaling branch in
+   Phase 5 rather than introducing a non-upstream placeholder.

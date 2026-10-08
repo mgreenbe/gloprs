@@ -4,12 +4,20 @@
 //! `markowitz`: permutations satisfy `A[row_permutation, column_permutation] =
 //! L U`, `L` has an implicit unit diagonal, and pivot ties are deterministic.
 
+use std::cell::RefCell;
 use std::fmt;
 
-use lp_data::lp_types::{ColIndex, VectorIndex};
+use lp_data::lp_types::{
+    ColIndex, RowIndex, RowToColMapping, VectorIndex, deterministic_time_for_fp_operations,
+};
+use lp_data::lp_utils::squared_norm;
+use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow, ScatteredVector};
 use lp_data::sparse::SparseMatrix;
+use lp_data::triangular_matrix::{Triangle, TriangularMatrix};
 
-use crate::markowitz::choose_pivot;
+use crate::markowitz;
+use crate::parameters::GlopParameters;
+use crate::stats::{DistributionKind, StatsGroup};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum FactorizationError {
@@ -17,6 +25,7 @@ pub enum FactorizationError {
     NonFinite,
     Singular { step: usize },
     DimensionMismatch,
+    InvalidParameters(String),
 }
 
 impl fmt::Display for FactorizationError {
@@ -28,6 +37,7 @@ impl fmt::Display for FactorizationError {
             Self::NonFinite => formatter.write_str("matrix contains a nonfinite coefficient"),
             Self::Singular { step } => write!(formatter, "matrix is singular at step {step}"),
             Self::DimensionMismatch => formatter.write_str("right-hand side dimension mismatch"),
+            Self::InvalidParameters(message) => formatter.write_str(message),
         }
     }
 }
@@ -36,75 +46,258 @@ impl std::error::Error for FactorizationError {}
 
 #[derive(Clone, Debug)]
 pub struct LuFactorization {
-    packed: Vec<Vec<f64>>,
+    is_identity_factorization: bool,
+    // Both factors use compact column-oriented storage. L's unit diagonal is
+    // implicit, as it is in upstream TriangularMatrix.
+    lower: TriangularMatrix,
+    upper: TriangularMatrix,
+    transpose_lower: TriangularMatrix,
+    transpose_upper: TriangularMatrix,
+    // Input index -> factor position, matching GLOP's row_perm_/col_perm_.
     row_permutation: Vec<usize>,
     column_permutation: Vec<usize>,
-    pivot_threshold: f64,
+    // Factor position -> input index.
+    inverse_row_permutation: Vec<usize>,
+    inverse_column_permutation: Vec<usize>,
+    parameters: GlopParameters,
+    deterministic_time_of_last_factorization: f64,
+    dense_zero_scratchpad: RefCell<Vec<f64>>,
+    markowitz_stats: StatsGroup,
+}
+
+impl Default for LuFactorization {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LuFactorization {
+    /// Creates GLOP's cleared state: an identity factorization that can solve
+    /// vectors of any dimension without storing factors.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            is_identity_factorization: true,
+            lower: TriangularMatrix::empty(Triangle::Lower, true),
+            upper: TriangularMatrix::empty(Triangle::Upper, false),
+            transpose_lower: TriangularMatrix::empty(Triangle::Upper, true),
+            transpose_upper: TriangularMatrix::empty(Triangle::Lower, false),
+            row_permutation: Vec::new(),
+            column_permutation: Vec::new(),
+            inverse_row_permutation: Vec::new(),
+            inverse_column_permutation: Vec::new(),
+            parameters: GlopParameters::default(),
+            deterministic_time_of_last_factorization: 0.0,
+            dense_zero_scratchpad: RefCell::new(Vec::new()),
+            markowitz_stats: StatsGroup::new("Markowitz"),
+        }
+    }
+
+    /// Resets to the dimension-independent identity factorization.
+    pub fn clear(&mut self) {
+        self.is_identity_factorization = true;
+        self.lower = TriangularMatrix::empty(Triangle::Lower, true);
+        self.upper = TriangularMatrix::empty(Triangle::Upper, false);
+        self.transpose_lower = TriangularMatrix::empty(Triangle::Upper, true);
+        self.transpose_upper = TriangularMatrix::empty(Triangle::Lower, false);
+        self.row_permutation.clear();
+        self.column_permutation.clear();
+        self.inverse_row_permutation.clear();
+        self.inverse_column_permutation.clear();
+        self.dense_zero_scratchpad.get_mut().clear();
+        // GLOP's Clear() deliberately retains both SetParameters() state and
+        // Markowitz's deterministic time for the last factorization.
+    }
+
+    #[must_use]
+    pub const fn is_identity_factorization(&self) -> bool {
+        self.is_identity_factorization
+    }
+
     /// Factorizes a square sparse matrix using threshold Markowitz pivots.
     ///
     /// # Errors
     ///
     /// Returns an error for nonsquare, nonfinite, or singular matrices.
-    #[allow(clippy::needless_range_loop)]
     pub fn factorize(
         matrix: &SparseMatrix,
         pivot_threshold: f64,
     ) -> Result<Self, FactorizationError> {
+        let parameters = GlopParameters {
+            lu_factorization_pivot_threshold: pivot_threshold,
+            ..GlopParameters::default()
+        };
+        Self::factorize_with_parameters(matrix, &parameters)
+    }
+
+    /// Factorizes using the same parameter bundle passed through GLOP's
+    /// `LuFactorization::SetParameters()`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-parameter, shape, coefficient, or singularity error.
+    pub fn factorize_with_parameters(
+        matrix: &SparseMatrix,
+        parameters: &GlopParameters,
+    ) -> Result<Self, FactorizationError> {
+        parameters
+            .validate()
+            .map_err(FactorizationError::InvalidParameters)?;
         let rows = matrix.num_rows().to_usize();
         let columns = matrix.num_cols().to_usize();
         if rows != columns {
             return Err(FactorizationError::NonSquare { rows, columns });
         }
-        let mut packed = vec![vec![0.0; columns]; rows];
         for column in 0..columns {
             for entry in matrix.column(ColIndex::from_usize(column)) {
                 if !entry.coefficient().is_finite() {
                     return Err(FactorizationError::NonFinite);
                 }
-                packed[entry.index().to_usize()][column] = entry.coefficient();
             }
         }
-        let mut row_permutation: Vec<usize> = (0..rows).collect();
-        let mut column_permutation: Vec<usize> = (0..columns).collect();
-        for step in 0..rows {
-            let pivot = choose_pivot(&packed, step, pivot_threshold)
-                .ok_or(FactorizationError::Singular { step })?;
-            packed.swap(step, pivot.row);
-            row_permutation.swap(step, pivot.row);
-            for row in &mut packed {
-                row.swap(step, pivot.column);
-            }
-            column_permutation.swap(step, pivot.column);
-
-            let diagonal = packed[step][step];
-            if diagonal == 0.0 || !diagonal.is_finite() {
-                return Err(FactorizationError::Singular { step });
-            }
-            for row in (step + 1)..rows {
-                let multiplier = packed[row][step] / diagonal;
-                packed[row][step] = multiplier;
-                if multiplier == 0.0 {
-                    continue;
-                }
-                for column in (step + 1)..columns {
-                    packed[row][column] -= multiplier * packed[step][column];
-                }
-            }
+        let factors = markowitz::factorize(matrix, parameters)
+            .map_err(|step| FactorizationError::Singular { step })?;
+        let deterministic_time_of_last_factorization =
+            deterministic_time_for_fp_operations(factors.num_fp_operations);
+        let lower = TriangularMatrix::from_columns(
+            &factors.lower_columns,
+            vec![1.0; rows],
+            Triangle::Lower,
+            true,
+        )
+        .map_err(|_| FactorizationError::Singular { step: 0 })?;
+        let upper = TriangularMatrix::from_columns(
+            &factors.upper_columns,
+            factors.upper_diagonal,
+            Triangle::Upper,
+            false,
+        )
+        .map_err(|_| FactorizationError::Singular { step: 0 })?;
+        let transpose_lower = lower.transpose();
+        let transpose_upper = upper.transpose();
+        let inverse_row_permutation = factors.row_permutation;
+        let inverse_column_permutation = factors.column_permutation;
+        let mut row_permutation = vec![0; rows];
+        let mut column_permutation = vec![0; columns];
+        for (position, &row) in inverse_row_permutation.iter().enumerate() {
+            row_permutation[row] = position;
+        }
+        for (position, &column) in inverse_column_permutation.iter().enumerate() {
+            column_permutation[column] = position;
+        }
+        let mut markowitz_stats = StatsGroup::new("Markowitz");
+        if let Some(stats) = factors.stats {
+            markowitz_stats.add(
+                "basis_singleton_column_ratio",
+                DistributionKind::Ratio,
+                stats.basis_singleton_column_ratio,
+            );
+            markowitz_stats.add(
+                "basis_residual_singleton_column_ratio",
+                DistributionKind::Ratio,
+                stats.basis_residual_singleton_column_ratio,
+            );
+            markowitz_stats.add(
+                "pivots_without_fill_in_ratio",
+                DistributionKind::Ratio,
+                stats.pivots_without_fill_in_ratio,
+            );
+            markowitz_stats.add(
+                "degree_two_pivot_columns",
+                DistributionKind::Ratio,
+                stats.degree_two_pivot_columns,
+            );
         }
         Ok(Self {
-            packed,
+            is_identity_factorization: false,
+            lower,
+            upper,
+            transpose_lower,
+            transpose_upper,
             row_permutation,
             column_permutation,
-            pivot_threshold,
+            inverse_row_permutation,
+            inverse_column_permutation,
+            parameters: parameters.clone(),
+            deterministic_time_of_last_factorization,
+            dense_zero_scratchpad: RefCell::new(vec![0.0; rows]),
+            markowitz_stats,
         })
+    }
+
+    /// Finds a stable independent subset of `candidates` and completes it
+    /// with the matrix's trailing identity/slack columns, in GLOP's order.
+    ///
+    /// Candidate indices refer to columns of `matrix`. As in GLOP, the matrix
+    /// is expected to end with one slack column per row.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension mismatch for an invalid candidate or absent slack
+    /// block, or an invalid-parameter error.
+    pub fn compute_initial_basis(
+        matrix: &SparseMatrix,
+        candidates: &[ColIndex],
+        parameters: &GlopParameters,
+    ) -> Result<RowToColMapping, FactorizationError> {
+        parameters
+            .validate()
+            .map_err(FactorizationError::InvalidParameters)?;
+        let num_rows = matrix.num_rows().to_usize();
+        let num_columns = matrix.num_cols().to_usize();
+        if num_columns < num_rows
+            || candidates
+                .iter()
+                .any(|column| column.to_usize() >= num_columns)
+        {
+            return Err(FactorizationError::DimensionMismatch);
+        }
+        let candidate_indices: Vec<_> = candidates.iter().map(|column| column.to_usize()).collect();
+        let (pivot_rows, pivot_columns) =
+            markowitz::compute_pivot_sequence(matrix, &candidate_indices, parameters);
+        let mut pivoted_rows = vec![false; num_rows];
+        for row in pivot_rows {
+            pivoted_rows[row] = true;
+        }
+        let mut selected_candidates = vec![false; candidates.len()];
+        for column in pivot_columns {
+            selected_candidates[column] = true;
+        }
+
+        let first_slack = num_columns - num_rows;
+        let mut basis = RowToColMapping::new();
+        for (row, &pivoted) in pivoted_rows.iter().enumerate() {
+            if !pivoted {
+                basis.push(ColIndex::from_usize(first_slack + row));
+            }
+        }
+        for (position, &selected) in selected_candidates.iter().enumerate() {
+            if selected {
+                basis.push(candidates[position]);
+            }
+        }
+        Ok(basis)
+    }
+
+    #[doc(hidden)]
+    #[must_use]
+    pub fn initial_basis_pivot_sequence(
+        matrix: &SparseMatrix,
+        candidates: &[ColIndex],
+        parameters: &GlopParameters,
+    ) -> Vec<(usize, ColIndex)> {
+        let candidate_indices: Vec<_> = candidates.iter().map(|column| column.to_usize()).collect();
+        let (rows, columns) =
+            markowitz::compute_pivot_sequence(matrix, &candidate_indices, parameters);
+        rows.into_iter()
+            .zip(columns)
+            .map(|(row, column)| (row, candidates[column]))
+            .collect()
     }
 
     #[must_use]
     pub fn dimension(&self) -> usize {
-        self.packed.len()
+        self.lower.dimension()
     }
 
     #[must_use]
@@ -118,8 +311,46 @@ impl LuFactorization {
     }
 
     #[must_use]
+    pub fn inverse_row_permutation(&self) -> &[usize] {
+        &self.inverse_row_permutation
+    }
+
+    #[must_use]
+    pub fn inverse_column_permutation(&self) -> &[usize] {
+        &self.inverse_column_permutation
+    }
+
+    /// Clears `Q` after the caller has incorporated it into its basis mapping.
+    pub fn set_column_permutation_to_identity(&mut self) {
+        self.column_permutation.clear();
+        self.inverse_column_permutation.clear();
+    }
+
+    #[must_use]
     pub const fn pivot_threshold(&self) -> f64 {
-        self.pivot_threshold
+        self.parameters.lu_factorization_pivot_threshold
+    }
+
+    #[must_use]
+    pub const fn parameters(&self) -> &GlopParameters {
+        &self.parameters
+    }
+
+    #[must_use]
+    pub const fn deterministic_time_of_last_factorization(&self) -> f64 {
+        self.deterministic_time_of_last_factorization
+    }
+
+    #[must_use]
+    pub fn stat_string(&self) -> String {
+        // LuFactorization's own two distributions are guarded by OR_STATS in
+        // the pinned release build; Markowitz's structural ratios are not.
+        self.markowitz_stats.stat_string()
+    }
+
+    pub(crate) fn merge_stats_from(&mut self, previous: &Self) {
+        self.markowitz_stats
+            .prepend_history(&previous.markowitz_stats);
     }
 
     /// Solves `A x = rhs`.
@@ -128,24 +359,58 @@ impl LuFactorization {
     ///
     /// Returns an error when the right-hand side has the wrong dimension.
     pub fn solve(&self, rhs: &[f64]) -> Result<Vec<f64>, FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(rhs.to_vec());
+        }
+        let lower_solution = self.right_solve_lower(rhs)?;
+        self.right_solve_upper(&lower_solution)
+    }
+
+    /// Solves the permuted lower system `L z = P rhs`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension mismatch.
+    pub fn right_solve_lower(&self, rhs: &[f64]) -> Result<Vec<f64>, FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(rhs.to_vec());
+        }
         let n = self.dimension();
         if rhs.len() != n {
             return Err(FactorizationError::DimensionMismatch);
         }
-        let mut work: Vec<f64> = self.row_permutation.iter().map(|&row| rhs[row]).collect();
-        for row in 0..n {
-            for column in 0..row {
-                work[row] -= self.packed[row][column] * work[column];
-            }
+        let mut work: Vec<f64> = self
+            .inverse_row_permutation
+            .iter()
+            .map(|&row| rhs[row])
+            .collect();
+        self.lower
+            .solve(&mut work)
+            .map_err(|_| FactorizationError::DimensionMismatch)?;
+        Ok(work)
+    }
+
+    /// Solves `U t = rhs` and maps `t` back through the column permutation.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension mismatch.
+    pub fn right_solve_upper(&self, rhs: &[f64]) -> Result<Vec<f64>, FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(rhs.to_vec());
         }
-        for row in (0..n).rev() {
-            for column in (row + 1)..n {
-                work[row] -= self.packed[row][column] * work[column];
-            }
-            work[row] /= self.packed[row][row];
+        if rhs.len() != self.dimension() {
+            return Err(FactorizationError::DimensionMismatch);
         }
-        let mut solution = vec![0.0; n];
-        for (position, &column) in self.column_permutation.iter().enumerate() {
+        let mut work = rhs.to_vec();
+        self.upper
+            .solve(&mut work)
+            .map_err(|_| FactorizationError::DimensionMismatch)?;
+        if self.inverse_column_permutation.is_empty() {
+            return Ok(work);
+        }
+        let mut solution = vec![0.0; self.dimension()];
+        for (position, &column) in self.inverse_column_permutation.iter().enumerate() {
             solution[column] = work[position];
         }
         Ok(solution)
@@ -157,30 +422,288 @@ impl LuFactorization {
     ///
     /// Returns an error when the right-hand side has the wrong dimension.
     pub fn transpose_solve(&self, rhs: &[f64]) -> Result<Vec<f64>, FactorizationError> {
-        let n = self.dimension();
-        if rhs.len() != n {
+        if self.is_identity_factorization {
+            return Ok(rhs.to_vec());
+        }
+        let upper_solution = self.left_solve_upper(rhs)?;
+        self.left_solve_lower(&upper_solution)
+    }
+
+    /// Solves `A x = rhs` while maintaining a sparse superset of result rows.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension mismatch.
+    pub fn solve_with_nonzeros(&self, rhs: &mut ScatteredColumn) -> Result<(), FactorizationError> {
+        self.right_solve_lower_with_nonzeros(rhs)?;
+        self.right_solve_upper_with_nonzeros(rhs)
+    }
+
+    /// Applies `L^-1 P` while preserving sparse positions.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension mismatch.
+    pub fn right_solve_lower_with_nonzeros(
+        &self,
+        rhs: &mut ScatteredColumn,
+    ) -> Result<(), FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(());
+        }
+        if rhs.len().to_usize() != self.dimension() {
             return Err(FactorizationError::DimensionMismatch);
         }
-        let mut work: Vec<f64> = self
-            .column_permutation
-            .iter()
-            .map(|&column| rhs[column])
-            .collect();
-        // U^T y = Q^T rhs.
-        for row in 0..n {
-            for column in 0..row {
-                work[row] -= self.packed[column][row] * work[column];
-            }
-            work[row] /= self.packed[row][row];
+        self.permute_scattered(rhs, &self.row_permutation);
+        {
+            let (values, non_zeros) = rhs.mutable_parts();
+            self.lower
+                .solve_with_nonzeros(values, non_zeros)
+                .map_err(|_| FactorizationError::DimensionMismatch)?;
         }
-        // L^T z = y.
-        for row in (0..n).rev() {
-            for column in (row + 1)..n {
-                work[row] -= self.packed[column][row] * work[column];
+        rhs.sort_non_zeros_if_needed();
+        Ok(())
+    }
+
+    /// Applies `Q U^-1` while preserving sparse positions.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension mismatch.
+    pub fn right_solve_upper_with_nonzeros(
+        &self,
+        rhs: &mut ScatteredColumn,
+    ) -> Result<(), FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(());
+        }
+        if rhs.len().to_usize() != self.dimension() {
+            return Err(FactorizationError::DimensionMismatch);
+        }
+        {
+            let (values, non_zeros) = rhs.mutable_parts();
+            self.upper
+                .solve_with_nonzeros(values, non_zeros)
+                .map_err(|_| FactorizationError::DimensionMismatch)?;
+        }
+        self.permute_scattered(rhs, &self.inverse_column_permutation);
+        rhs.sort_non_zeros_if_needed();
+        Ok(())
+    }
+
+    /// Solves `A^T x = rhs` while maintaining sparse result positions.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension mismatch.
+    pub fn transpose_solve_with_nonzeros(
+        &self,
+        rhs: &mut ScatteredRow,
+    ) -> Result<(), FactorizationError> {
+        self.left_solve_upper_with_nonzeros(rhs)?;
+        self.left_solve_lower_with_nonzeros(rhs)
+    }
+
+    /// Applies `U^-T Q^T` while preserving sparse positions.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension mismatch.
+    pub fn left_solve_upper_with_nonzeros(
+        &self,
+        rhs: &mut ScatteredRow,
+    ) -> Result<(), FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(());
+        }
+        if rhs.len().to_usize() != self.dimension() {
+            return Err(FactorizationError::DimensionMismatch);
+        }
+        self.permute_scattered(rhs, &self.column_permutation);
+        {
+            let (values, non_zeros) = rhs.mutable_parts();
+            self.transpose_upper
+                .solve_with_nonzeros(values, non_zeros)
+                .map_err(|_| FactorizationError::DimensionMismatch)?;
+        }
+        rhs.sort_non_zeros_if_needed();
+        Ok(())
+    }
+
+    /// Applies `P^T L^-T` while preserving sparse positions.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension mismatch.
+    pub fn left_solve_lower_with_nonzeros(
+        &self,
+        rhs: &mut ScatteredRow,
+    ) -> Result<(), FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(());
+        }
+        if rhs.len().to_usize() != self.dimension() {
+            return Err(FactorizationError::DimensionMismatch);
+        }
+        {
+            let (values, non_zeros) = rhs.mutable_parts();
+            self.transpose_lower
+                .solve_with_nonzeros(values, non_zeros)
+                .map_err(|_| FactorizationError::DimensionMismatch)?;
+        }
+        self.permute_scattered(rhs, &self.inverse_row_permutation);
+        Ok(())
+    }
+
+    /// Applies `P^T L^-T` and optionally retains the result before `P^T`.
+    ///
+    /// This is the Rust counterpart of GLOP's two-output
+    /// `LeftSolveLWithNonZeros()`, used to cache the intermediate needed by
+    /// `BasisFactorization::RightSolveForTau()`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension mismatch.
+    pub fn left_solve_lower_with_nonzeros_and_cache(
+        &self,
+        rhs: &mut ScatteredRow,
+        result_before_permutation: &mut ScatteredColumn,
+    ) -> Result<bool, FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(false);
+        }
+        if rhs.len().to_usize() != self.dimension()
+            || result_before_permutation.len().to_usize() != self.dimension()
+        {
+            return Err(FactorizationError::DimensionMismatch);
+        }
+        {
+            let (values, non_zeros) = rhs.mutable_parts();
+            self.transpose_lower
+                .solve_with_nonzeros(values, non_zeros)
+                .map_err(|_| FactorizationError::DimensionMismatch)?;
+        }
+        result_before_permutation.clear();
+        if rhs.non_zeros().is_empty() {
+            for (row, &value) in rhs.values().as_slice().iter().enumerate() {
+                if value != 0.0 {
+                    result_before_permutation.set(RowIndex::from_usize(row), value);
+                }
+            }
+        } else {
+            for entry in rhs.iter() {
+                result_before_permutation.set(
+                    RowIndex::from_usize(entry.index().to_usize()),
+                    entry.coefficient(),
+                );
             }
         }
-        let mut solution = vec![0.0; n];
-        for (position, &row) in self.row_permutation.iter().enumerate() {
+        self.permute_scattered(rhs, &self.inverse_row_permutation);
+        Ok(true)
+    }
+
+    /// Applies `L^-1` when the input is already in factor-row coordinates.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension mismatch.
+    pub fn right_solve_lower_with_permuted_input(
+        &self,
+        rhs: &mut ScatteredColumn,
+    ) -> Result<(), FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(());
+        }
+        if rhs.len().to_usize() != self.dimension() {
+            return Err(FactorizationError::DimensionMismatch);
+        }
+        let (values, non_zeros) = rhs.mutable_parts();
+        self.lower
+            .solve_with_nonzeros(values, non_zeros)
+            .map_err(|_| FactorizationError::DimensionMismatch)
+    }
+
+    fn permute_scattered<I: VectorIndex + Ord>(
+        &self,
+        vector: &mut ScatteredVector<I>,
+        destination_by_source: &[usize],
+    ) {
+        if destination_by_source.is_empty() {
+            return;
+        }
+        let n = destination_by_source.len();
+        let mut scratch = self.dense_zero_scratchpad.borrow_mut();
+        scratch.resize(n, 0.0);
+        let (values, non_zeros) = vector.mutable_parts();
+        if non_zeros.is_empty() {
+            for source in 0..n {
+                scratch[destination_by_source[source]] = values[source];
+                values[source] = 0.0;
+            }
+            for destination in 0..n {
+                values[destination] = scratch[destination];
+                scratch[destination] = 0.0;
+            }
+        } else {
+            for source in non_zeros.iter_mut() {
+                let source_position = source.to_usize();
+                let destination = destination_by_source[source_position];
+                scratch[destination] = values[source_position];
+                values[source_position] = 0.0;
+                *source = I::from_usize(destination);
+            }
+            for &destination in non_zeros.iter() {
+                let position = destination.to_usize();
+                values[position] = scratch[position];
+                scratch[position] = 0.0;
+            }
+        }
+    }
+
+    /// Solves `U^T y = Q^T rhs`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension mismatch.
+    pub fn left_solve_upper(&self, rhs: &[f64]) -> Result<Vec<f64>, FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(rhs.to_vec());
+        }
+        if rhs.len() != self.dimension() {
+            return Err(FactorizationError::DimensionMismatch);
+        }
+        let mut work: Vec<f64> = if self.inverse_column_permutation.is_empty() {
+            rhs.to_vec()
+        } else {
+            self.inverse_column_permutation
+                .iter()
+                .map(|&column| rhs[column])
+                .collect()
+        };
+        self.upper
+            .transpose_solve(&mut work)
+            .map_err(|_| FactorizationError::DimensionMismatch)?;
+        Ok(work)
+    }
+
+    /// Solves `L^T z = rhs` and maps through the inverse row permutation.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension mismatch.
+    pub fn left_solve_lower(&self, rhs: &[f64]) -> Result<Vec<f64>, FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(rhs.to_vec());
+        }
+        if rhs.len() != self.dimension() {
+            return Err(FactorizationError::DimensionMismatch);
+        }
+        let mut work = rhs.to_vec();
+        self.lower
+            .transpose_solve(&mut work)
+            .map_err(|_| FactorizationError::DimensionMismatch)?;
+        let mut solution = vec![0.0; self.dimension()];
+        for (position, &row) in self.inverse_row_permutation.iter().enumerate() {
             solution[row] = work[position];
         }
         Ok(solution)
@@ -191,37 +714,117 @@ impl LuFactorization {
         let n = self.dimension();
         let mut lower = vec![vec![0.0; n]; n];
         let mut upper = vec![vec![0.0; n]; n];
-        for row in 0..n {
-            lower[row][row] = 1.0;
-            for column in 0..n {
-                if row > column {
-                    lower[row][column] = self.packed[row][column];
-                } else {
-                    upper[row][column] = self.packed[row][column];
-                }
+        for column in 0..n {
+            lower[column][column] = 1.0;
+            for (row, coefficient) in self.lower.column(column) {
+                lower[row][column] = coefficient;
             }
+            for (row, coefficient) in self.upper.column(column) {
+                upper[row][column] = coefficient;
+            }
+            upper[column][column] = self.upper.diagonal(column);
         }
         (lower, upper)
     }
 
+    /// Materializes `L * U` in factor coordinates for diagnostics and tests.
+    #[must_use]
+    pub fn lower_times_upper(&self) -> SparseMatrix {
+        let mut lower = SparseMatrix::new();
+        let mut upper = SparseMatrix::new();
+        self.lower.copy_to_sparse_matrix(&mut lower);
+        self.upper.copy_to_sparse_matrix(&mut upper);
+        let mut product = SparseMatrix::new();
+        product.populate_from_product(&lower, &upper);
+        product
+    }
+
+    /// Returns a column of U using the input matrix's column numbering.
+    #[must_use]
+    pub fn column_of_upper(&self, input_column: usize) -> Vec<(usize, f64)> {
+        if self.is_identity_factorization {
+            return vec![(input_column, 1.0)];
+        }
+        let column = if self.column_permutation.is_empty() {
+            input_column
+        } else {
+            let Some(&column) = self.column_permutation.get(input_column) else {
+                return Vec::new();
+            };
+            column
+        };
+        let mut result: Vec<_> = self.upper.column(column).collect();
+        result.push((column, self.upper.diagonal(column)));
+        result
+    }
+
+    /// Computes `||A^-1 a||_2^2` for a sparse input column.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension error for an out-of-range sparse row.
+    pub fn right_solve_squared_norm(
+        &self,
+        entries: &[(usize, f64)],
+    ) -> Result<f64, FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(entries
+                .iter()
+                .fold(0.0, |sum, entry| sum + entry.1 * entry.1));
+        }
+        let mut rhs = ScatteredColumn::new(RowIndex::from_usize(self.dimension()));
+        for &(row, value) in entries {
+            if row >= self.dimension() {
+                return Err(FactorizationError::DimensionMismatch);
+            }
+            rhs.set(RowIndex::from_usize(row), value);
+        }
+        self.solve_with_nonzeros(&mut rhs)?;
+        Ok(scattered_squared_norm(&rhs))
+    }
+
+    /// Computes `||(A^T)^-1 e_row||_2^2`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension error for an invalid row.
+    pub fn dual_edge_squared_norm(&self, row: usize) -> Result<f64, FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(1.0);
+        }
+        if row >= self.dimension() {
+            return Err(FactorizationError::DimensionMismatch);
+        }
+        let mut rhs = ScatteredRow::new(ColIndex::from_usize(self.dimension()));
+        rhs.set(ColIndex::from_usize(row), 1.0);
+        self.transpose_solve_with_nonzeros(&mut rhs)?;
+        Ok(scattered_squared_norm(&rhs))
+    }
+
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn fill_in_ratio(&self, matrix: &SparseMatrix) -> f64 {
+        if self.is_identity_factorization || matrix.num_entries().value() == 0 {
+            return 1.0;
+        }
+        self.number_of_entries() as f64 / matrix.num_entries().value() as f64
+    }
+
     #[must_use]
     pub fn number_of_entries(&self) -> usize {
-        let n = self.dimension();
-        let lower = (0..n)
-            .flat_map(|row| (0..row).map(move |column| (row, column)))
-            .filter(|&(row, column)| self.packed[row][column] != 0.0)
-            .count();
-        let upper = (0..n)
-            .flat_map(|row| (row..n).map(move |column| (row, column)))
-            .filter(|&(row, column)| self.packed[row][column] != 0.0)
-            .count();
-        lower + upper
+        if self.is_identity_factorization {
+            return 0;
+        }
+        self.lower.num_entries() + self.upper.num_entries()
     }
 
     #[must_use]
     pub fn determinant(&self) -> f64 {
+        if self.is_identity_factorization {
+            return 1.0;
+        }
         let diagonal_product: f64 = (0..self.dimension())
-            .map(|index| self.packed[index][index])
+            .map(|column| self.upper.diagonal(column))
             .product();
         diagonal_product
             * f64::from(permutation_signature(&self.row_permutation))
@@ -234,6 +837,9 @@ impl LuFactorization {
     ///
     /// Propagates solve failures.
     pub fn inverse_one_norm(&self) -> Result<f64, FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(1.0);
+        }
         let n = self.dimension();
         let mut norm = 0.0_f64;
         for column in 0..n {
@@ -250,6 +856,9 @@ impl LuFactorization {
     ///
     /// Propagates solve failures.
     pub fn inverse_infinity_norm(&self) -> Result<f64, FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(1.0);
+        }
         let n = self.dimension();
         let mut norm = 0.0_f64;
         for row in 0..n {
@@ -263,6 +872,56 @@ impl LuFactorization {
             );
         }
         Ok(norm)
+    }
+
+    /// Computes `||A||_1 ||A^-1||_1`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates solve failures.
+    pub fn one_norm_condition_number(
+        &self,
+        matrix: &SparseMatrix,
+    ) -> Result<f64, FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(1.0);
+        }
+        Ok(matrix.one_norm() * self.inverse_one_norm()?)
+    }
+
+    /// Computes `||A||_infinity ||A^-1||_infinity`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates solve failures.
+    pub fn infinity_norm_condition_number(
+        &self,
+        matrix: &SparseMatrix,
+    ) -> Result<f64, FactorizationError> {
+        if self.is_identity_factorization {
+            return Ok(1.0);
+        }
+        Ok(matrix.infinity_norm() * self.inverse_infinity_norm()?)
+    }
+
+    #[must_use]
+    pub fn inverse_infinity_norm_upper_bound(&self) -> f64 {
+        if self.is_identity_factorization {
+            return 1.0;
+        }
+        self.lower.inverse_infinity_norm_upper_bound()
+            * self.upper.inverse_infinity_norm_upper_bound()
+    }
+}
+
+fn scattered_squared_norm<I: VectorIndex + Ord>(vector: &ScatteredVector<I>) -> f64 {
+    if vector.non_zeros().is_empty() {
+        squared_norm(vector.values().as_slice())
+    } else {
+        vector.non_zeros().iter().fold(0.0, |sum, &index| {
+            let value = vector.value(index);
+            sum + value * value
+        })
     }
 }
 
@@ -363,5 +1022,79 @@ mod tests {
             LuFactorization::factorize(&nonfinite, 0.1).unwrap_err(),
             FactorizationError::NonFinite
         );
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn singleton_fast_path_does_not_apply_markowitz_singularity_threshold() {
+        // ExtractSingletonColumns() accepts structural singleton pivots
+        // directly in GLOP; the threshold is applied only by FindPivot().
+        let tiny_singleton = matrix(&[&[1e-16]]);
+        let factorization =
+            LuFactorization::factorize_with_parameters(&tiny_singleton, &GlopParameters::default())
+                .unwrap();
+        assert_eq!(factorization.determinant(), 1e-16);
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn cleared_factorization_is_dimension_independent_identity() {
+        let mut factorization = LuFactorization::factorize(&matrix(&[&[2.0]]), 0.125).unwrap();
+        let deterministic_time = factorization.deterministic_time_of_last_factorization();
+        factorization.clear();
+        assert!(factorization.is_identity_factorization());
+        assert_eq!(factorization.pivot_threshold(), 0.125);
+        assert_eq!(
+            factorization.deterministic_time_of_last_factorization(),
+            deterministic_time
+        );
+        assert_eq!(
+            factorization.solve(&[1.0, -2.0, 3.0]).unwrap(),
+            [1.0, -2.0, 3.0]
+        );
+        assert_eq!(
+            factorization.transpose_solve(&[4.0, 5.0]).unwrap(),
+            [4.0, 5.0]
+        );
+        assert_eq!(factorization.number_of_entries(), 0);
+        assert_eq!(factorization.determinant().to_bits(), 1.0_f64.to_bits());
+    }
+
+    #[test]
+    #[allow(clippy::cast_precision_loss)]
+    fn hypersparse_solve_matches_dense_solve_through_permutations() {
+        let n = 83;
+        let mut input = SparseMatrix::new();
+        input.populate_from_zero(RowIndex::from_usize(n), ColIndex::from_usize(n));
+        for column in 0..n {
+            let row = (7 * column) % n;
+            input
+                .mutable_column(ColIndex::from_usize(column))
+                .add_entry(RowIndex::from_usize(row), 1.0 + column as f64 / 100.0);
+        }
+        input.clean_up();
+        let factorization = LuFactorization::factorize(&input, 0.01).unwrap();
+
+        let mut rhs = vec![0.0; n];
+        rhs[37] = -2.5;
+        let expected = factorization.solve(&rhs).unwrap();
+        let mut scattered = ScatteredColumn::new(RowIndex::from_usize(n));
+        scattered.set(RowIndex::new(37), -2.5);
+        factorization.solve_with_nonzeros(&mut scattered).unwrap();
+        assert!((0..n).all(|index| {
+            (expected[index] - scattered.value(RowIndex::from_usize(index))).abs() < 1e-14
+        }));
+        assert_eq!(scattered.non_zeros().len(), 1);
+
+        let expected = factorization.transpose_solve(&rhs).unwrap();
+        let mut scattered = ScatteredRow::new(ColIndex::from_usize(n));
+        scattered.set(ColIndex::new(37), -2.5);
+        factorization
+            .transpose_solve_with_nonzeros(&mut scattered)
+            .unwrap();
+        assert!((0..n).all(|index| {
+            (expected[index] - scattered.value(ColIndex::from_usize(index))).abs() < 1e-14
+        }));
+        assert_eq!(scattered.non_zeros().len(), 1);
     }
 }

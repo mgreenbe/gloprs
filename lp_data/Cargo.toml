@@ -13,6 +13,9 @@ name = "lp_data"
 [lints]
 workspace = true
 
+[dependencies]
+rand = "0.9.2"
+
 [[bench]]
 name = "sparse_primitives"
 harness = false
