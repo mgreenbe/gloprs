@@ -33,6 +33,7 @@ name = "gloprs-glop"
 version = "0.1.0"
 dependencies = [
  "gloprs-lp-data",
+ "rand",
 ]
 
 [[package]]

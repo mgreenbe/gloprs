@@ -1,25 +1,26 @@
 // Copyright 2026 gloprs contributors
 // Licensed under the Apache License, Version 2.0.
-// Focused differential adapter for GLOP's LU initial-basis construction.
+// Differential adapter for GLOP's high-level initial-basis crash procedures.
 
 #include <iostream>
-#include <vector>
 
-#include "ortools/glop/lu_factorization.h"
+#include "ortools/glop/initial_basis.h"
+#include "ortools/lp_data/lp_types.h"
 #include "ortools/lp_data/sparse.h"
 
 int main() {
   using namespace operations_research::glop;
-  int num_rows;
-  int num_columns;
-  int num_entries;
-  int num_candidates;
-  if (!(std::cin >> num_rows >> num_columns >> num_entries >> num_candidates)) {
+  int mode;
+  int rows;
+  int columns;
+  int entries;
+  int candidate_columns;
+  if (!(std::cin >> mode >> rows >> columns >> entries >> candidate_columns)) {
     return 2;
   }
   SparseMatrix matrix;
-  matrix.PopulateFromZero(RowIndex(num_rows), ColIndex(num_columns));
-  for (int i = 0; i < num_entries; ++i) {
+  matrix.PopulateFromZero(RowIndex(rows), ColIndex(columns));
+  for (int entry = 0; entry < entries; ++entry) {
     int row;
     int column;
     double value;
@@ -28,35 +29,46 @@ int main() {
                                                             value);
   }
   matrix.CleanUp();
-  std::vector<ColIndex> candidates;
-  candidates.reserve(num_candidates);
-  for (int i = 0; i < num_candidates; ++i) {
+  CompactSparseMatrix compact(matrix);
+  DenseRow objective(ColIndex(columns), 0.0);
+  DenseRow lower(ColIndex(columns), 0.0);
+  DenseRow upper(ColIndex(columns), 0.0);
+  VariableTypeRow types(ColIndex(columns), VariableType::UNCONSTRAINED);
+  for (int column = 0; column < columns; ++column) {
+    int type;
+    std::cin >> objective[ColIndex(column)] >> lower[ColIndex(column)] >>
+        upper[ColIndex(column)] >> type;
+    types[ColIndex(column)] = static_cast<VariableType>(type);
+  }
+  RowToColMapping basis(RowIndex(rows), kInvalidCol);
+  for (int row = 0; row < rows; ++row) {
     int column;
     std::cin >> column;
-    candidates.push_back(ColIndex(column));
+    basis[RowIndex(row)] = ColIndex(column);
   }
-  CompactSparseMatrix compact(matrix);
-  LuFactorization factorization;
-  const RowToColMapping basis =
-      factorization.ComputeInitialBasis(compact, candidates);
+  InitialBasis crash(compact, objective, lower, upper, types);
+  switch (mode) {
+    case 0:
+      crash.CompleteBixbyBasis(ColIndex(candidate_columns), &basis);
+      break;
+    case 1:
+      crash.CompleteTriangularPrimalBasis(ColIndex(candidate_columns), &basis);
+      break;
+    case 2:
+      crash.CompleteTriangularDualBasis(ColIndex(candidate_columns), &basis);
+      break;
+    case 3:
+      crash.GetPrimalMarosBasis(ColIndex(candidate_columns), &basis);
+      break;
+    case 4:
+      crash.GetDualMarosBasis(ColIndex(candidate_columns), &basis);
+      break;
+    default:
+      return 3;
+  }
   std::cout << "basis";
-  for (const ColIndex column : basis) std::cout << ' ' << column.value();
-  std::cout << "\npivots";
-  const RowPermutation& row_perm = factorization.row_perm();
-  const ColumnPermutation& col_perm = factorization.GetColumnPermutation();
-  for (int step = 0; step < basis.size().value(); ++step) {
-    int pivot_row = -1;
-    int pivot_column = -1;
-    for (int row = 0; row < row_perm.size().value(); ++row) {
-      if (row_perm[RowIndex(row)].value() == step) pivot_row = row;
-    }
-    for (int column = 0; column < col_perm.size().value(); ++column) {
-      if (col_perm[ColIndex(column)].value() == step) {
-        pivot_column = candidates[column].value();
-      }
-    }
-    if (pivot_row < 0 || pivot_column < 0) break;
-    std::cout << ' ' << pivot_row << ':' << pivot_column;
+  for (RowIndex row(0); row < basis.size(); ++row) {
+    std::cout << ' ' << basis[row].value();
   }
   std::cout << '\n';
   return 0;

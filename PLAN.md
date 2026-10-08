@@ -366,6 +366,26 @@ Exit criteria:
 
 ## Phase 3: port simplex state and pivot mechanics
 
+Status: complete. The remaining state modules now follow their pinned GLOP
+counterparts directly: the top-31 dynamic pricing heap, primal variable values
+and infeasibility prices, reduced costs and dual values, primal prices, both
+dual entering-variable ratio tests, and all Bixby/triangular/Maros crash
+strategies. The primal Harris leaving-row code is retained as a narrow
+Phase-3 kernel extracted from `revised_simplex.cc`; the full driver remains in
+Phase 4 and is explicitly still `in progress` in `PORTING.md`.
+
+Differential coverage includes 500 generated pricing-operation traces, 100
+generated reduced-cost/value/feasibility states, 100 generated dual phase-I and
+phase-II ratio tests, and 375 initial-basis crashes spanning all five modes.
+Twenty controlled three-pivot primal traces agree with native `RevisedSimplex`
+on iteration counts, basic-variable sets, final variable values, and reduced
+costs. Existing Phase-2 multi-update suites continue to verify that the basis,
+update-row, direction, edge-norm, and refactorization machinery used by those
+pivots agrees after every update. The crash comparison deliberately preserves
+two implementation-sensitive upstream details discovered by the trace: Maros's
+literal row-to-column availability lookup and the pinned libc++ heap behavior
+for equivalent triangular candidates.
+
 Port the components that maintain revised-simplex state:
 
 - variable information, bounds, statuses, and boxed-variable transitions;
@@ -390,6 +410,24 @@ Exit criteria:
 - Refactorization and incremental basis updates remain numerically consistent.
 
 ## Phase 4: port revised simplex end to end
+
+Status: in progress. File-level Rust counterparts for `revised_simplex` and
+`lp_solver` now exist. The current driver includes equation-form conversion,
+the primal phase-I piecewise-linear feasibility objective and breakpoint ratio
+test, primal optimization, Harris ratio tests, bound flips, product-form basis
+updates, initial-basis crashes and condition rejection, warm-basis input,
+solution/ray extraction, independent residual checks, and opt-in normalized
+iteration events. The public CLI can run an unscaled, unpreprocessed solve.
+
+This is not yet a validated Phase-4 port. The current entering-column scan is
+temporary and must be replaced by the already ported `PrimalPrices`/
+`PrimalEdgeNorms` path; the dual phase-I/phase-II loop, perturbation and cost
+shift orchestration, precise final checks, objective limits, and complete
+incremental warm-start cases remain to be translated. Nine smallest-Netlib
+models reach the published objective in exploratory release runs, but native
+iteration traces diverge and `sc105`/`sc205` expose unresolved numerical-state
+issues. Consequently neither file is marked ported or validated in
+`PORTING.md`, and none of the dataset gates below is complete.
 
 Translate the revised-simplex driver and its immediate orchestration:
 

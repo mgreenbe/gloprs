@@ -665,7 +665,6 @@ impl BasisRepresentation {
             self.basis
                 .replace_column(ColIndex::from_usize(leaving_column), entering_column);
             self.force_refactorization()?;
-            self.set_column_permutation_to_identity();
             return Ok(());
         }
         let update = EtaMatrix::new(leaving_column, direction).map_err(|_| {
@@ -781,7 +780,6 @@ impl BasisRepresentation {
             self.basis
                 .replace_column(ColIndex::from_usize(leaving_column), entering_column);
             self.force_refactorization()?;
-            self.set_column_permutation_to_identity();
             return Ok(());
         };
         let mut right_update =
@@ -815,7 +813,6 @@ impl BasisRepresentation {
             self.basis
                 .replace_column(ColIndex::from_usize(leaving_column), entering_column);
             self.force_refactorization()?;
-            self.set_column_permutation_to_identity();
             return Ok(());
         }
 

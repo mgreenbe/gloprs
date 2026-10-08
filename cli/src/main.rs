@@ -1,63 +1,74 @@
 use std::env;
 use std::process::ExitCode;
 
+use glop::lp_solver::LPSolver;
 use lp_data::mps_reader::parse_mps_file;
+
+fn usage(program: &std::ffi::OsStr) -> ExitCode {
+    eprintln!(
+        "usage: {} inspect [--tsv] MODEL.mps\n       {} solve MODEL.mps",
+        program.to_string_lossy(),
+        program.to_string_lossy()
+    );
+    ExitCode::FAILURE
+}
 
 fn main() -> ExitCode {
     let mut arguments = env::args_os();
     let program = arguments.next().unwrap_or_default();
     let Some(command) = arguments.next() else {
-        eprintln!(
-            "usage: {} inspect [--tsv] MODEL.mps",
-            program.to_string_lossy()
-        );
-        return ExitCode::FAILURE;
+        return usage(&program);
     };
     let Some(mut path) = arguments.next() else {
-        eprintln!(
-            "usage: {} inspect [--tsv] MODEL.mps",
-            program.to_string_lossy()
-        );
-        return ExitCode::FAILURE;
+        return usage(&program);
     };
-    let tab_separated = path == "--tsv";
+    let tab_separated = command == "inspect" && path == "--tsv";
     if tab_separated {
         let Some(actual_path) = arguments.next() else {
-            eprintln!(
-                "usage: {} inspect [--tsv] MODEL.mps",
-                program.to_string_lossy()
-            );
-            return ExitCode::FAILURE;
+            return usage(&program);
         };
         path = actual_path;
     }
-    if command != "inspect" || arguments.next().is_some() {
-        eprintln!(
-            "usage: {} inspect [--tsv] MODEL.mps",
-            program.to_string_lossy()
-        );
-        return ExitCode::FAILURE;
+    if arguments.next().is_some() {
+        return usage(&program);
     }
-    match parse_mps_file(path) {
-        Ok(model) => {
-            if tab_separated {
-                let summary = model.summary();
-                println!(
-                    "{}\t{}\t{}\t{}\t{:016x}",
-                    summary.name,
-                    summary.rows,
-                    summary.columns,
-                    summary.nonzeros,
-                    model.data_fingerprint()
-                );
-            } else {
-                println!("{}", model.summary());
-            }
-            ExitCode::SUCCESS
-        }
+    let model = match parse_mps_file(path) {
+        Ok(model) => model,
         Err(error) => {
             eprintln!("{error}");
-            ExitCode::FAILURE
+            return ExitCode::FAILURE;
         }
+    };
+    if command == "inspect" {
+        if tab_separated {
+            let summary = model.summary();
+            println!(
+                "{}\t{}\t{}\t{}\t{:016x}",
+                summary.name,
+                summary.rows,
+                summary.columns,
+                summary.nonzeros,
+                model.data_fingerprint()
+            );
+        } else {
+            println!("{}", model.summary());
+        }
+        return ExitCode::SUCCESS;
     }
+    if command == "solve" {
+        let mut solver = LPSolver::new();
+        solver.parameters_mut().use_preprocessing = false;
+        solver.parameters_mut().use_scaling = false;
+        let status = solver.solve(&model);
+        println!(
+            "status={} objective={:.17e} iterations={} primal_infeasibility={:.17e} dual_infeasibility={:.17e}",
+            status,
+            solver.objective_value(),
+            solver.number_of_simplex_iterations(),
+            solver.maximum_primal_infeasibility(),
+            solver.maximum_dual_infeasibility()
+        );
+        return ExitCode::SUCCESS;
+    }
+    usage(&program)
 }
