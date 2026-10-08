@@ -399,17 +399,19 @@ impl RevisedSimplex {
                 .as_ref()
                 .unwrap()
                 .solve_with_nonzeros(&mut rhs)?;
-            let changed_rows: Vec<_> = if rhs.non_zeros().is_empty() {
-                (0..self.num_rows.to_usize())
-                    .map(RowIndex::from_usize)
-                    .collect()
+            if rhs.non_zeros().is_empty() {
+                for row in 0..self.num_rows.to_usize() {
+                    let row_index = RowIndex::from_usize(row);
+                    self.variable_values[self.basis[row_index]] -= rhs.value(row_index);
+                }
+                self.recompute_dual_prices()?;
             } else {
-                rhs.non_zeros().to_vec()
-            };
-            for &row in &changed_rows {
-                self.variable_values[self.basis[row]] -= rhs.value(row);
+                let changed_rows = rhs.non_zeros().to_vec();
+                for &row in &changed_rows {
+                    self.variable_values[self.basis[row]] -= rhs.value(row);
+                }
+                self.update_dual_prices(&changed_rows)?;
             }
-            self.update_dual_prices(&changed_rows)?;
         }
         Ok(())
     }
@@ -1727,6 +1729,7 @@ impl RevisedSimplex {
         let mut reduced_costs_precise =
             self.basis_factorization.as_ref().unwrap().is_refactorized();
         self.recompute_dual_prices()?;
+        let mut pending_price_rows = Vec::new();
         loop {
             if time_limit.limit_reached()
                 || self.num_iterations
@@ -1754,6 +1757,7 @@ impl RevisedSimplex {
                 self.initialize_values()?;
                 reduced_costs_precise = true;
                 self.recompute_dual_prices()?;
+                pending_price_rows.clear();
                 if self.dual_objective_limit != f64::INFINITY
                     && self.internal_objective() > self.dual_objective_limit
                 {
@@ -1765,6 +1769,10 @@ impl RevisedSimplex {
             if !self.bound_flip_candidates.is_empty() {
                 let candidates = std::mem::take(&mut self.bound_flip_candidates);
                 self.make_boxed_variables_dual_feasible(&candidates, true)?;
+            }
+            if !pending_price_rows.is_empty() {
+                self.update_dual_prices(&pending_price_rows)?;
+                pending_price_rows.clear();
             }
 
             let Some(leaving_position) = self.dual_prices.get_maximum() else {
@@ -1974,15 +1982,15 @@ impl RevisedSimplex {
                     self.dual_edge_norms.clear();
                 }
                 self.dual_prices.clear();
+                pending_price_rows.clear();
             } else {
-                let changed_rows = if direction.non_zeros().is_empty() {
+                pending_price_rows = if direction.non_zeros().is_empty() {
                     (0..self.num_rows.to_usize())
                         .map(RowIndex::from_usize)
                         .collect::<Vec<_>>()
                 } else {
                     direction.non_zeros().to_vec()
                 };
-                self.update_dual_prices(&changed_rows)?;
             }
         }
     }

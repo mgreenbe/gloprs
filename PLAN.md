@@ -510,15 +510,23 @@ divergence. A subsequent audit found that Rust unconditionally forced a second
 LU rebuild after dedicated dual Phase I where GLOP's conditional
 `Refactorize()` is a no-op; preserving the existing factorization removes the
 resulting basis-order and random-stream drift. The complete entering column,
-leaving basic column, and leaving-row trajectory now agrees for the first 131
-`perold` pivots. Pivot 132 is an exact ratio-test tie exposed by remaining
-numerical drift in the recomputed basic values and dual prices. A smallest-25
-trajectory audit now finds complete pivot-sequence agreement for `afiro`,
-`sc50a`, `sc50b`, `kb2`,
-`adlittle`, `blend`, `scagr7`, `sc205`, `share2b`, and `scagr25`; the other 15
-first diverge between pivots 4 and 87, except `brandy` at pivot 120.
+leaving basic column, and leaving-row trajectory now agrees for the first 132
+`perold` pivots. Pivot 133 is an exact ratio-test tie exposed by remaining
+numerical drift in the recomputed basic values and dual prices. The trajectory
+audit also found two Phase-II orchestration mismatches. GLOP applies pending
+boxed-variable flips before updating dual prices for the preceding direction
+at the start of the next iteration; Rust now preserves that order instead of
+updating at the end of the preceding iteration. More importantly, a dense
+FTRAN result from a boxed-variable flip now takes GLOP's full
+`RecomputeDualPrices()` path instead of incrementally updating every row. The
+latter difference retained stale top-31 heap entries and gave exact ties the
+wrong multiplicity. A smallest-25 audit now finds complete pivot-sequence
+agreement for `afiro`, `sc50a`, `sc50b`, `kb2`, `sc105`, `adlittle`,
+`stocfor1`, `blend`, `scagr7`, `share2b`, `recipe`, and `share1b`. Of the
+remaining 13, `vtp.base` now agrees through 15 pivots rather than only three,
+and `boeing2` through 62 rather than 26.
 With scaling and preprocessing disabled, the current trace finishes `perold`
-in 859 Rust iterations versus 1049 in native GLOP.
+in 885 Rust iterations versus 1049 in native GLOP.
 
 This is not yet a validated Phase-4 port. The primal phase-I objective update is
 not yet connected to GLOP's incremental `ReducedCosts` orchestration; the
