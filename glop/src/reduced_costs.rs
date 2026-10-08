@@ -26,6 +26,31 @@ use crate::primal_edge_norms::PrimalEdgeNorms;
 use crate::update_row::UpdateRow;
 use crate::variables_info::VariablesInfo;
 
+/// Applies GLOP's reduced-cost update for one primal basis pivot.
+///
+/// Returns `false` when the entering reduced cost is exactly zero and no
+/// numerical update is required. The caller still updates its basic objective.
+pub fn update_reduced_cost_values_before_basis_pivot(
+    reduced_costs: &mut [f64],
+    entering_column: ColIndex,
+    leaving_column: ColIndex,
+    pivot: f64,
+    update_row: &UpdateRow,
+) -> bool {
+    debug_assert_ne!(pivot, 0.0);
+    let entering_cost = reduced_costs[entering_column.to_usize()];
+    if entering_cost == 0.0 {
+        return false;
+    }
+    let new_leaving_cost = entering_cost / -pivot;
+    for &column in update_row.non_zero_positions() {
+        reduced_costs[column] += new_leaving_cost * update_row.coefficient(column);
+    }
+    reduced_costs[leaving_column.to_usize()] = new_leaving_cost;
+    reduced_costs[entering_column.to_usize()] = 0.0;
+    true
+}
+
 #[derive(Debug)]
 pub struct ReducedCosts<'a> {
     matrix: &'a CompactSparseMatrix,
@@ -422,20 +447,18 @@ impl<'a> ReducedCosts<'a> {
         pivot: f64,
         update_row: &UpdateRow,
     ) {
-        debug_assert_ne!(pivot, 0.0);
-        let entering_cost = self.reduced_costs[entering_column.to_usize()];
-        if entering_cost == 0.0 {
+        if !update_reduced_cost_values_before_basis_pivot(
+            &mut self.reduced_costs,
+            entering_column,
+            leaving_column,
+            pivot,
+            update_row,
+        ) {
             self.are_reduced_costs_precise = false;
             return;
         }
         self.are_reduced_costs_recomputed = false;
         self.are_reduced_costs_precise = false;
-        let new_leaving_cost = entering_cost / -pivot;
-        for &column in update_row.non_zero_positions() {
-            self.reduced_costs[column] += new_leaving_cost * update_row.coefficient(column);
-        }
-        self.reduced_costs[leaving_column.to_usize()] = new_leaving_cost;
-        self.reduced_costs[entering_column.to_usize()] = 0.0;
     }
 
     fn update_basic_objective(&mut self, entering_column: ColIndex, leaving_row: RowIndex) {
@@ -495,6 +518,82 @@ impl PrimalPrices {
             self.recompute = false;
         }
         self.prices.get_maximum().map(ColIndex::from_usize)
+    }
+
+    /// Incrementally updates prices touched by a primal pivot.
+    pub fn update_before_basis_pivot_from_values(
+        &mut self,
+        entering_column: ColIndex,
+        update_row: &UpdateRow,
+        variables_info: &VariablesInfo,
+        reduced_costs: &[f64],
+        squared_norms: &[f64],
+        dual_feasibility_tolerance: f64,
+    ) {
+        if self.recompute {
+            return;
+        }
+        for &position in update_row.non_zero_positions() {
+            let column = ColIndex::from_usize(position);
+            let value = reduced_costs[position];
+            let infeasible = (variables_info.can_decrease().contains(column)
+                && value > dual_feasibility_tolerance)
+                || (variables_info.can_increase().contains(column)
+                    && value < -dual_feasibility_tolerance);
+            if infeasible {
+                self.prices
+                    .add_or_update(position, value * value / squared_norms[position]);
+            } else {
+                self.prices.remove(position);
+            }
+        }
+        self.prices.remove(entering_column.to_usize());
+    }
+
+    /// Recomputes one heap entry after a precision check or status change.
+    pub fn recompute_price_at_from_values(
+        &mut self,
+        column: ColIndex,
+        variables_info: &VariablesInfo,
+        reduced_costs: &[f64],
+        squared_norms: &[f64],
+        dual_feasibility_tolerance: f64,
+    ) {
+        if self.recompute {
+            return;
+        }
+        let position = column.to_usize();
+        let value = reduced_costs[position];
+        let infeasible = (variables_info.can_decrease().contains(column)
+            && value > dual_feasibility_tolerance)
+            || (variables_info.can_increase().contains(column)
+                && value < -dual_feasibility_tolerance);
+        if infeasible {
+            self.prices
+                .add_or_update(position, value * value / squared_norms[position]);
+        } else {
+            self.prices.remove(position);
+        }
+    }
+
+    /// Removes a bound-flipping column after its new status makes it dual feasible.
+    pub fn set_and_debug_check_column_is_dual_feasible_from_values(
+        &mut self,
+        column: ColIndex,
+        variables_info: &VariablesInfo,
+        reduced_costs: &[f64],
+        dual_feasibility_tolerance: f64,
+    ) {
+        if self.recompute {
+            return;
+        }
+        let value = reduced_costs[column.to_usize()];
+        debug_assert!(
+            !(variables_info.can_decrease().contains(column) && value > dual_feasibility_tolerance
+                || variables_info.can_increase().contains(column)
+                    && value < -dual_feasibility_tolerance)
+        );
+        self.prices.remove(column.to_usize());
     }
 
     pub fn best_entering_column(

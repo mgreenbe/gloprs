@@ -428,13 +428,19 @@ pricing again before accepting an empty candidate set. Primal phase I and II
 now select entering columns through the ported `PrimalPrices` heap with the
 configured Dantzig, steepest-edge, or Devex norms, test entering-edge precision,
 and maintain the norms through the shared `UpdateRow` before each basis pivot.
+Optimization pivots now maintain reduced costs and heap prices incrementally in
+GLOP's order (edge norms, reduced costs, prices), use the same update-row sparse
+support, and retry after the precise entering reduced cost invalidates the
+selected candidate. Imprecise edge norms and bound flips now use GLOP's local
+heap maintenance rather than unconditional price rebuilds. Full recomputation
+is retained after refactorization and in
+the current phase-I driver, whose feasibility objective changes during the
+iteration.
 Maximization objective coordinates and primal objective limits follow GLOP's
 offset/scaling sign convention and strict stopping test.
 
-This is not yet a validated Phase-4 port. Reduced costs and the pricing heap are
-still rebuilt on every iteration instead of using the ported incremental
-`ReducedCosts::UpdateBeforeBasisPivot()` and
-`PrimalPrices::UpdateBeforeBasisPivot()` orchestration; the dual
+This is not yet a validated Phase-4 port. The primal phase-I objective update is
+not yet connected to GLOP's incremental `ReducedCosts` orchestration; the dual
 phase-I/phase-II loop, perturbation and cost-shift orchestration, full
 termination/reoptimization checks, and complete incremental warm-start cases
 remain to be translated. The reproducible `tools/validate_netlib_solve.py`

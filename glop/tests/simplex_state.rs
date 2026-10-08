@@ -18,7 +18,9 @@ use glop::initial_basis::InitialBasis;
 use glop::parameters::GlopParameters;
 use glop::pricing::DynamicMaximum;
 use glop::primal_ratio_test::{LeavingChoice, choose_leaving_variable_row};
-use glop::reduced_costs::{PrimalPrices, ReducedCosts};
+use glop::reduced_costs::{
+    PrimalPrices, ReducedCosts, update_reduced_cost_values_before_basis_pivot,
+};
 use glop::update_row::UpdateRow;
 use glop::variable_values::VariableValues;
 use glop::variables_info::VariablesInfo;
@@ -105,6 +107,39 @@ fn reduced_costs_values_and_prices_match_their_definitions() {
             .best_entering_column(&info, &factorization, &mut norms, &mut reduced)
             .unwrap(),
         Some(ColIndex::new(0))
+    );
+
+    // GLOP updates exactly the columns in row 0 of B^-1 A, then explicitly
+    // installs the new leaving reduced cost and removes the entering column.
+    let mut update_row = UpdateRow::new(&full);
+    update_row
+        .compute_update_row(&factorization, &full, info.relevance(), 0)
+        .unwrap();
+    let mut incrementally_updated = reduced_values;
+    assert!(update_reduced_cost_values_before_basis_pivot(
+        &mut incrementally_updated,
+        ColIndex::new(0),
+        ColIndex::new(2),
+        2.0,
+        &update_row,
+    ));
+    assert_eq!(incrementally_updated, [0.0, 5.25, 1.75, 0.0]);
+    prices.update_before_basis_pivot_from_values(
+        ColIndex::new(0),
+        &update_row,
+        &info,
+        &incrementally_updated,
+        &squared_norms,
+        1e-8,
+    );
+    assert_eq!(
+        prices.best_entering_column_from_values(
+            &info,
+            &incrementally_updated,
+            &squared_norms,
+            1e-8,
+        ),
+        None
     );
 }
 

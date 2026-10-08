@@ -27,7 +27,7 @@ use crate::lu_factorization::FactorizationError;
 use crate::parameters::{GlopParameters, InitialBasisHeuristic};
 use crate::primal_edge_norms::{PricingRule as EdgePricingRule, PrimalEdgeNorms};
 use crate::primal_ratio_test::{LeavingChoice, choose_leaving_variable_row};
-use crate::reduced_costs::PrimalPrices;
+use crate::reduced_costs::{PrimalPrices, update_reduced_cost_values_before_basis_pivot};
 use crate::time_limit::TimeLimit;
 use crate::update_row::UpdateRow;
 use crate::variables_info::{BasisState, VariablesInfo};
@@ -526,6 +526,9 @@ impl RevisedSimplex {
             .set_pricing_rule(pricing_rule);
         self.primal_prices.force_recomputation();
         let mut final_check_performed = false;
+        let incremental_reduced_costs = phase == SimplexPhase::Optimization;
+        let mut recompute_reduced_costs = true;
+        let mut refactorize_for_precision = false;
         loop {
             if time_limit.limit_reached()
                 || self.num_iterations
@@ -538,8 +541,33 @@ impl RevisedSimplex {
                 };
                 return Ok(());
             }
+            if refactorize_for_precision {
+                self.basis_factorization
+                    .as_mut()
+                    .unwrap()
+                    .force_refactorization()?;
+                self.incorporate_basis_permutation();
+                self.update_row.as_mut().unwrap().invalidate();
+                self.primal_prices.force_recomputation();
+                recompute_reduced_costs = true;
+                refactorize_for_precision = false;
+            }
+            if self
+                .primal_edge_norms
+                .as_ref()
+                .unwrap()
+                .needs_basis_refactorization()
+                && !self.basis_factorization.as_ref().unwrap().is_refactorized()
+            {
+                refactorize_for_precision = true;
+                continue;
+            }
             let phase_objective = self.phase_objective(phase);
-            self.compute_reduced_costs(&phase_objective)?;
+            if !incremental_reduced_costs || recompute_reduced_costs {
+                self.compute_reduced_costs(&phase_objective)?;
+                self.primal_prices.force_recomputation();
+                recompute_reduced_costs = false;
+            }
             if phase == SimplexPhase::Optimization
                 && self.basis_factorization.as_ref().unwrap().is_refactorized()
                 && self.internal_objective() < self.primal_objective_limit
@@ -548,11 +576,6 @@ impl RevisedSimplex {
                 self.objective_limit_reached = true;
                 return Ok(());
             }
-            // Reduced costs are still recomputed by the provisional driver;
-            // rebuild the pricing heap from those current values. The heap,
-            // norm choice, and tie behavior are nevertheless the upstream
-            // `PrimalPrices` path rather than a separate linear scan.
-            self.primal_prices.force_recomputation();
             let Some(entering) = self.choose_entering()? else {
                 // GLOP accepts an empty pricing set only after its FINAL_CHECK
                 // has both precise reduced costs and a refactorized basis.
@@ -564,6 +587,9 @@ impl RevisedSimplex {
                         .unwrap()
                         .force_refactorization()?;
                     self.incorporate_basis_permutation();
+                    self.update_row.as_mut().unwrap().invalidate();
+                    self.primal_prices.force_recomputation();
+                    recompute_reduced_costs = true;
                     final_check_performed = true;
                     continue;
                 }
@@ -591,15 +617,80 @@ impl RevisedSimplex {
                     direction.values().as_slice(),
                 )
             {
-                self.primal_prices.force_recomputation();
+                if self
+                    .primal_edge_norms
+                    .as_ref()
+                    .unwrap()
+                    .needs_basis_refactorization()
+                {
+                    self.primal_prices.force_recomputation();
+                    refactorize_for_precision = true;
+                } else {
+                    let norms = self.primal_edge_norms.as_mut().unwrap().squared_norms(
+                        self.basis_factorization.as_ref().unwrap(),
+                        self.variables_info.as_ref().unwrap().relevance(),
+                    )?;
+                    self.primal_prices.recompute_price_at_from_values(
+                        entering,
+                        self.variables_info.as_ref().unwrap(),
+                        self.reduced_costs.as_slice(),
+                        norms,
+                        self.parameters.dual_feasibility_tolerance,
+                    );
+                }
                 continue;
+            }
+            let precise_reduced = phase_objective[entering]
+                - (0..self.num_rows.to_usize())
+                    .map(|row| {
+                        phase_objective[self.basis[RowIndex::from_usize(row)]]
+                            * direction.value(RowIndex::from_usize(row))
+                    })
+                    .sum::<f64>();
+            let old_reduced = self.reduced_costs[entering];
+            self.reduced_costs[entering] = precise_reduced;
+            if incremental_reduced_costs {
+                let scale = if precise_reduced.abs() <= 1.0 {
+                    1.0
+                } else {
+                    precise_reduced
+                };
+                refactorize_for_precision |= ((old_reduced - precise_reduced) / scale).abs()
+                    > self.parameters.recompute_reduced_costs_threshold;
+            }
+            {
+                let norms = self.primal_edge_norms.as_mut().unwrap().squared_norms(
+                    self.basis_factorization.as_ref().unwrap(),
+                    self.variables_info.as_ref().unwrap().relevance(),
+                )?;
+                self.primal_prices.recompute_price_at_from_values(
+                    entering,
+                    self.variables_info.as_ref().unwrap(),
+                    self.reduced_costs.as_slice(),
+                    norms,
+                    self.parameters.dual_feasibility_tolerance,
+                );
+            }
+            {
+                let info = self.variables_info.as_ref().unwrap();
+                let valid_entering_candidate = (info.can_increase().contains(entering)
+                    && precise_reduced < -self.parameters.dual_feasibility_tolerance)
+                    || (info.can_decrease().contains(entering)
+                        && precise_reduced > self.parameters.dual_feasibility_tolerance);
+                if !valid_entering_candidate {
+                    // Matches ReducedCosts::MakeReducedCostsPrecise() after
+                    // TestEnteringReducedCostPrecision() changes the sign or
+                    // feasibility of the selected column.
+                    refactorize_for_precision = true;
+                    continue;
+                }
             }
             let direction_norm = direction
                 .values()
                 .as_slice()
                 .iter()
                 .fold(0.0_f64, |maximum, value| maximum.max(value.abs()));
-            let reduced = self.reduced_costs[entering];
+            let reduced = precise_reduced;
             let choice = if phase == SimplexPhase::Feasibility {
                 self.phase_one_ratio_test(entering, reduced, &direction, direction_norm)
             } else {
@@ -623,6 +714,9 @@ impl RevisedSimplex {
                     .unwrap()
                     .force_refactorization()?;
                 self.incorporate_basis_permutation();
+                self.update_row.as_mut().unwrap().invalidate();
+                self.primal_prices.force_recomputation();
+                recompute_reduced_costs = true;
                 continue;
             }
             let (leaving_row, step_length, target_bound) = match choice {
@@ -688,6 +782,27 @@ impl RevisedSimplex {
                         direction.values().as_slice(),
                         self.update_row.as_mut().unwrap(),
                     )?;
+                if incremental_reduced_costs {
+                    update_reduced_cost_values_before_basis_pivot(
+                        self.reduced_costs.as_mut_slice(),
+                        entering,
+                        leaving,
+                        direction.value(row),
+                        self.update_row.as_ref().unwrap(),
+                    );
+                    let norms = self.primal_edge_norms.as_mut().unwrap().squared_norms(
+                        self.basis_factorization.as_ref().unwrap(),
+                        self.variables_info.as_ref().unwrap().relevance(),
+                    )?;
+                    self.primal_prices.update_before_basis_pivot_from_values(
+                        entering,
+                        self.update_row.as_ref().unwrap(),
+                        self.variables_info.as_ref().unwrap(),
+                        self.reduced_costs.as_slice(),
+                        norms,
+                        self.parameters.dual_feasibility_tolerance,
+                    );
+                }
                 self.variable_values[leaving] = target_bound;
                 let leaving_status = self.status_at_bound(leaving, target_bound);
                 {
@@ -732,6 +847,10 @@ impl RevisedSimplex {
                 }
                 self.incorporate_basis_permutation();
                 self.update_row.as_mut().unwrap().invalidate();
+                if self.basis_factorization.as_ref().unwrap().is_refactorized() {
+                    recompute_reduced_costs = true;
+                    self.primal_prices.force_recomputation();
+                }
             } else {
                 let info = self.variables_info.as_mut().unwrap();
                 if step > 0.0 {
@@ -741,6 +860,13 @@ impl RevisedSimplex {
                     info.update_to_nonbasic_status(entering, VariableStatus::AtLowerBound);
                     self.variable_values[entering] = info.lower_bounds()[entering.to_usize()];
                 }
+                self.primal_prices
+                    .set_and_debug_check_column_is_dual_feasible_from_values(
+                        entering,
+                        info,
+                        self.reduced_costs.as_slice(),
+                        self.parameters.dual_feasibility_tolerance,
+                    );
             }
             self.num_iterations += 1;
             if self.trace_enabled {
