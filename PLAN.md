@@ -424,18 +424,24 @@ middle-product update. Basis-update refactorizations leave their LU column
 permutation visible until the revised-simplex owner applies it to the external
 basis mapping, matching `PermuteBasis()`. The optimality path also performs
 GLOP's precise final check by refactorizing, recomputing reduced costs, and
-pricing again before accepting an empty candidate set.
+pricing again before accepting an empty candidate set. Primal phase I and II
+now select entering columns through the ported `PrimalPrices` heap with the
+configured Dantzig, steepest-edge, or Devex norms, test entering-edge precision,
+and maintain the norms through the shared `UpdateRow` before each basis pivot.
+Maximization objective coordinates and primal objective limits follow GLOP's
+offset/scaling sign convention and strict stopping test.
 
-This is not yet a validated Phase-4 port. The current entering-column scan is
-temporary and must be replaced by the already ported `PrimalPrices`/
-`PrimalEdgeNorms` path; the dual phase-I/phase-II loop, perturbation and cost
-shift orchestration, full termination/reoptimization checks, objective limits, and complete
-incremental warm-start cases remain to be translated. Nine smallest-Netlib
-models reach the published objective in exploratory release runs, and the
-previous `sc105`/`sc205` numerical-state discrepancies are covered by targeted
-regressions and now terminate `OPTIMAL` at their published objectives. Native
-iteration traces still diverge. Consequently neither file is marked ported or
-validated in `PORTING.md`, and none of the dataset gates below is complete.
+This is not yet a validated Phase-4 port. Reduced costs and the pricing heap are
+still rebuilt on every iteration instead of using the ported incremental
+`ReducedCosts::UpdateBeforeBasisPivot()` and
+`PrimalPrices::UpdateBeforeBasisPivot()` orchestration; the dual
+phase-I/phase-II loop, perturbation and cost-shift orchestration, full
+termination/reoptimization checks, and complete incremental warm-start cases
+remain to be translated. The reproducible `tools/validate_netlib_solve.py`
+gate passes status, objective, and independent primal/dual feasibility checks
+on the 25 smallest Netlib models. Native iteration counts still diverge,
+sometimes substantially, so neither file is marked ported or validated in
+`PORTING.md`.
 
 Translate the revised-simplex driver and its immediate orchestration:
 

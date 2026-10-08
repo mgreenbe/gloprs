@@ -464,6 +464,39 @@ impl PrimalPrices {
         self.recompute = true;
     }
 
+    /// Recomputes prices from already materialized reduced costs and norms.
+    ///
+    /// This is the explicit-collaborator form of GLOP's
+    /// `PrimalPrices::GetBestEnteringColumn()`. It lets the in-progress
+    /// revised-simplex driver use the ported pricing heap before ownership of
+    /// its reduced-cost state has moved fully into [`ReducedCosts`].
+    pub fn best_entering_column_from_values(
+        &mut self,
+        variables_info: &VariablesInfo,
+        reduced_costs: &[f64],
+        squared_norms: &[f64],
+        dual_feasibility_tolerance: f64,
+    ) -> Option<ColIndex> {
+        if self.recompute {
+            debug_assert_eq!(reduced_costs.len(), squared_norms.len());
+            self.prices.clear_and_resize(reduced_costs.len());
+            for column in variables_info.relevance().iter_ones() {
+                let position = column.to_usize();
+                let value = reduced_costs[position];
+                let infeasible = (variables_info.can_decrease().contains(column)
+                    && value > dual_feasibility_tolerance)
+                    || (variables_info.can_increase().contains(column)
+                        && value < -dual_feasibility_tolerance);
+                if infeasible {
+                    self.prices
+                        .add_or_update(position, value * value / squared_norms[position]);
+                }
+            }
+            self.recompute = false;
+        }
+        self.prices.get_maximum().map(ColIndex::from_usize)
+    }
+
     pub fn best_entering_column(
         &mut self,
         variables_info: &VariablesInfo,
@@ -474,19 +507,13 @@ impl PrimalPrices {
         if self.recompute {
             let reduced = reduced_costs.reduced_costs()?.to_vec();
             let norms = primal_edge_norms.squared_norms(basis, variables_info.relevance())?;
-            self.prices.clear_and_resize(reduced.len());
             let tolerance = reduced_costs.dual_feasibility_tolerance();
-            for column in variables_info.relevance().iter_ones() {
-                let value = reduced[column.to_usize()];
-                let infeasible = (variables_info.can_decrease().contains(column)
-                    && value > tolerance)
-                    || (variables_info.can_increase().contains(column) && value < -tolerance);
-                if infeasible {
-                    self.prices
-                        .add_or_update(column.to_usize(), value * value / norms[column.to_usize()]);
-                }
-            }
-            self.recompute = false;
+            return Ok(self.best_entering_column_from_values(
+                variables_info,
+                &reduced,
+                norms,
+                tolerance,
+            ));
         }
         Ok(self.prices.get_maximum().map(ColIndex::from_usize))
     }

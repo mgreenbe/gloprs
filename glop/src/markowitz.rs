@@ -204,6 +204,31 @@ impl MatrixNonZeroPattern {
             self.row_degree[row] += target_pattern.len() - old_size;
         }
     }
+
+    /// Updates row degrees after deleting a computed pivot column.
+    ///
+    /// Structural zeros belong to the residual pattern and are counted. An
+    /// exact-zero reachability overestimate does not: it can be distinguished
+    /// by the absence of the pivot column from that row's symbolic pattern.
+    fn remove_column(
+        &mut self,
+        pivot_column: usize,
+        column: &SparseColumn,
+        singleton_rows: &mut Vec<usize>,
+    ) {
+        for entry in column {
+            let row = entry.index().to_usize();
+            if self.row_degree[row] == 0
+                || (entry.coefficient() == 0.0 && !self.row_nonzeros[row].contains(&pivot_column))
+            {
+                continue;
+            }
+            self.row_degree[row] -= 1;
+            if self.row_degree[row] == 1 {
+                singleton_rows.push(row);
+            }
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -314,7 +339,7 @@ impl ColumnPriorityQueue {
 #[derive(Clone, Debug, Default)]
 struct CandidateColumn {
     needs_solve: bool,
-    contains_zero: bool,
+    needs_split: bool,
 }
 
 /// GLOP's logical-column repository backed by a small reusable physical pool.
@@ -408,13 +433,12 @@ fn compute_column<'a>(
             row_permutation,
             permuted_upper.mutable_column(column),
         );
-        candidates[column].contains_zero = residual.iter().any(|entry| entry.coefficient() == 0.0);
         *num_fp_operations += lower_factor.num_fp_operations_in_last_permuted_lower_sparse_solve();
     } else {
         // GLOP performs this test before populating a column seen for the
         // first time. In particular, an empty residual column is returned
         // immediately when its structural degree is zero.
-        if residual.num_entries() == residual_degree && !candidates[column].contains_zero {
+        if residual.num_entries() == residual_degree && !candidates[column].needs_split {
             permuted_lower.restore_column(column, residual);
             return permuted_lower.column(column);
         }
@@ -428,10 +452,12 @@ fn compute_column<'a>(
             INVALID,
             permuted_upper.mutable_column(column),
         );
+        candidates[column].needs_split = false;
         permuted_lower.restore_column(column, residual);
         return permuted_lower.column(column);
     }
     candidates[column].needs_solve = false;
+    candidates[column].needs_split = false;
     permuted_lower.restore_column(column, residual);
     debug_assert!(
         permuted_lower
@@ -792,6 +818,7 @@ fn compute(matrix: MatrixView<'_>, parameters: &GlopParameters) -> MarkowitzResu
                     continue;
                 }
                 pattern.column_degree[column] -= 1;
+                candidates[column].needs_split = true;
                 update_degree(
                     column,
                     pattern.column_degree[column],
@@ -803,13 +830,7 @@ fn compute(matrix: MatrixView<'_>, parameters: &GlopParameters) -> MarkowitzResu
         } else if pivot.markowitz == 0 {
             pivots_without_fill_in += 1;
             debug_assert_eq!(row_degree, 1);
-            for entry in residual {
-                let row = entry.index().to_usize();
-                pattern.row_degree[row] = pattern.row_degree[row].saturating_sub(1);
-                if pattern.row_degree[row] == 1 {
-                    singleton_rows.push(row);
-                }
-            }
+            pattern.remove_column(pivot.column, residual, &mut singleton_rows);
         } else {
             pattern.update(pivot.row, pivot.column, residual);
             for &column in &pattern.row_nonzeros[pivot.row] {
@@ -824,13 +845,7 @@ fn compute(matrix: MatrixView<'_>, parameters: &GlopParameters) -> MarkowitzResu
                     );
                 }
             }
-            for entry in residual {
-                let row = entry.index().to_usize();
-                pattern.row_degree[row] = pattern.row_degree[row].saturating_sub(1);
-                if pattern.row_degree[row] == 1 {
-                    singleton_rows.push(row);
-                }
-            }
+            pattern.remove_column(pivot.column, residual, &mut singleton_rows);
         }
 
         if contains_only_singleton_columns {
@@ -995,7 +1010,7 @@ mod tests {
     }
 
     #[test]
-    fn exact_cancellation_disables_the_cardinality_only_split_shortcut() {
+    fn deleted_row_disables_the_cardinality_only_split_shortcut() {
         let mut matrix = SparseMatrix::new();
         matrix.populate_from_zero(RowIndex::new(3), lp_data::lp_types::ColIndex::new(1));
         let mut lower_factor = TriangularMatrix::empty(Triangle::Lower, true);
@@ -1003,7 +1018,7 @@ mod tests {
         let row_permutation = [INVALID, 0, INVALID];
         let mut candidates = vec![CandidateColumn {
             needs_solve: false,
-            contains_zero: true,
+            needs_split: true,
         }];
         let mut permuted_lower = ReusableColumnMemory::new(1);
         permuted_lower
@@ -1037,5 +1052,25 @@ mod tests {
                 .to_bits(),
             2.0_f64.to_bits()
         );
+    }
+
+    #[test]
+    fn residual_pattern_ignores_only_nonstructural_exact_zeros() {
+        let mut pattern = MatrixNonZeroPattern {
+            row_nonzeros: vec![Vec::new(), vec![0], vec![1]],
+            row_degree: vec![0, 1, 1],
+            column_degree: vec![1, 1],
+            deleted_columns: vec![true, false],
+            scratchpad: vec![false; 2],
+            non_deleted_columns: 1,
+        };
+        let mut residual = SparseColumn::new();
+        residual.add_entry(RowIndex::new(1), 0.0);
+        residual.add_entry(RowIndex::new(2), 0.0);
+        let mut singletons = Vec::new();
+
+        pattern.remove_column(0, &residual, &mut singletons);
+
+        assert_eq!(pattern.row_degree, [0, 0, 1]);
     }
 }

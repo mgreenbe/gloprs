@@ -90,6 +90,16 @@ fn reduced_costs_values_and_prices_match_their_definitions() {
     // Column 1 cannot decrease from its lower bound, so column 0 enters.
     let mut norms = glop::primal_edge_norms::PrimalEdgeNorms::new(&full);
     let mut prices = PrimalPrices::new(1);
+    let reduced_values = reduced.reduced_costs().unwrap().to_vec();
+    let squared_norms = norms
+        .squared_norms(&factorization, info.relevance())
+        .unwrap()
+        .to_vec();
+    assert_eq!(
+        prices.best_entering_column_from_values(&info, &reduced_values, &squared_norms, 1e-8,),
+        Some(ColIndex::new(0))
+    );
+    prices.force_recomputation();
     assert_eq!(
         prices
             .best_entering_column(&info, &factorization, &mut norms, &mut reduced)

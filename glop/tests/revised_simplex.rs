@@ -1,3 +1,4 @@
+use glop::parameters::{GlopParameters, PricingRule};
 use glop::revised_simplex::RevisedSimplex;
 use glop::time_limit::TimeLimit;
 use lp_data::lp_data::LinearProgram;
@@ -37,4 +38,68 @@ fn solves_a_bounded_problem_through_phase_one_and_two() {
     assert!(simplex.variable_value(y).abs() < 1e-9);
     assert!(!simplex.trace().is_empty());
     assert_eq!(simplex.problem_num_cols().to_usize(), 2);
+}
+
+#[test]
+fn all_primal_pricing_rules_drive_the_revised_simplex_loop() {
+    let mut lp = LinearProgram::default();
+    let x = lp.create_new_variable();
+    let y = lp.create_new_variable();
+    let row = lp.create_new_constraint();
+    lp.set_variable_bounds(x, 0.0, 10.0);
+    lp.set_variable_bounds(y, 0.0, 10.0);
+    lp.set_constraint_bounds(row, f64::NEG_INFINITY, 4.0);
+    lp.set_coefficient(row, x, 1.0);
+    lp.set_coefficient(row, y, 2.0);
+    lp.set_objective_coefficient(x, -1.0);
+    lp.set_objective_coefficient(y, -1.0);
+    lp.clean_up();
+
+    for rule in [
+        PricingRule::Dantzig,
+        PricingRule::SteepestEdge,
+        PricingRule::Devex,
+    ] {
+        let parameters = GlopParameters {
+            feasibility_rule: rule,
+            optimization_rule: rule,
+            ..GlopParameters::default()
+        };
+        let mut simplex = RevisedSimplex::new();
+        simplex.set_parameters(&parameters);
+        simplex
+            .solve(&lp, &mut TimeLimit::new(f64::INFINITY, f64::INFINITY))
+            .unwrap();
+        assert_eq!(simplex.problem_status(), ProblemStatus::Optimal);
+        assert!((simplex.objective_value() + 4.0).abs() < 1e-9);
+    }
+}
+
+#[test]
+fn maximization_and_primal_objective_limit_use_external_objective_coordinates() {
+    let mut lp = LinearProgram::default();
+    let x = lp.create_new_variable();
+    let row = lp.create_new_constraint();
+    lp.set_variable_bounds(x, 0.0, 10.0);
+    lp.set_constraint_bounds(row, f64::NEG_INFINITY, 4.0);
+    lp.set_coefficient(row, x, 1.0);
+    lp.set_objective_coefficient(x, 1.0);
+    lp.set_objective_offset(3.0);
+    lp.set_objective_scaling_factor(2.0);
+    lp.set_maximization_problem(true);
+    lp.clean_up();
+
+    let parameters = GlopParameters {
+        objective_upper_limit: 10.0,
+        ..GlopParameters::default()
+    };
+    let mut simplex = RevisedSimplex::new();
+    simplex.set_parameters(&parameters);
+    simplex
+        .solve(&lp, &mut TimeLimit::new(f64::INFINITY, f64::INFINITY))
+        .unwrap();
+
+    assert_eq!(simplex.problem_status(), ProblemStatus::PrimalFeasible);
+    assert!(simplex.objective_limit_reached());
+    assert!((simplex.objective_value() - 14.0).abs() < 1e-9);
 }

@@ -18,15 +18,18 @@ use lp_data::lp_types::{
     ColIndex, ConstraintStatus, DenseColumn, DenseRow, INVALID_COL, ProblemStatus, RowIndex,
     RowToColMapping, VariableStatus, VectorIndex,
 };
-use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow};
+use lp_data::scattered_vector::ScatteredColumn;
 use lp_data::sparse::{CompactSparseMatrix, SparseMatrix};
 
 use crate::basis_representation::BasisRepresentation;
 use crate::initial_basis::InitialBasis;
 use crate::lu_factorization::FactorizationError;
 use crate::parameters::{GlopParameters, InitialBasisHeuristic};
+use crate::primal_edge_norms::{PricingRule as EdgePricingRule, PrimalEdgeNorms};
 use crate::primal_ratio_test::{LeavingChoice, choose_leaving_variable_row};
+use crate::reduced_costs::PrimalPrices;
 use crate::time_limit::TimeLimit;
+use crate::update_row::UpdateRow;
 use crate::variables_info::{BasisState, VariablesInfo};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -58,12 +61,17 @@ pub struct RevisedSimplex {
     objective: DenseRow,
     objective_offset: f64,
     objective_scaling_factor: f64,
+    primal_objective_limit: f64,
+    objective_limit_reached: bool,
     basis: RowToColMapping,
     basis_factorization: Option<BasisRepresentation>,
     variables_info: Option<VariablesInfo>,
     variable_values: DenseRow,
     reduced_costs: DenseRow,
     dual_values: DenseColumn,
+    primal_edge_norms: Option<PrimalEdgeNorms>,
+    primal_prices: PrimalPrices,
+    update_row: Option<UpdateRow>,
     primal_ray: DenseRow,
     dual_ray: DenseColumn,
     solution_state: BasisState,
@@ -94,12 +102,17 @@ impl RevisedSimplex {
             objective: DenseRow::new(),
             objective_offset: 0.0,
             objective_scaling_factor: 1.0,
+            primal_objective_limit: f64::NEG_INFINITY,
+            objective_limit_reached: false,
             basis: RowToColMapping::new(),
             basis_factorization: None,
             variables_info: None,
             variable_values: DenseRow::new(),
             reduced_costs: DenseRow::new(),
             dual_values: DenseColumn::new(),
+            primal_edge_norms: None,
+            primal_prices: PrimalPrices::new(1),
+            update_row: None,
             primal_ray: DenseRow::new(),
             dual_ray: DenseColumn::new(),
             solution_state: BasisState::default(),
@@ -182,8 +195,21 @@ impl RevisedSimplex {
                 })
                 .collect(),
         );
-        self.objective_offset = equation_lp.objective_offset();
-        self.objective_scaling_factor = equation_lp.objective_scaling_factor();
+        if equation_lp.is_maximization_problem() {
+            self.objective_offset = -equation_lp.objective_offset();
+            self.objective_scaling_factor = -equation_lp.objective_scaling_factor();
+        } else {
+            self.objective_offset = equation_lp.objective_offset();
+            self.objective_scaling_factor = equation_lp.objective_scaling_factor();
+        }
+        let external_limit = if self.objective_scaling_factor >= 0.0 {
+            self.parameters.objective_lower_limit
+        } else {
+            self.parameters.objective_upper_limit
+        };
+        self.primal_objective_limit =
+            external_limit / self.objective_scaling_factor - self.objective_offset;
+        self.objective_limit_reached = false;
 
         let mut info = VariablesInfo::new(&self.matrix);
         info.load_bounds_and_return_true_if_unchanged(
@@ -327,6 +353,14 @@ impl RevisedSimplex {
         self.initialize_values()?;
         self.reduced_costs = DenseRow::filled(self.num_cols, 0.0);
         self.dual_values = DenseColumn::filled(self.num_rows, 0.0);
+        let mut primal_edge_norms = PrimalEdgeNorms::new(&self.matrix);
+        primal_edge_norms.set_glop_parameters(&self.parameters);
+        self.primal_edge_norms = Some(primal_edge_norms);
+        self.primal_prices =
+            PrimalPrices::new(u64::try_from(self.parameters.random_seed).unwrap_or_default());
+        let mut update_row = UpdateRow::new(&self.matrix);
+        update_row.set_glop_parameters(&self.parameters);
+        self.update_row = Some(update_row);
         self.primal_ray = DenseRow::new();
         self.dual_ray = DenseColumn::new();
         self.problem_status = ProblemStatus::Init;
@@ -408,26 +442,19 @@ impl RevisedSimplex {
         Ok(())
     }
 
-    fn choose_entering(&self) -> Option<ColIndex> {
+    fn choose_entering(&mut self) -> Result<Option<ColIndex>, FactorizationError> {
         let info = self.variables_info.as_ref().unwrap();
-        let tolerance = self.parameters.dual_feasibility_tolerance;
-        let mut best = None;
-        let mut best_price = tolerance;
-        for column in info.relevance().iter_ones() {
-            let reduced = self.reduced_costs[column];
-            let price = if reduced < -tolerance && info.can_increase().contains(column) {
-                -reduced
-            } else if reduced > tolerance && info.can_decrease().contains(column) {
-                reduced
-            } else {
-                continue;
-            };
-            if price > best_price {
-                best_price = price;
-                best = Some(column);
-            }
-        }
-        best
+        let norms = self
+            .primal_edge_norms
+            .as_mut()
+            .unwrap()
+            .squared_norms(self.basis_factorization.as_ref().unwrap(), info.relevance())?;
+        Ok(self.primal_prices.best_entering_column_from_values(
+            info,
+            self.reduced_costs.as_slice(),
+            norms,
+            self.parameters.dual_feasibility_tolerance,
+        ))
     }
 
     fn direction(&self, entering: ColIndex) -> Result<ScatteredColumn, FactorizationError> {
@@ -484,6 +511,20 @@ impl RevisedSimplex {
         phase: SimplexPhase,
         time_limit: &mut TimeLimit,
     ) -> Result<(), FactorizationError> {
+        let pricing_rule = match if phase == SimplexPhase::Feasibility {
+            self.parameters.feasibility_rule
+        } else {
+            self.parameters.optimization_rule
+        } {
+            crate::parameters::PricingRule::Dantzig => EdgePricingRule::Dantzig,
+            crate::parameters::PricingRule::SteepestEdge => EdgePricingRule::SteepestEdge,
+            crate::parameters::PricingRule::Devex => EdgePricingRule::Devex,
+        };
+        self.primal_edge_norms
+            .as_mut()
+            .unwrap()
+            .set_pricing_rule(pricing_rule);
+        self.primal_prices.force_recomputation();
         let mut final_check_performed = false;
         loop {
             if time_limit.limit_reached()
@@ -499,7 +540,20 @@ impl RevisedSimplex {
             }
             let phase_objective = self.phase_objective(phase);
             self.compute_reduced_costs(&phase_objective)?;
-            let Some(entering) = self.choose_entering() else {
+            if phase == SimplexPhase::Optimization
+                && self.basis_factorization.as_ref().unwrap().is_refactorized()
+                && self.internal_objective() < self.primal_objective_limit
+            {
+                self.problem_status = ProblemStatus::PrimalFeasible;
+                self.objective_limit_reached = true;
+                return Ok(());
+            }
+            // Reduced costs are still recomputed by the provisional driver;
+            // rebuild the pricing heap from those current values. The heap,
+            // norm choice, and tie behavior are nevertheless the upstream
+            // `PrimalPrices` path rather than a separate linear scan.
+            self.primal_prices.force_recomputation();
+            let Some(entering) = self.choose_entering()? else {
                 // GLOP accepts an empty pricing set only after its FINAL_CHECK
                 // has both precise reduced costs and a refactorized basis.
                 // This provisional driver does not yet retain that precision
@@ -528,6 +582,18 @@ impl RevisedSimplex {
             };
             let direction = self.direction(entering)?;
             final_check_performed = false;
+            if !self
+                .primal_edge_norms
+                .as_mut()
+                .unwrap()
+                .test_entering_edge_norm_precision(
+                    entering.to_usize(),
+                    direction.values().as_slice(),
+                )
+            {
+                self.primal_prices.force_recomputation();
+                continue;
+            }
             let direction_norm = direction
                 .values()
                 .as_slice()
@@ -603,6 +669,25 @@ impl RevisedSimplex {
 
             if let Some(row) = leaving_row {
                 let leaving = self.basis[row];
+                self.update_row
+                    .as_mut()
+                    .unwrap()
+                    .compute_unit_row_left_inverse(
+                        self.basis_factorization.as_ref().unwrap(),
+                        row.to_usize(),
+                    )?;
+                self.primal_edge_norms
+                    .as_mut()
+                    .unwrap()
+                    .update_before_basis_pivot(
+                        self.basis_factorization.as_ref().unwrap(),
+                        self.variables_info.as_ref().unwrap().relevance(),
+                        entering.to_usize(),
+                        leaving.to_usize(),
+                        row.to_usize(),
+                        direction.values().as_slice(),
+                        self.update_row.as_mut().unwrap(),
+                    )?;
                 self.variable_values[leaving] = target_bound;
                 let leaving_status = self.status_at_bound(leaving, target_bound);
                 {
@@ -611,18 +696,13 @@ impl RevisedSimplex {
                     info.update_to_basic_status(entering);
                 }
                 self.basis[row] = entering;
-                let mut unit_left_inverse =
-                    ScatteredRow::new(ColIndex::from_usize(self.num_rows.to_usize()));
-                self.basis_factorization
-                    .as_ref()
-                    .unwrap()
-                    .left_solve_for_unit_row(row.to_usize(), &mut unit_left_inverse)?;
                 let pivot_from_update_row = self
                     .matrix
                     .column(entering)
                     .iter()
                     .map(|entry| {
-                        unit_left_inverse.value(ColIndex::from_usize(entry.index().to_usize()))
+                        self.update_row.as_ref().unwrap().unit_row_left_inverse()
+                            [entry.index().to_usize()]
                             * entry.coefficient()
                     })
                     .sum::<f64>();
@@ -651,6 +731,7 @@ impl RevisedSimplex {
                         )?;
                 }
                 self.incorporate_basis_permutation();
+                self.update_row.as_mut().unwrap().invalidate();
             } else {
                 let info = self.variables_info.as_mut().unwrap();
                 if step > 0.0 {
@@ -846,6 +927,10 @@ impl RevisedSimplex {
     #[must_use]
     pub fn objective_value(&self) -> f64 {
         self.objective_scaling_factor * (self.internal_objective() + self.objective_offset)
+    }
+    #[must_use]
+    pub const fn objective_limit_reached(&self) -> bool {
+        self.objective_limit_reached
     }
     #[must_use]
     pub fn variable_value(&self, column: ColIndex) -> f64 {
