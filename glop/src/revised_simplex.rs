@@ -16,7 +16,7 @@
 use lp_data::lp_data::LinearProgram;
 use lp_data::lp_types::{
     ColIndex, ConstraintStatus, DenseColumn, DenseRow, INVALID_COL, ProblemStatus, RowIndex,
-    RowToColMapping, VariableStatus, VectorIndex,
+    RowToColMapping, VariableStatus, VariableType, VectorIndex,
 };
 use lp_data::lp_utils::precise_scalar_product;
 use lp_data::scattered_vector::ScatteredColumn;
@@ -83,6 +83,9 @@ pub struct RevisedSimplex {
     dual_prices: DynamicMaximum,
     entering_variable: EnteringVariable,
     bound_flip_candidates: Vec<ColIndex>,
+    dual_phase_one_improvement_direction: DenseRow,
+    dual_phase_one_pricing_vector: DenseColumn,
+    num_dual_infeasible_positions: usize,
     update_row: Option<UpdateRow>,
     primal_ray: DenseRow,
     dual_ray: DenseColumn,
@@ -132,6 +135,9 @@ impl RevisedSimplex {
             dual_prices: DynamicMaximum::new(1),
             entering_variable: EnteringVariable::new(1),
             bound_flip_candidates: Vec::new(),
+            dual_phase_one_improvement_direction: DenseRow::new(),
+            dual_phase_one_pricing_vector: DenseColumn::new(),
+            num_dual_infeasible_positions: 0,
             update_row: None,
             primal_ray: DenseRow::new(),
             dual_ray: DenseColumn::new(),
@@ -207,6 +213,37 @@ impl RevisedSimplex {
     ) -> Result<bool, FactorizationError> {
         let objective = self.objective.clone();
         self.compute_reduced_costs(&objective)?;
+        self.variables_info
+            .as_mut()
+            .unwrap()
+            .make_boxed_variable_relevant(false);
+
+        let info = self.variables_info.as_ref().unwrap();
+        let tolerance = self.parameters.dual_feasibility_tolerance;
+        let nonboxed_dual_infeasible = info.relevance().iter_ones().any(|column| {
+            let reduced = self.reduced_costs[column];
+            (info.can_increase().contains(column) && reduced < -tolerance)
+                || (info.can_decrease().contains(column) && reduced > tolerance)
+        });
+        if nonboxed_dual_infeasible {
+            if !self.parameters.use_dedicated_dual_feasibility_algorithm {
+                // The transformed-problem alternative remains a separate
+                // Phase-4 path; keep the primal fallback for this nondefault.
+                return Ok(false);
+            }
+            self.run_dedicated_dual_phase_one(time_limit)?;
+            if self.problem_status != ProblemStatus::DualFeasible {
+                return Ok(true);
+            }
+            self.basis_factorization
+                .as_mut()
+                .unwrap()
+                .force_refactorization()?;
+            self.incorporate_basis_permutation();
+            self.update_row.as_mut().unwrap().invalidate();
+            let objective = self.objective.clone();
+            self.compute_reduced_costs(&objective)?;
+        }
 
         // Boxed nonbasic variables can be made dual feasible by moving them to
         // their opposite bound without changing the basis.
@@ -223,20 +260,6 @@ impl RevisedSimplex {
             .unwrap()
             .make_boxed_variable_relevant(true);
         self.initialize_values()?;
-
-        let info = self.variables_info.as_ref().unwrap();
-        let tolerance = self.parameters.dual_feasibility_tolerance;
-        let nonboxed_dual_infeasible = info.relevance().iter_ones().any(|column| {
-            let reduced = self.reduced_costs[column];
-            (info.can_increase().contains(column) && reduced < -tolerance)
-                || (info.can_decrease().contains(column) && reduced > tolerance)
-        });
-        if nonboxed_dual_infeasible {
-            // The dedicated and transformed dual Phase-I paths are the next
-            // Phase-4 boundary. Preserve the existing primal fallback until
-            // either path can establish dual feasibility faithfully.
-            return Ok(false);
-        }
         self.problem_status = ProblemStatus::DualFeasible;
         self.run_dual_phase_two(time_limit)?;
         Ok(true)
@@ -347,6 +370,188 @@ impl RevisedSimplex {
             }
             self.update_dual_prices(&changed_rows)?;
         }
+        Ok(())
+    }
+
+    fn dual_phase_one_sign(&self, column: ColIndex) -> f64 {
+        let info = self.variables_info.as_ref().unwrap();
+        let reduced = self.reduced_costs[column];
+        let tolerance = self.parameters.dual_feasibility_tolerance;
+        if info.can_increase().contains(column) && reduced < -tolerance {
+            1.0
+        } else if info.can_decrease().contains(column) && reduced > tolerance {
+            -1.0
+        } else {
+            0.0
+        }
+    }
+
+    fn dual_phase_one_leaving_candidate(
+        cost: f64,
+        variable_type: VariableType,
+        threshold: f64,
+    ) -> bool {
+        cost != 0.0
+            && (matches!(
+                variable_type,
+                VariableType::UpperAndLowerBounded | VariableType::FixedVariable
+            ) || variable_type == VariableType::UpperBounded && cost < -threshold
+                || variable_type == VariableType::LowerBounded && cost > threshold)
+    }
+
+    fn update_dual_phase_one_price_at(
+        dual_prices: &mut DynamicMaximum,
+        row: RowIndex,
+        price: f64,
+        squared_norm: f64,
+        variable_type: VariableType,
+        threshold: f64,
+        dense: bool,
+    ) {
+        if Self::dual_phase_one_leaving_candidate(price, variable_type, threshold) {
+            let scaled = price * price / squared_norm;
+            if dense {
+                dual_prices.dense_add_or_update(row.to_usize(), scaled);
+            } else {
+                dual_prices.add_or_update(row.to_usize(), scaled);
+            }
+        } else {
+            dual_prices.remove(row.to_usize());
+        }
+    }
+
+    fn update_dual_phase_one_prices_for_columns(
+        &mut self,
+        columns: &[usize],
+        from_scratch: bool,
+    ) -> Result<(), FactorizationError> {
+        if from_scratch {
+            self.num_dual_infeasible_positions = 0;
+            self.dual_phase_one_pricing_vector = DenseColumn::filled(self.num_rows, 0.0);
+            self.dual_phase_one_improvement_direction = DenseRow::filled(self.num_cols, 0.0);
+            self.dual_prices.clear_and_resize(self.num_rows.to_usize());
+        }
+        let mut rhs = ScatteredColumn::new(self.num_rows);
+        for &position in columns {
+            let column = ColIndex::from_usize(position);
+            let sign = self.dual_phase_one_sign(column);
+            let old_sign = self.dual_phase_one_improvement_direction[column];
+            if sign == old_sign {
+                continue;
+            }
+            if sign == 0.0 {
+                self.num_dual_infeasible_positions -= 1;
+            } else if old_sign == 0.0 {
+                self.num_dual_infeasible_positions += 1;
+            }
+            self.compact_matrix.column_add_multiple_to_scattered_column(
+                column,
+                sign - old_sign,
+                &mut rhs,
+            );
+            self.dual_phase_one_improvement_direction[column] = sign;
+        }
+        if rhs.non_zeros().is_empty() {
+            return Ok(());
+        }
+        rhs.clear_sparse_mask();
+        rhs.clear_non_zeros_if_too_dense(0.8);
+        self.basis_factorization
+            .as_ref()
+            .unwrap()
+            .solve_with_nonzeros(&mut rhs)?;
+        let norms = self
+            .dual_edge_norms
+            .edge_squared_norms(self.basis_factorization.as_ref().unwrap())?;
+        let types = self.variables_info.as_ref().unwrap().variable_types();
+        let threshold = self.parameters.ratio_test_zero_threshold;
+        if rhs.non_zeros().is_empty() {
+            self.dual_prices.start_dense_updates();
+            for row in 0..self.num_rows.to_usize() {
+                let row = RowIndex::from_usize(row);
+                let delta = rhs.value(row);
+                if delta == 0.0 {
+                    continue;
+                }
+                self.dual_phase_one_pricing_vector[row] += delta;
+                Self::update_dual_phase_one_price_at(
+                    &mut self.dual_prices,
+                    row,
+                    self.dual_phase_one_pricing_vector[row],
+                    norms[row.to_usize()],
+                    types[self.basis[row]],
+                    threshold,
+                    true,
+                );
+            }
+        } else {
+            let rows = rhs.non_zeros().to_vec();
+            for row in rows {
+                self.dual_phase_one_pricing_vector[row] += rhs.value(row);
+                Self::update_dual_phase_one_price_at(
+                    &mut self.dual_prices,
+                    row,
+                    self.dual_phase_one_pricing_vector[row],
+                    norms[row.to_usize()],
+                    types[self.basis[row]],
+                    threshold,
+                    false,
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn update_dual_phase_one_prices_on_pivot(
+        &mut self,
+        leaving_row: RowIndex,
+        entering: ColIndex,
+        direction: &ScatteredColumn,
+    ) -> Result<(), FactorizationError> {
+        // Keep this condition synchronized with the full-recomputation path at
+        // the start of the next Phase-I leaving-row selection. GLOP skips this
+        // eta update whenever the norms will force all prices to be rebuilt.
+        if self.dual_edge_norms.needs_basis_refactorization()
+            || self.dual_phase_one_pricing_vector.is_empty()
+        {
+            return Ok(());
+        }
+        let norms = self
+            .dual_edge_norms
+            .edge_squared_norms(self.basis_factorization.as_ref().unwrap())?;
+        let types = self.variables_info.as_ref().unwrap().variable_types();
+        let threshold = self.parameters.ratio_test_zero_threshold;
+        let step = self.dual_phase_one_pricing_vector[leaving_row] / direction.value(leaving_row);
+        for entry in direction {
+            let row = entry.row();
+            self.dual_phase_one_pricing_vector[row] -= entry.coefficient() * step;
+            Self::update_dual_phase_one_price_at(
+                &mut self.dual_prices,
+                row,
+                self.dual_phase_one_pricing_vector[row],
+                norms[row.to_usize()],
+                types[self.basis[row]],
+                threshold,
+                false,
+            );
+        }
+        self.dual_phase_one_pricing_vector[leaving_row] = step;
+        self.dual_phase_one_pricing_vector[leaving_row] -=
+            self.dual_phase_one_improvement_direction[entering];
+        if self.dual_phase_one_improvement_direction[entering] != 0.0 {
+            self.num_dual_infeasible_positions -= 1;
+        }
+        self.dual_phase_one_improvement_direction[entering] = 0.0;
+        self.dual_phase_one_improvement_direction[self.basis[leaving_row]] = 0.0;
+        Self::update_dual_phase_one_price_at(
+            &mut self.dual_prices,
+            leaving_row,
+            self.dual_phase_one_pricing_vector[leaving_row],
+            norms[leaving_row.to_usize()],
+            types[entering],
+            threshold,
+            false,
+        );
         Ok(())
     }
 
@@ -1091,6 +1296,252 @@ impl RevisedSimplex {
         }
     }
 
+    fn run_dedicated_dual_phase_one(
+        &mut self,
+        time_limit: &mut TimeLimit,
+    ) -> Result<(), FactorizationError> {
+        let mut reduced_costs_precise =
+            self.basis_factorization.as_ref().unwrap().is_refactorized();
+        let mut prices_initialized = false;
+        loop {
+            if time_limit.limit_reached()
+                || self.num_iterations
+                    >= u64::try_from(self.parameters.max_number_of_iterations).unwrap_or(u64::MAX)
+            {
+                self.problem_status = ProblemStatus::Init;
+                return Ok(());
+            }
+            if self.dual_edge_norms.needs_basis_refactorization()
+                && !self.basis_factorization.as_ref().unwrap().is_refactorized()
+            {
+                self.basis_factorization
+                    .as_mut()
+                    .unwrap()
+                    .force_refactorization()?;
+                self.incorporate_basis_permutation();
+                self.update_row.as_mut().unwrap().invalidate();
+                reduced_costs_precise = false;
+                prices_initialized = false;
+            }
+            if self.basis_factorization.as_ref().unwrap().is_refactorized()
+                && !reduced_costs_precise
+            {
+                let objective = self.objective.clone();
+                self.compute_reduced_costs(&objective)?;
+                reduced_costs_precise = true;
+                prices_initialized = false;
+            }
+            let columns = if prices_initialized {
+                Vec::new()
+            } else {
+                self.variables_info
+                    .as_ref()
+                    .unwrap()
+                    .relevance()
+                    .iter_ones()
+                    .map(VectorIndex::to_usize)
+                    .collect()
+            };
+            self.update_dual_phase_one_prices_for_columns(&columns, !prices_initialized)?;
+            prices_initialized = true;
+            if self.num_dual_infeasible_positions == 0 {
+                self.problem_status = ProblemStatus::DualFeasible;
+                return Ok(());
+            }
+            let Some(leaving_position) = self.dual_prices.get_maximum() else {
+                self.problem_status = ProblemStatus::DualInfeasible;
+                return Ok(());
+            };
+            let leaving_row = RowIndex::from_usize(leaving_position);
+            let cost_variation = self.dual_phase_one_pricing_vector[leaving_row];
+            let leaving_column = self.basis[leaving_row];
+            let target_bound = if cost_variation < 0.0 {
+                self.variables_info.as_ref().unwrap().upper_bounds()[leaving_column.to_usize()]
+            } else {
+                self.variables_info.as_ref().unwrap().lower_bounds()[leaving_column.to_usize()]
+            };
+
+            self.update_row
+                .as_mut()
+                .unwrap()
+                .compute_unit_row_left_inverse(
+                    self.basis_factorization.as_ref().unwrap(),
+                    leaving_position,
+                )?;
+            if !self.dual_edge_norms.test_precision(
+                leaving_position,
+                self.update_row
+                    .as_ref()
+                    .unwrap()
+                    .unit_row_left_inverse_scattered(),
+            ) {
+                // TestPrecision() installs the exact norm for this row. As in
+                // GLOP, update just this heap entry before choosing again; a
+                // norm-wide precision failure is handled at the loop head.
+                let norms = self
+                    .dual_edge_norms
+                    .edge_squared_norms(self.basis_factorization.as_ref().unwrap())?;
+                let variable_type =
+                    self.variables_info.as_ref().unwrap().variable_types()[leaving_column];
+                Self::update_dual_phase_one_price_at(
+                    &mut self.dual_prices,
+                    leaving_row,
+                    cost_variation,
+                    norms[leaving_position],
+                    variable_type,
+                    self.parameters.ratio_test_zero_threshold,
+                    false,
+                );
+                continue;
+            }
+            self.update_row.as_mut().unwrap().compute_update_row(
+                self.basis_factorization.as_ref().unwrap(),
+                &self.matrix,
+                self.variables_info.as_ref().unwrap().relevance(),
+                leaving_position,
+            )?;
+            let entering = self
+                .entering_variable
+                .dual_phase_one_choose_entering_column_from_values(
+                    reduced_costs_precise,
+                    self.update_row.as_ref().unwrap(),
+                    cost_variation,
+                    self.variables_info.as_ref().unwrap(),
+                    self.reduced_costs.as_slice(),
+                    self.parameters.dual_feasibility_tolerance,
+                );
+            let Some(entering) = entering else {
+                if !reduced_costs_precise {
+                    self.basis_factorization
+                        .as_mut()
+                        .unwrap()
+                        .force_refactorization()?;
+                    self.incorporate_basis_permutation();
+                    self.update_row.as_mut().unwrap().invalidate();
+                    prices_initialized = false;
+                    continue;
+                }
+                self.problem_status = ProblemStatus::Abnormal;
+                return Ok(());
+            };
+            let entering_coefficient = self
+                .update_row
+                .as_ref()
+                .unwrap()
+                .coefficient(entering.to_usize());
+            if entering_coefficient.abs() < self.parameters.dual_small_pivot_threshold
+                && !reduced_costs_precise
+            {
+                self.basis_factorization
+                    .as_mut()
+                    .unwrap()
+                    .force_refactorization()?;
+                self.incorporate_basis_permutation();
+                self.update_row.as_mut().unwrap().invalidate();
+                prices_initialized = false;
+                continue;
+            }
+            let direction = self.direction(entering)?;
+            let pivot = direction.value(leaving_row);
+            let direction_norm = direction
+                .values()
+                .as_slice()
+                .iter()
+                .fold(0.0_f64, |maximum, value| maximum.max(value.abs()));
+            if pivot.abs() < self.parameters.small_pivot_threshold * direction_norm
+                && !reduced_costs_precise
+            {
+                self.basis_factorization
+                    .as_mut()
+                    .unwrap()
+                    .force_refactorization()?;
+                self.incorporate_basis_permutation();
+                self.update_row.as_mut().unwrap().invalidate();
+                prices_initialized = false;
+                continue;
+            }
+            if pivot.abs() <= 1e-20 {
+                return Err(FactorizationError::Singular {
+                    step: leaving_position,
+                });
+            }
+            update_reduced_cost_values_before_basis_pivot(
+                self.reduced_costs.as_mut_slice(),
+                entering,
+                leaving_column,
+                pivot,
+                self.update_row.as_ref().unwrap(),
+            );
+            self.dual_edge_norms.update_before_basis_pivot(
+                self.basis_factorization.as_ref().unwrap(),
+                leaving_position,
+                direction.values().as_slice(),
+                self.update_row
+                    .as_ref()
+                    .unwrap()
+                    .unit_row_left_inverse_scattered(),
+            )?;
+            self.update_dual_phase_one_prices_on_pivot(leaving_row, entering, &direction)?;
+            let changed_columns = self
+                .update_row
+                .as_ref()
+                .unwrap()
+                .non_zero_positions()
+                .to_vec();
+
+            let leaving_status = self.status_at_bound(leaving_column, target_bound);
+            {
+                let info = self.variables_info.as_mut().unwrap();
+                info.update_to_nonbasic_status(leaving_column, leaving_status);
+                info.update_to_basic_status(entering);
+            }
+            self.basis[leaving_row] = entering;
+            self.variable_values[leaving_column] = target_bound;
+            let pivot_from_update_row = self
+                .update_row
+                .as_ref()
+                .unwrap()
+                .coefficient(entering.to_usize());
+            let pivot_difference = (pivot_from_update_row - pivot).abs();
+            let imprecise_pivot = pivot_difference
+                > self.parameters.refactorization_threshold
+                    * (1.0 + pivot_from_update_row.abs().min(pivot.abs()));
+            if imprecise_pivot {
+                self.basis_factorization
+                    .as_mut()
+                    .unwrap()
+                    .replace_column_and_refactorize(
+                        leaving_position,
+                        self.matrix.column(entering).clone(),
+                    )?;
+            } else {
+                self.basis_factorization
+                    .as_mut()
+                    .unwrap()
+                    .replace_column_after_solve(
+                        entering.to_usize(),
+                        leaving_position,
+                        &direction,
+                        self.matrix.column(entering).clone(),
+                    )?;
+            }
+            self.incorporate_basis_permutation();
+            self.update_row.as_mut().unwrap().invalidate();
+            reduced_costs_precise = false;
+            if self.basis_factorization.as_ref().unwrap().is_refactorized()
+                || self.dual_edge_norms.needs_basis_refactorization()
+            {
+                if self.basis_factorization.as_ref().unwrap().is_refactorized() {
+                    self.dual_edge_norms.clear();
+                }
+                prices_initialized = false;
+            } else {
+                self.update_dual_phase_one_prices_for_columns(&changed_columns, false)?;
+            }
+            self.num_iterations += 1;
+        }
+    }
+
     fn run_dual_phase_two(&mut self, time_limit: &mut TimeLimit) -> Result<(), FactorizationError> {
         let mut reduced_costs_precise =
             self.basis_factorization.as_ref().unwrap().is_refactorized();
@@ -1322,8 +1773,12 @@ impl RevisedSimplex {
                     objective: self.internal_objective(),
                 });
             }
-            if self.basis_factorization.as_ref().unwrap().is_refactorized() {
-                self.dual_edge_norms.clear();
+            if self.basis_factorization.as_ref().unwrap().is_refactorized()
+                || self.dual_edge_norms.needs_basis_refactorization()
+            {
+                if self.basis_factorization.as_ref().unwrap().is_refactorized() {
+                    self.dual_edge_norms.clear();
+                }
                 self.dual_prices.clear();
             } else {
                 let changed_rows = if direction.non_zeros().is_empty() {

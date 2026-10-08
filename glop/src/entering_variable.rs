@@ -248,6 +248,25 @@ impl EnteringVariable {
     ) -> Result<Option<ColIndex>, FactorizationError> {
         let reduced_costs = reduced_costs_state.reduced_costs()?.to_vec();
         let dual_tolerance = reduced_costs_state.dual_feasibility_tolerance();
+        Ok(self.dual_phase_one_choose_entering_column_from_values(
+            nothing_to_recompute,
+            update_row,
+            cost_variation,
+            variables_info,
+            &reduced_costs,
+            dual_tolerance,
+        ))
+    }
+
+    pub fn dual_phase_one_choose_entering_column_from_values(
+        &mut self,
+        nothing_to_recompute: bool,
+        update_row: &UpdateRow,
+        cost_variation: f64,
+        variables_info: &VariablesInfo,
+        reduced_costs: &[f64],
+        dual_tolerance: f64,
+    ) -> Option<ColIndex> {
         let threshold = if nothing_to_recompute {
             self.parameters.minimum_acceptable_pivot
         } else {
@@ -322,7 +341,7 @@ impl EnteringVariable {
             }
             breakpoints.pop();
         }
-        Ok(entering.map(ColIndex::from_usize))
+        entering.map(ColIndex::from_usize)
     }
 
     #[must_use]

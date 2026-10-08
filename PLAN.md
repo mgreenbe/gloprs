@@ -466,22 +466,23 @@ solves, exposes rays only for the matching terminal status, removes internal
 slack coordinates from primal rays, and establishes the dual-certificate
 identity `variable_bounds_ray = -A^T constraints_ray` with GLOP's
 minimization/maximization sign convention.
-Dual Phase II is now connected for an initially dual-feasible basis. It uses
+The default dedicated dual Phase I and dual Phase II are now connected. They use
 the ported `DynamicMaximum` dual prices, exact dual edge norms, sparse BTRAN
 and update-row computation, Harris bound-flipping ratio test, incremental
 reduced-cost and norm updates, middle-product basis updates, boxed-variable
 flips, precision-triggered refactorization, and final optimality/unboundedness
 checks. The dual objective limit follows GLOP's shifted/scaled external
 coordinates and is tested separately. One- and two-pivot regressions cover
-optimal solves, and a dual-ray regression covers primal infeasibility. The CLI and Netlib validator expose an
+optimal solves, a dedicated-phase-I regression starts from a dual-infeasible
+basis, and a dual-ray regression covers primal infeasibility. The CLI and Netlib validator expose an
 opt-in dual mode; all smallest-50 models pass status, objective, and independent
-primal/dual feasibility validation with a 10-second per-model limit. Until
-dual Phase I is connected, models whose initial basis is not dual feasible
-continue through the existing primal driver.
+primal/dual feasibility validation with a 10-second per-model limit using the
+dual driver throughout. The nondefault transformed-problem dual Phase-I
+alternative is not yet connected and currently falls back to the primal driver.
 
 This is not yet a validated Phase-4 port. The primal phase-I objective update is
-not yet connected to GLOP's incremental `ReducedCosts` orchestration; the dual
-phase-I loop and dual reoptimization after cleanup,
+not yet connected to GLOP's incremental `ReducedCosts` orchestration; the
+nondefault transformed dual Phase-I loop and dual reoptimization after cleanup,
 perturbation and cost-shift orchestration, full
 termination/reoptimization checks, and complete incremental warm-start cases
 remain to be translated. The reproducible `tools/validate_netlib_solve.py`
