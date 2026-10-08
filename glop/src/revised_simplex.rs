@@ -188,6 +188,13 @@ impl RevisedSimplex {
     }
 
     #[must_use]
+    pub fn num_basis_updates(&self) -> usize {
+        self.basis_factorization
+            .as_ref()
+            .map_or(0, BasisRepresentation::num_updates)
+    }
+
+    #[must_use]
     pub fn initial_basis_before_permutation(&self) -> &RowToColMapping {
         &self.initial_basis_before_permutation
     }
@@ -543,11 +550,13 @@ impl RevisedSimplex {
         leaving_row: RowIndex,
         entering: ColIndex,
         direction: &ScatteredColumn,
+        reduced_costs_recomputed: bool,
     ) -> Result<(), FactorizationError> {
         // Keep this condition synchronized with the full-recomputation path at
         // the start of the next Phase-I leaving-row selection. GLOP skips this
         // eta update whenever the norms will force all prices to be rebuilt.
-        if self.dual_edge_norms.needs_basis_refactorization()
+        if reduced_costs_recomputed
+            || self.dual_edge_norms.needs_basis_refactorization()
             || self.dual_phase_one_pricing_vector.is_empty()
         {
             return Ok(());
@@ -1430,6 +1439,7 @@ impl RevisedSimplex {
     ) -> Result<(), FactorizationError> {
         let mut reduced_costs_precise =
             self.basis_factorization.as_ref().unwrap().is_refactorized();
+        let mut reduced_costs_recomputed = true;
         let mut prices_initialized = false;
         loop {
             if time_limit.limit_reached() {
@@ -1454,6 +1464,7 @@ impl RevisedSimplex {
                 let objective = self.objective.clone();
                 self.compute_reduced_costs(&objective)?;
                 reduced_costs_precise = true;
+                reduced_costs_recomputed = true;
                 prices_initialized = false;
             }
             let columns = if prices_initialized {
@@ -1615,13 +1626,15 @@ impl RevisedSimplex {
             let increasing_reduced_cost_needed =
                 (cost_variation > 0.0) == (entering_coefficient > 0.0);
             self.shift_cost_if_needed(increasing_reduced_cost_needed, entering);
-            update_reduced_cost_values_before_basis_pivot(
+            if update_reduced_cost_values_before_basis_pivot(
                 self.reduced_costs.as_mut_slice(),
                 entering,
                 leaving_column,
                 pivot,
                 self.update_row.as_ref().unwrap(),
-            );
+            ) {
+                reduced_costs_recomputed = false;
+            }
             self.dual_edge_norms.update_before_basis_pivot(
                 self.basis_factorization.as_ref().unwrap(),
                 leaving_position,
@@ -1631,7 +1644,12 @@ impl RevisedSimplex {
                     .unwrap()
                     .unit_row_left_inverse_scattered(),
             )?;
-            self.update_dual_phase_one_prices_on_pivot(leaving_row, entering, &direction)?;
+            self.update_dual_phase_one_prices_on_pivot(
+                leaving_row,
+                entering,
+                &direction,
+                reduced_costs_recomputed,
+            )?;
             let changed_columns = self
                 .update_row
                 .as_ref()
@@ -1679,7 +1697,8 @@ impl RevisedSimplex {
             self.incorporate_basis_permutation();
             self.update_row.as_mut().unwrap().invalidate();
             reduced_costs_precise = false;
-            if self.basis_factorization.as_ref().unwrap().is_refactorized()
+            if reduced_costs_recomputed
+                || self.basis_factorization.as_ref().unwrap().is_refactorized()
                 || self.dual_edge_norms.needs_basis_refactorization()
             {
                 if self.basis_factorization.as_ref().unwrap().is_refactorized() {
@@ -1690,6 +1709,16 @@ impl RevisedSimplex {
                 self.update_dual_phase_one_prices_for_columns(&changed_columns, false)?;
             }
             self.num_iterations += 1;
+            if self.trace_enabled {
+                self.trace.push(IterationEvent {
+                    iteration: self.num_iterations,
+                    phase: SimplexPhase::Feasibility,
+                    entering_column: Some(entering),
+                    leaving_row: Some(leaving_row),
+                    step: 0.0,
+                    objective: self.internal_objective(),
+                });
+            }
         }
     }
 

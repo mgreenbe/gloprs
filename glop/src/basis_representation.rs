@@ -543,11 +543,19 @@ impl BasisRepresentation {
                 .right_solve_lower_with_permuted_input(&mut tau.value)?;
         } else {
             tau.value.clear();
-            for entry in input {
-                tau.value.set(
-                    lp_data::lp_types::RowIndex::from_usize(entry.index().to_usize()),
-                    entry.coefficient(),
-                );
+            if input.non_zeros().is_empty() {
+                tau.value
+                    .values_mut()
+                    .as_mut_slice()
+                    .copy_from_slice(input.values().as_slice());
+                tau.value.non_zeros_mut().clear();
+            } else {
+                for entry in input {
+                    tau.value.set(
+                        lp_data::lp_types::RowIndex::from_usize(entry.index().to_usize()),
+                        entry.coefficient(),
+                    );
+                }
             }
             self.factorization
                 .right_solve_lower_with_nonzeros(&mut tau.value)?;
@@ -1224,6 +1232,20 @@ mod tests {
                 .zip(sparse_left)
                 .all(|(dense, sparse)| dense.to_bits() == sparse.to_bits())
         );
+    }
+
+    #[test]
+    fn tau_solve_preserves_dense_sentinel_input() {
+        let basis_matrix = matrix(&[&[2.0, 0.0], &[1.0, 3.0]]);
+        let basis = BasisRepresentation::new(basis_matrix, 0.01, 64).unwrap();
+        let mut input = ScatteredRow::new(ColIndex::new(2));
+        input.values_mut()[ColIndex::new(0)] = 4.0;
+        input.values_mut()[ColIndex::new(1)] = 7.0;
+
+        let expected = basis.solve(input.values().as_slice()).unwrap();
+        let actual = basis.right_solve_for_tau(&input).unwrap();
+
+        assert_eq!(actual, expected);
     }
 
     #[test]

@@ -35,6 +35,17 @@ fn main() {
 
     println!("iterations {}", simplex.number_of_iterations());
     println!("status {}", simplex.problem_status());
+    println!("updates {}", simplex.num_basis_updates());
+    for event in simplex.trace() {
+        if let (Some(entering), Some(leaving)) = (event.entering_column, event.leaving_row) {
+            println!(
+                "pivot {} {} {}",
+                entering.to_usize(),
+                leaving.to_usize(),
+                event.iteration
+            );
+        }
+    }
     print!("initial_basis");
     for &column in simplex.initial_basis_before_permutation().as_slice() {
         print!(" {}", column.to_usize());

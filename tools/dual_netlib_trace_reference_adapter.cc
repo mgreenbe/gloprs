@@ -44,6 +44,8 @@ int main(int argc, char** argv) {
   std::cout << std::setprecision(17) << "iterations "
             << simplex.GetNumberOfIterations() << "\nstatus "
             << glop::GetProblemStatusString(simplex.GetProblemStatus())
+            << "\nupdates "
+            << simplex.GetBasisFactorization().NumUpdates()
             << "\nbasis";
   for (int row = 0; row < lp.num_constraints().value(); ++row) {
     std::cout << ' ' << simplex.GetBasis(glop::RowIndex(row)).value();
