@@ -52,6 +52,7 @@ pub struct IterationEvent {
     pub phase: SimplexPhase,
     pub entering_column: Option<ColIndex>,
     pub leaving_row: Option<RowIndex>,
+    pub leaving_column: Option<ColIndex>,
     pub step: f64,
     pub objective: f64,
 }
@@ -278,10 +279,7 @@ impl RevisedSimplex {
             if self.problem_status != ProblemStatus::DualFeasible {
                 return Ok(true);
             }
-            self.basis_factorization
-                .as_mut()
-                .unwrap()
-                .force_refactorization()?;
+            self.basis_factorization.as_mut().unwrap().refactorize()?;
             self.incorporate_basis_permutation();
             self.update_row.as_mut().unwrap().invalidate();
             let objective = self.objective.clone();
@@ -1300,6 +1298,7 @@ impl RevisedSimplex {
             } else {
                 step_length
             };
+            let trace_leaving_column = leaving_row.map(|row| self.basis[row]);
             if phase == SimplexPhase::Feasibility
                 && let Some(row) = leaving_row
             {
@@ -1426,6 +1425,7 @@ impl RevisedSimplex {
                     phase,
                     entering_column: Some(entering),
                     leaving_row,
+                    leaving_column: trace_leaving_column,
                     step,
                     objective: self.internal_objective(),
                 });
@@ -1715,6 +1715,7 @@ impl RevisedSimplex {
                     phase: SimplexPhase::Feasibility,
                     entering_column: Some(entering),
                     leaving_row: Some(leaving_row),
+                    leaving_column: Some(leaving_column),
                     step: 0.0,
                     objective: self.internal_objective(),
                 });
@@ -1961,6 +1962,7 @@ impl RevisedSimplex {
                     phase: SimplexPhase::Optimization,
                     entering_column: Some(entering),
                     leaving_row: Some(leaving_row),
+                    leaving_column: Some(leaving_column),
                     step,
                     objective: self.internal_objective(),
                 });

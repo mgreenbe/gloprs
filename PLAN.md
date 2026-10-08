@@ -496,24 +496,29 @@ The apparent post-first-pivot refactorization in the first prefix trace was
 GLOP's iteration-limit final check, not a trajectory event. Instrumentation
 instead localized the first numerical drift to the first dual-edge-norm
 update: a dense-sentinel scattered row was treated as having no entries when
-computing tau. Preserving those dense values makes the first 45
-entering-column/leaving-row choices agree exactly; pivot 46 is the next target.
+computing tau. Preserving those dense values removed the pivot-12 divergence.
 Basis permutations update Rust's Phase-I pricing vector and dual edge norms as
 `PermuteBasis()` does upstream. GLOP's exact
 shared `std::mt19937_64` stream, libc++/Abseil distributions, and isolated tied
 top-31 pricing sequence agree exactly; this is not a tolerance or RNG defect.
-At pivot 46 the remaining `perold` difference is an exact-price tie exposed by
-roundoff in an incremental Phase-I pricing solve: native selects row 536 at
-`0.50000000000000144`, while Rust has that row at `0.49999999999997835` and
-selects another row at exactly `0.5`. The row-536 pricing value first differs
-by about `2.2e-18` after pivot 31 and accumulates a roughly `2.3e-14`
-difference in the post-pivot-33 sparse basis solve. Thus the next localization
-target is the accumulated middle-product/scattered-solve arithmetic, not the
-heap or its random tie breaking. A smallest-25 trajectory audit found complete
-pivot-sequence agreement for `afiro`, `sc50a`, `sc50b`, `blend`, `scagr7`,
-`share2b`, and `scagr25`; the other 18 first diverge between pivots 4 and 90.
+The former pivot-46 difference was an exact-price tie exposed by roundoff in
+an incremental Phase-I pricing solve. Factor-stage traces localized it to a
+middle-product denominator: GLOP uses the four-accumulator
+`CompactSparseMatrix::ColumnScalarProduct`, while Rust had used a linear fold.
+Using the ported four-accumulator kernel removed the former pivot-46
+divergence. A subsequent audit found that Rust unconditionally forced a second
+LU rebuild after dedicated dual Phase I where GLOP's conditional
+`Refactorize()` is a no-op; preserving the existing factorization removes the
+resulting basis-order and random-stream drift. The complete entering column,
+leaving basic column, and leaving-row trajectory now agrees for the first 131
+`perold` pivots. Pivot 132 is an exact ratio-test tie exposed by remaining
+numerical drift in the recomputed basic values and dual prices. A smallest-25
+trajectory audit now finds complete pivot-sequence agreement for `afiro`,
+`sc50a`, `sc50b`, `kb2`,
+`adlittle`, `blend`, `scagr7`, `sc205`, `share2b`, and `scagr25`; the other 15
+first diverge between pivots 4 and 87, except `brandy` at pivot 120.
 With scaling and preprocessing disabled, the current trace finishes `perold`
-in 847 Rust iterations versus 1049 in native GLOP.
+in 859 Rust iterations versus 1049 in native GLOP.
 
 This is not yet a validated Phase-4 port. The primal phase-I objective update is
 not yet connected to GLOP's incremental `ReducedCosts` orchestration; the

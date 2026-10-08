@@ -37,10 +37,15 @@ fn main() {
     println!("status {}", simplex.problem_status());
     println!("updates {}", simplex.num_basis_updates());
     for event in simplex.trace() {
-        if let (Some(entering), Some(leaving)) = (event.entering_column, event.leaving_row) {
+        if let (Some(entering), Some(leaving), Some(leaving_column)) = (
+            event.entering_column,
+            event.leaving_row,
+            event.leaving_column,
+        ) {
             println!(
-                "pivot {} {} {}",
+                "pivot {} {} {} {}",
                 entering.to_usize(),
+                leaving_column.to_usize(),
                 leaving.to_usize(),
                 event.iteration
             );

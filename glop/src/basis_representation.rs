@@ -12,7 +12,9 @@ use lp_data::sparse_vector::SparseColumn;
 
 use crate::lu_factorization::{FactorizationError, LuFactorization};
 use crate::parameters::GlopParameters;
-use crate::rank_one_update::{RankOneUpdateElementaryMatrix, RankOneUpdateFactorization};
+use crate::rank_one_update::{
+    RankOneUpdateElementaryMatrix, RankOneUpdateFactorization, sparse_scalar_product,
+};
 use crate::stats::{DistributionKind, StatsGroup};
 
 /// Classical product-form update from upstream `basis_representation.h`.
@@ -896,12 +898,11 @@ impl BasisRepresentation {
                 .filter(|entry| entry.1 != 0.0)
                 .collect()
         };
-        let u_dot_v = v.iter().fold(0.0, |sum, &(index, value)| {
-            value.mul_add(
-                right_update.value(lp_data::lp_types::RowIndex::from_usize(index)),
-                sum,
-            )
-        });
+        // GLOP obtains this denominator from
+        // CompactSparseMatrix::ColumnScalarProduct(). Preserve its
+        // four-accumulator reduction order; a linear fold changes later
+        // pricing ties after a sufficiently long update chain.
+        let u_dot_v = sparse_scalar_product(&v, right_update.values().as_slice());
         let update = RankOneUpdateElementaryMatrix::new(u, v, u_dot_v);
         if update.is_singular() {
             return Err(FactorizationError::Singular {

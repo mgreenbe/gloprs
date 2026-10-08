@@ -5,7 +5,7 @@ use std::cell::Cell;
 use lp_data::lp_types::{ColIndex, RowIndex, VectorIndex, deterministic_time_for_fp_operations};
 use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow};
 
-fn sparse_scalar_product(entries: &[(usize, f64)], values: &[f64]) -> f64 {
+pub(crate) fn sparse_scalar_product(entries: &[(usize, f64)], values: &[f64]) -> f64 {
     let shifted_end = entries.len().saturating_sub(3);
     let mut entry = 0;
     let (mut result1, mut result2, mut result3, mut result4) = (0.0, 0.0, 0.0, 0.0);
