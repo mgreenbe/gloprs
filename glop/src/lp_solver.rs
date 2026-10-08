@@ -12,7 +12,7 @@ use lp_data::lp_types::{
     ColIndex, ConstraintStatus, ConstraintStatusColumn, DenseColumn, DenseRow, ProblemStatus,
     RowIndex, VariableStatus, VariableStatusRow, VectorIndex,
 };
-use lp_data::lp_utils::precise_scalar_product;
+use lp_data::lp_utils::{accurate_sum, precise_scalar_product};
 
 use crate::parameters::GlopParameters;
 use crate::revised_simplex::RevisedSimplex;
@@ -146,11 +146,7 @@ impl LPSolver {
         lp: &LinearProgram,
         solution: &ProblemSolution,
     ) -> ProblemStatus {
-        if solution.primal_values.len() != lp.num_variables()
-            || solution.dual_values.len() != lp.num_constraints()
-            || solution.variable_statuses.len() != lp.num_variables()
-            || solution.constraint_statuses.len() != lp.num_constraints()
-        {
+        if !Self::is_problem_solution_consistent(lp, solution) {
             self.resize_solution(lp.num_constraints(), lp.num_variables());
             return ProblemStatus::Abnormal;
         }
@@ -161,6 +157,8 @@ impl LPSolver {
         self.constraint_statuses
             .clone_from(&solution.constraint_statuses);
         self.compute_reduced_costs(lp);
+        let primal_objective_value = self.compute_objective(lp);
+        let dual_objective_value = self.compute_dual_objective(lp);
         self.compute_constraint_activities(lp);
         self.problem_objective_value =
             lp.objective_scaling_factor() * (self.compute_objective(lp) + lp.objective_offset());
@@ -182,6 +180,13 @@ impl LPSolver {
         {
             status = ProblemStatus::Imprecise;
         }
+        if status == ProblemStatus::Optimal
+            && (primal_objective_value - dual_objective_value).abs()
+                > self.compute_max_expected_objective_error(lp)
+            && self.parameters.change_status_to_imprecise
+        {
+            status = ProblemStatus::Imprecise;
+        }
         self.may_have_multiple_solutions = status == ProblemStatus::Optimal
             && (0..lp.num_variables().to_usize()).any(|column| {
                 let index = ColIndex::from_usize(column);
@@ -192,7 +197,104 @@ impl LPSolver {
                         || (self.primal_values[index] - lp.variable_upper_bounds()[index]).abs()
                             <= 1e-7)
             });
+        if status == ProblemStatus::Optimal && !self.may_have_multiple_solutions {
+            self.may_have_multiple_solutions = (0..lp.num_constraints().to_usize()).any(|row| {
+                let index = RowIndex::from_usize(row);
+                self.constraint_statuses[index] != ConstraintStatus::FixedValue
+                    && self.dual_values[index].abs() <= 1e-9
+                    && ((self.constraint_activities[index] - lp.constraint_lower_bounds()[index])
+                        .abs()
+                        <= 1e-7
+                        || (self.constraint_activities[index]
+                            - lp.constraint_upper_bounds()[index])
+                            .abs()
+                            <= 1e-7)
+            });
+        }
         status
+    }
+
+    fn is_problem_solution_consistent(lp: &LinearProgram, solution: &ProblemSolution) -> bool {
+        if solution.primal_values.len() != lp.num_variables()
+            || solution.dual_values.len() != lp.num_constraints()
+            || solution.variable_statuses.len() != lp.num_variables()
+            || solution.constraint_statuses.len() != lp.num_constraints()
+        {
+            return false;
+        }
+        if !matches!(
+            solution.status,
+            ProblemStatus::Optimal | ProblemStatus::PrimalFeasible | ProblemStatus::DualFeasible
+        ) {
+            return true;
+        }
+
+        let mut num_basic_variables = 0_usize;
+        for column in 0..lp.num_variables().to_usize() {
+            let column = ColIndex::from_usize(column);
+            let value = solution.primal_values[column];
+            let lower = lp.variable_lower_bounds()[column];
+            let upper = lp.variable_upper_bounds()[column];
+            match solution.variable_statuses[column] {
+                VariableStatus::Basic => num_basic_variables += 1,
+                VariableStatus::FixedValue => {
+                    if value != upper && value != lower {
+                        return false;
+                    }
+                }
+                VariableStatus::AtLowerBound => {
+                    if value != lower || lower == upper {
+                        return false;
+                    }
+                }
+                VariableStatus::AtUpperBound => {
+                    let error = (value - upper).abs();
+                    if error.is_nan() || error > 1e-7 || lower == upper {
+                        return false;
+                    }
+                }
+                VariableStatus::Free => {
+                    if lower != f64::NEG_INFINITY || upper != f64::INFINITY || value != 0.0 {
+                        return false;
+                    }
+                }
+            }
+        }
+        for row in 0..lp.num_constraints().to_usize() {
+            let row = RowIndex::from_usize(row);
+            let dual_value = solution.dual_values[row];
+            let lower = lp.constraint_lower_bounds()[row];
+            let upper = lp.constraint_upper_bounds()[row];
+            match solution.constraint_statuses[row] {
+                ConstraintStatus::Basic => {
+                    if dual_value != 0.0 {
+                        return false;
+                    }
+                    num_basic_variables += 1;
+                }
+                ConstraintStatus::FixedValue => {
+                    if upper - lower > 1e-12 {
+                        return false;
+                    }
+                }
+                ConstraintStatus::AtLowerBound => {
+                    if lower == f64::NEG_INFINITY {
+                        return false;
+                    }
+                }
+                ConstraintStatus::AtUpperBound => {
+                    if upper == f64::INFINITY {
+                        return false;
+                    }
+                }
+                ConstraintStatus::Free => {
+                    if dual_value != 0.0 || lower != f64::NEG_INFINITY || upper != f64::INFINITY {
+                        return false;
+                    }
+                }
+            }
+        }
+        num_basic_variables == lp.num_constraints().to_usize()
     }
 
     fn resize_solution(&mut self, rows: RowIndex, columns: ColIndex) {
@@ -236,6 +338,56 @@ impl LPSolver {
             lp.objective_coefficients().as_slice(),
             self.primal_values.as_slice(),
         )
+    }
+
+    fn compute_dual_objective(&self, lp: &LinearProgram) -> f64 {
+        let optimization_sign = if lp.is_maximization_problem() {
+            -1.0
+        } else {
+            1.0
+        };
+        let row_terms = (0..lp.num_constraints().to_usize()).filter_map(|row| {
+            let row = RowIndex::from_usize(row);
+            let lower = lp.constraint_lower_bounds()[row];
+            let upper = lp.constraint_upper_bounds()[row];
+            let dual = self.dual_values[row];
+            let corrected_dual = optimization_sign * dual;
+            if corrected_dual > 0.0 && lower != f64::NEG_INFINITY {
+                Some(dual * lower)
+            } else if corrected_dual < 0.0 && upper != f64::INFINITY {
+                Some(dual * upper)
+            } else {
+                None
+            }
+        });
+        let column_terms = (0..lp.num_variables().to_usize()).map(|column| {
+            let column = ColIndex::from_usize(column);
+            let reduced = optimization_sign * self.reduced_costs[column];
+            let correction = match self.variable_statuses[column] {
+                VariableStatus::AtLowerBound if reduced > 0.0 => {
+                    reduced * lp.variable_lower_bounds()[column]
+                }
+                VariableStatus::AtUpperBound if reduced < 0.0 => {
+                    reduced * lp.variable_upper_bounds()[column]
+                }
+                VariableStatus::FixedValue => reduced * lp.variable_upper_bounds()[column],
+                _ => 0.0,
+            };
+            optimization_sign * correction
+        });
+        accurate_sum(row_terms.chain(column_terms))
+    }
+
+    fn compute_max_expected_objective_error(&self, lp: &LinearProgram) -> f64 {
+        let tolerance = self.parameters.solution_feasibility_tolerance;
+        let mut error = 0.0;
+        for column in 0..lp.num_variables().to_usize() {
+            let column = ColIndex::from_usize(column);
+            error += lp.objective_coefficients()[column].abs()
+                * tolerance
+                * self.primal_values[column].abs().max(1.0);
+        }
+        error
     }
 
     fn compute_infeasibilities(&mut self, lp: &LinearProgram) -> (bool, bool) {

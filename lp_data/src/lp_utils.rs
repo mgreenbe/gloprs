@@ -39,7 +39,9 @@ pub fn scalar_product(left: &[f64], right: &[f64]) -> f64 {
     sum
 }
 
-fn accurate_sum(terms: impl IntoIterator<Item = f64>) -> f64 {
+/// Sum terms using GLOP's `AccurateSum` recurrence.
+#[must_use]
+pub fn accurate_sum(terms: impl IntoIterator<Item = f64>) -> f64 {
     let mut sum = 0.0;
     let mut error_sum = 0.0;
     for term in terms {

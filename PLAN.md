@@ -454,6 +454,12 @@ also changes the signs of dual values and reduced costs for maximization before
 exposing them, as upstream does, and final primal/dual residual classification
 uses GLOP's coordinate-scaled allowed errors while retaining the unscaled
 maximum residuals for reporting.
+The public solution loader now enforces GLOP's complete status/basis
+consistency contract, including exact nonbasic values, free-variable and
+constraint requirements, and the required number of basic variables.  Its
+optimality validation also computes the compensated dual objective and GLOP's
+expected primal-objective error bound before accepting the primal/dual gap,
+and multiple-solution detection covers both variable and constraint facets.
 
 This is not yet a validated Phase-4 port. The primal phase-I objective update is
 not yet connected to GLOP's incremental `ReducedCosts` orchestration; the dual
