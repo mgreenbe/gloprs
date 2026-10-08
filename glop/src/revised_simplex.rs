@@ -10,6 +10,7 @@
     clippy::float_cmp,
     clippy::missing_errors_doc,
     clippy::missing_panics_doc,
+    clippy::struct_excessive_bools,
     clippy::too_many_lines
 )]
 
@@ -19,6 +20,7 @@ use lp_data::lp_types::{
     RowToColMapping, VariableStatus, VariableType, VectorIndex,
 };
 use lp_data::lp_utils::precise_scalar_product;
+use lp_data::permutation::ColumnPermutation;
 use lp_data::scattered_vector::ScatteredColumn;
 use lp_data::sparse::{CompactSparseMatrix, SparseMatrix};
 
@@ -31,6 +33,7 @@ use crate::parameters::{GlopParameters, InitialBasisHeuristic};
 use crate::pricing::DynamicMaximum;
 use crate::primal_edge_norms::{PricingRule as EdgePricingRule, PrimalEdgeNorms};
 use crate::primal_ratio_test::{LeavingChoice, choose_leaving_variable_row};
+use crate::random::SharedRandom;
 use crate::reduced_costs::{PrimalPrices, update_reduced_cost_values_before_basis_pivot};
 use crate::time_limit::TimeLimit;
 use crate::update_row::UpdateRow;
@@ -73,10 +76,13 @@ pub struct RevisedSimplex {
     variables_info: Option<VariablesInfo>,
     variable_values: DenseRow,
     reduced_costs: DenseRow,
+    cost_perturbations: DenseRow,
+    has_cost_shift: bool,
     dual_values: DenseColumn,
     solution_reduced_costs: DenseRow,
     solution_dual_values: DenseColumn,
     is_maximization_problem: bool,
+    random: SharedRandom,
     primal_edge_norms: Option<PrimalEdgeNorms>,
     primal_prices: PrimalPrices,
     dual_edge_norms: DualEdgeNorms,
@@ -95,6 +101,8 @@ pub struct RevisedSimplex {
     num_iterations: u64,
     trace_enabled: bool,
     trace: Vec<IterationEvent>,
+    initial_basis_before_permutation: RowToColMapping,
+    initial_column_permutation: Vec<usize>,
 }
 
 impl Default for RevisedSimplex {
@@ -106,6 +114,7 @@ impl Default for RevisedSimplex {
 impl RevisedSimplex {
     #[must_use]
     pub fn new() -> Self {
+        let random = SharedRandom::new(1);
         Self {
             parameters: GlopParameters::default(),
             problem_status: ProblemStatus::Init,
@@ -125,15 +134,18 @@ impl RevisedSimplex {
             variables_info: None,
             variable_values: DenseRow::new(),
             reduced_costs: DenseRow::new(),
+            cost_perturbations: DenseRow::new(),
+            has_cost_shift: false,
             dual_values: DenseColumn::new(),
             solution_reduced_costs: DenseRow::new(),
             solution_dual_values: DenseColumn::new(),
             is_maximization_problem: false,
+            random: random.clone(),
             primal_edge_norms: None,
-            primal_prices: PrimalPrices::new(1),
+            primal_prices: PrimalPrices::new_with_random(random.clone()),
             dual_edge_norms: DualEdgeNorms::new(),
-            dual_prices: DynamicMaximum::new(1),
-            entering_variable: EnteringVariable::new(1),
+            dual_prices: DynamicMaximum::new_with_random(random.clone()),
+            entering_variable: EnteringVariable::new_with_random(random),
             bound_flip_candidates: Vec::new(),
             dual_phase_one_improvement_direction: DenseRow::new(),
             dual_phase_one_pricing_vector: DenseColumn::new(),
@@ -147,10 +159,14 @@ impl RevisedSimplex {
             num_iterations: 0,
             trace_enabled: false,
             trace: Vec::new(),
+            initial_basis_before_permutation: RowToColMapping::new(),
+            initial_column_permutation: Vec::new(),
         }
     }
 
     pub fn set_parameters(&mut self, parameters: &GlopParameters) {
+        #[allow(clippy::cast_sign_loss)]
+        self.random.seed(parameters.random_seed as u64);
         self.parameters = parameters.clone();
     }
 
@@ -169,6 +185,26 @@ impl RevisedSimplex {
     #[must_use]
     pub fn trace(&self) -> &[IterationEvent] {
         &self.trace
+    }
+
+    #[must_use]
+    pub fn initial_basis_before_permutation(&self) -> &RowToColMapping {
+        &self.initial_basis_before_permutation
+    }
+
+    #[must_use]
+    pub fn initial_column_permutation(&self) -> &[usize] {
+        &self.initial_column_permutation
+    }
+
+    #[must_use]
+    pub fn dual_phase_one_pricing_vector(&self) -> &DenseColumn {
+        &self.dual_phase_one_pricing_vector
+    }
+
+    pub fn dual_edge_squared_norms(&mut self) -> Result<&[f64], FactorizationError> {
+        self.dual_edge_norms
+            .edge_squared_norms(self.basis_factorization.as_ref().unwrap())
     }
 
     pub fn clear_state_for_next_solve(&mut self) {
@@ -524,7 +560,8 @@ impl RevisedSimplex {
         let step = self.dual_phase_one_pricing_vector[leaving_row] / direction.value(leaving_row);
         for entry in direction {
             let row = entry.row();
-            self.dual_phase_one_pricing_vector[row] -= entry.coefficient() * step;
+            self.dual_phase_one_pricing_vector[row] =
+                (-entry.coefficient()).mul_add(step, self.dual_phase_one_pricing_vector[row]);
             Self::update_dual_phase_one_price_at(
                 &mut self.dual_prices,
                 row,
@@ -685,43 +722,42 @@ impl RevisedSimplex {
             basis = crashed.as_slice().to_vec();
         }
         self.basis = RowToColMapping::from_vec(basis);
-
-        let mut basis_matrix = SparseMatrix::new();
-        basis_matrix.populate_from_zero(
-            self.num_rows,
-            ColIndex::from_usize(self.num_rows.to_usize()),
-        );
-        for row in 0..self.num_rows.to_usize() {
-            *basis_matrix.mutable_column(ColIndex::from_usize(row)) = self
-                .matrix
-                .column(self.basis[RowIndex::from_usize(row)])
-                .clone();
+        if self.trace_enabled {
+            self.initial_basis_before_permutation = self.basis.clone();
         }
-        let mut basis_factorization =
-            BasisRepresentation::new_with_parameters(basis_matrix, &self.parameters)?;
+        let triangular_crash_can_fall_back = !has_external_basis
+            && self.parameters.initial_basis == InitialBasisHeuristic::Triangular;
+        let mut basis_factorization = match BasisRepresentation::new_with_parameters(
+            self.current_basis_matrix(),
+            &self.parameters,
+        ) {
+            Ok(factorization) => factorization,
+            Err(_) if triangular_crash_can_fall_back => {
+                // CreateInitialBasis() immediately tests TRIANGULAR's proposed
+                // basis upstream and reverts to the all-slack basis when that
+                // advanced crash is not factorizable.
+                self.use_all_slack_basis();
+                BasisRepresentation::new_with_parameters(
+                    self.current_basis_matrix(),
+                    &self.parameters,
+                )?
+            }
+            Err(error) => return Err(error),
+        };
         if basis_factorization.infinity_norm_condition_number_upper_bound()
             > self.parameters.initial_condition_number_threshold
         {
-            self.basis = RowToColMapping::from_vec(
-                (0..self.num_rows.to_usize())
-                    .map(|row| {
-                        ColIndex::new(self.first_slack_col.value() + i32::try_from(row).unwrap())
-                    })
-                    .collect(),
-            );
-            let mut slack_basis = SparseMatrix::new();
-            slack_basis.populate_from_zero(
-                self.num_rows,
-                ColIndex::from_usize(self.num_rows.to_usize()),
-            );
-            for row in 0..self.num_rows.to_usize() {
-                *slack_basis.mutable_column(ColIndex::from_usize(row)) = self
-                    .matrix
-                    .column(self.basis[RowIndex::from_usize(row)])
-                    .clone();
+            self.use_all_slack_basis();
+            basis_factorization = BasisRepresentation::new_with_parameters(
+                self.current_basis_matrix(),
+                &self.parameters,
+            )?;
+            if self.trace_enabled {
+                self.initial_basis_before_permutation = self.basis.clone();
             }
-            basis_factorization =
-                BasisRepresentation::new_with_parameters(slack_basis, &self.parameters)?;
+        }
+        if self.trace_enabled {
+            self.initial_column_permutation = basis_factorization.column_permutation().to_vec();
         }
         if !basis_factorization.column_permutation().is_empty() {
             let mut permuted = self.basis.clone();
@@ -734,26 +770,42 @@ impl RevisedSimplex {
             self.basis = permuted;
             basis_factorization.set_column_permutation_to_identity();
         }
+        let info_before_advanced_basis = info.clone();
         info.change_unused_basic_variables_to_free(&self.basis);
+        let variable_values = match self.compute_initial_values(&info, &basis_factorization) {
+            Ok(values) => values,
+            Err(_) if triangular_crash_can_fall_back => {
+                // InitializeFirstBasis() also recomputes the basic values. A
+                // numerical failure in that solve rejects TRIANGULAR's crash
+                // just like a factorization or condition-number failure.
+                self.use_all_slack_basis();
+                basis_factorization = BasisRepresentation::new_with_parameters(
+                    self.current_basis_matrix(),
+                    &self.parameters,
+                )?;
+                info = info_before_advanced_basis;
+                info.change_unused_basic_variables_to_free(&self.basis);
+                self.compute_initial_values(&info, &basis_factorization)?
+            }
+            Err(error) => return Err(error),
+        };
         self.basis_factorization = Some(basis_factorization);
         self.variables_info = Some(info);
-        self.variable_values = DenseRow::filled(self.num_cols, 0.0);
-        self.initialize_values()?;
+        self.variable_values = variable_values;
         self.reduced_costs = DenseRow::filled(self.num_cols, 0.0);
+        self.cost_perturbations = DenseRow::filled(self.num_cols, 0.0);
+        self.has_cost_shift = false;
         self.dual_values = DenseColumn::filled(self.num_rows, 0.0);
         let mut primal_edge_norms = PrimalEdgeNorms::new(&self.matrix);
         primal_edge_norms.set_glop_parameters(&self.parameters);
         self.primal_edge_norms = Some(primal_edge_norms);
-        self.primal_prices =
-            PrimalPrices::new(u64::try_from(self.parameters.random_seed).unwrap_or_default());
+        self.primal_prices = PrimalPrices::new_with_random(self.random.clone());
         self.dual_edge_norms.set_glop_parameters(&self.parameters);
         self.dual_edge_norms
             .resize_on_new_rows(self.num_rows.to_usize());
         self.dual_edge_norms.clear();
-        self.dual_prices =
-            DynamicMaximum::new(u64::try_from(self.parameters.random_seed).unwrap_or_default());
-        self.entering_variable =
-            EnteringVariable::new(u64::try_from(self.parameters.random_seed).unwrap_or_default());
+        self.dual_prices = DynamicMaximum::new_with_random(self.random.clone());
+        self.entering_variable = EnteringVariable::new_with_random(self.random.clone());
         self.entering_variable.set_parameters(&self.parameters);
         self.bound_flip_candidates.clear();
         let mut update_row = UpdateRow::new(&self.matrix);
@@ -765,8 +817,56 @@ impl RevisedSimplex {
         Ok(())
     }
 
+    fn use_all_slack_basis(&mut self) {
+        self.basis = RowToColMapping::from_vec(
+            (0..self.num_rows.to_usize())
+                .map(|row| {
+                    ColIndex::new(self.first_slack_col.value() + i32::try_from(row).unwrap())
+                })
+                .collect(),
+        );
+    }
+
+    fn current_basis_matrix(&self) -> SparseMatrix {
+        let mut basis_matrix = SparseMatrix::new();
+        basis_matrix.populate_from_zero(
+            self.num_rows,
+            ColIndex::from_usize(self.num_rows.to_usize()),
+        );
+        for row in 0..self.num_rows.to_usize() {
+            *basis_matrix.mutable_column(ColIndex::from_usize(row)) = self
+                .matrix
+                .column(self.basis[RowIndex::from_usize(row)])
+                .clone();
+        }
+        basis_matrix
+    }
+
+    fn strengthen_lu_pivoting_after_early_imprecision(&mut self) -> Result<(), FactorizationError> {
+        if self.basis_factorization.as_ref().unwrap().num_updates() < 10 {
+            self.parameters.lu_factorization_pivot_threshold =
+                (1.5 * self.parameters.lu_factorization_pivot_threshold).min(0.9);
+            self.basis_factorization
+                .as_mut()
+                .unwrap()
+                .set_parameters(&self.parameters)?;
+        }
+        Ok(())
+    }
+
     fn initialize_values(&mut self) -> Result<(), FactorizationError> {
         let info = self.variables_info.as_ref().unwrap();
+        self.variable_values =
+            self.compute_initial_values(info, self.basis_factorization.as_ref().unwrap())?;
+        Ok(())
+    }
+
+    fn compute_initial_values(
+        &self,
+        info: &VariablesInfo,
+        basis_factorization: &BasisRepresentation,
+    ) -> Result<DenseRow, FactorizationError> {
+        let mut variable_values = DenseRow::filled(self.num_cols, 0.0);
         let mut rhs = vec![0.0; self.num_rows.to_usize()];
         for column in 0..self.num_cols.to_usize() {
             let index = ColIndex::from_usize(column);
@@ -786,16 +886,16 @@ impl RevisedSimplex {
                     .unwrap_or(0.0),
                 VariableStatus::Basic => unreachable!(),
             };
-            self.variable_values[index] = value;
+            variable_values[index] = value;
             for entry in self.matrix.column(index) {
                 rhs[entry.index().to_usize()] -= entry.coefficient() * value;
             }
         }
-        let basic = self.basis_factorization.as_ref().unwrap().solve(&rhs)?;
+        let basic = basis_factorization.solve(&rhs)?;
         for (row, &value) in basic.iter().enumerate() {
-            self.variable_values[self.basis[RowIndex::from_usize(row)]] = value;
+            variable_values[self.basis[RowIndex::from_usize(row)]] = value;
         }
-        Ok(())
+        Ok(variable_values)
     }
 
     fn phase_objective(&self, phase: SimplexPhase) -> DenseRow {
@@ -821,7 +921,10 @@ impl RevisedSimplex {
 
     fn compute_reduced_costs(&mut self, objective: &DenseRow) -> Result<(), FactorizationError> {
         let basic_objective: Vec<_> = (0..self.num_rows.to_usize())
-            .map(|row| objective[self.basis[RowIndex::from_usize(row)]])
+            .map(|row| {
+                let column = self.basis[RowIndex::from_usize(row)];
+                objective[column] + self.cost_perturbations[column]
+            })
             .collect();
         let dual = self
             .basis_factorization
@@ -831,13 +934,37 @@ impl RevisedSimplex {
         self.dual_values = DenseColumn::from_vec(dual.clone());
         for column in 0..self.num_cols.to_usize() {
             let index = ColIndex::from_usize(column);
-            let mut value = objective[index];
+            let mut value = objective[index] + self.cost_perturbations[index];
             for entry in self.matrix.column(index) {
                 value -= dual[entry.index().to_usize()] * entry.coefficient();
             }
             self.reduced_costs[index] = value;
         }
         Ok(())
+    }
+
+    fn shift_cost_if_needed(&mut self, increasing_reduced_cost_needed: bool, column: ColIndex) {
+        let minimum_delta =
+            self.parameters.degenerate_ministep_factor * self.parameters.dual_feasibility_tolerance;
+        let value = self.reduced_costs[column];
+        if increasing_reduced_cost_needed && value <= -minimum_delta
+            || !increasing_reduced_cost_needed && value >= minimum_delta
+        {
+            return;
+        }
+        let delta = if increasing_reduced_cost_needed {
+            minimum_delta
+        } else {
+            -minimum_delta
+        };
+        self.cost_perturbations[column] -= value + delta;
+        self.reduced_costs[column] = -delta;
+        self.has_cost_shift = true;
+    }
+
+    fn remove_cost_shifts(&mut self) {
+        self.cost_perturbations.as_mut_slice().fill(0.0);
+        self.has_cost_shift = false;
     }
 
     fn choose_entering(&mut self) -> Result<Option<ColIndex>, FactorizationError> {
@@ -1241,6 +1368,7 @@ impl RevisedSimplex {
                     > self.parameters.refactorization_threshold
                         * (1.0 + pivot_from_update_row.abs().min(pivot_from_direction.abs()));
                 if imprecise_pivot {
+                    self.strengthen_lu_pivoting_after_early_imprecision()?;
                     self.basis_factorization
                         .as_mut()
                         .unwrap()
@@ -1304,10 +1432,7 @@ impl RevisedSimplex {
             self.basis_factorization.as_ref().unwrap().is_refactorized();
         let mut prices_initialized = false;
         loop {
-            if time_limit.limit_reached()
-                || self.num_iterations
-                    >= u64::try_from(self.parameters.max_number_of_iterations).unwrap_or(u64::MAX)
-            {
+            if time_limit.limit_reached() {
                 self.problem_status = ProblemStatus::Init;
                 return Ok(());
             }
@@ -1345,6 +1470,18 @@ impl RevisedSimplex {
             self.update_dual_phase_one_prices_for_columns(&columns, !prices_initialized)?;
             prices_initialized = true;
             if self.num_dual_infeasible_positions == 0 {
+                if self.has_cost_shift {
+                    self.remove_cost_shifts();
+                    self.basis_factorization
+                        .as_mut()
+                        .unwrap()
+                        .force_refactorization()?;
+                    self.incorporate_basis_permutation();
+                    self.update_row.as_mut().unwrap().invalidate();
+                    reduced_costs_precise = false;
+                    prices_initialized = false;
+                    continue;
+                }
                 self.problem_status = ProblemStatus::DualFeasible;
                 return Ok(());
             }
@@ -1465,6 +1602,19 @@ impl RevisedSimplex {
                     step: leaving_position,
                 });
             }
+            // GLOP checks the iteration limit only after pricing, the ratio
+            // test, and FTRAN. This permits a zero-iteration solve to report
+            // feasibility/optimality while stopping immediately before the
+            // first actual pivot.
+            if self.num_iterations
+                >= u64::try_from(self.parameters.max_number_of_iterations).unwrap_or(u64::MAX)
+            {
+                self.problem_status = ProblemStatus::Init;
+                return Ok(());
+            }
+            let increasing_reduced_cost_needed =
+                (cost_variation > 0.0) == (entering_coefficient > 0.0);
+            self.shift_cost_if_needed(increasing_reduced_cost_needed, entering);
             update_reduced_cost_values_before_basis_pivot(
                 self.reduced_costs.as_mut_slice(),
                 entering,
@@ -1507,6 +1657,7 @@ impl RevisedSimplex {
                 > self.parameters.refactorization_threshold
                     * (1.0 + pivot_from_update_row.abs().min(pivot.abs()));
             if imprecise_pivot {
+                self.strengthen_lu_pivoting_after_early_imprecision()?;
                 self.basis_factorization
                     .as_mut()
                     .unwrap()
@@ -1589,7 +1740,9 @@ impl RevisedSimplex {
             let Some(leaving_position) = self.dual_prices.get_maximum() else {
                 if !self.basis_factorization.as_ref().unwrap().is_refactorized()
                     || !reduced_costs_precise
+                    || self.has_cost_shift
                 {
+                    self.remove_cost_shifts();
                     self.basis_factorization
                         .as_mut()
                         .unwrap()
@@ -1700,6 +1853,15 @@ impl RevisedSimplex {
                 });
             }
 
+            let entering_coefficient = self
+                .update_row
+                .as_ref()
+                .unwrap()
+                .coefficient(entering.to_usize());
+            let increasing_reduced_cost_needed =
+                (cost_variation > 0.0) == (entering_coefficient > 0.0);
+            self.shift_cost_if_needed(increasing_reduced_cost_needed, entering);
+
             update_reduced_cost_values_before_basis_pivot(
                 self.reduced_costs.as_mut_slice(),
                 entering,
@@ -1739,6 +1901,7 @@ impl RevisedSimplex {
                 > self.parameters.refactorization_threshold
                     * (1.0 + pivot_from_update_row.abs().min(pivot.abs()));
             if imprecise_pivot {
+                self.strengthen_lu_pivoting_after_early_imprecision()?;
                 self.basis_factorization
                     .as_mut()
                     .unwrap()
@@ -1901,16 +2064,41 @@ impl RevisedSimplex {
     }
 
     fn incorporate_basis_permutation(&mut self) {
-        let factorization = self.basis_factorization.as_mut().unwrap();
-        if factorization.column_permutation().is_empty() {
+        let permutation = self
+            .basis_factorization
+            .as_ref()
+            .unwrap()
+            .column_permutation()
+            .to_vec();
+        if permutation.is_empty() {
             return;
         }
         let mut permuted = self.basis.clone();
-        for (source, &destination) in factorization.column_permutation().iter().enumerate() {
+        for (source, &destination) in permutation.iter().enumerate() {
             permuted[RowIndex::from_usize(destination)] = self.basis[RowIndex::from_usize(source)];
         }
         self.basis = permuted;
-        factorization.set_column_permutation_to_identity();
+
+        if !self.dual_phase_one_pricing_vector.is_empty() {
+            let mut permuted = self.dual_phase_one_pricing_vector.clone();
+            for (source, &destination) in permutation.iter().enumerate() {
+                permuted[RowIndex::from_usize(destination)] =
+                    self.dual_phase_one_pricing_vector[RowIndex::from_usize(source)];
+            }
+            self.dual_phase_one_pricing_vector = permuted;
+        }
+        self.dual_edge_norms
+            .update_data_on_basis_permutation(&ColumnPermutation::from_vec(
+                permutation
+                    .iter()
+                    .copied()
+                    .map(ColIndex::from_usize)
+                    .collect(),
+            ));
+        self.basis_factorization
+            .as_mut()
+            .unwrap()
+            .set_column_permutation_to_identity();
     }
 
     fn maximum_primal_infeasibility(&self) -> f64 {

@@ -14,11 +14,10 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
 use lp_data::lp_types::{ColIndex, VariableType, VectorIndex};
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
 
 use crate::lu_factorization::FactorizationError;
 use crate::parameters::GlopParameters;
+use crate::random::SharedRandom;
 use crate::reduced_costs::ReducedCosts;
 use crate::update_row::UpdateRow;
 use crate::variables_info::VariablesInfo;
@@ -65,17 +64,22 @@ impl PartialOrd for ColWithRatio {
 pub struct EnteringVariable {
     parameters: GlopParameters,
     equivalent_entering_choices: Vec<usize>,
-    random: StdRng,
+    random: SharedRandom,
     num_operations: i64,
 }
 
 impl EnteringVariable {
     #[must_use]
     pub fn new(seed: u64) -> Self {
+        Self::new_with_random(SharedRandom::new(seed))
+    }
+
+    #[must_use]
+    pub fn new_with_random(random: SharedRandom) -> Self {
         Self {
             parameters: GlopParameters::default(),
             equivalent_entering_choices: Vec::new(),
-            random: StdRng::seed_from_u64(seed),
+            random,
             num_operations: 0,
         }
     }
@@ -220,7 +224,7 @@ impl EnteringVariable {
             }
             let choice = self
                 .random
-                .random_range(0..self.equivalent_entering_choices.len());
+                .uniform_index(self.equivalent_entering_choices.len());
             entering = Some(self.equivalent_entering_choices[choice]);
         }
         if best_coefficient < self.parameters.minimum_acceptable_pivot

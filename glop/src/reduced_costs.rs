@@ -15,14 +15,13 @@
 use lp_data::lp_types::{ColIndex, DenseRow, RowIndex, RowToColMapping, VariableType, VectorIndex};
 use lp_data::scattered_vector::ScatteredColumn;
 use lp_data::sparse::CompactSparseMatrix;
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
 
 use crate::basis_representation::BasisRepresentation;
 use crate::lu_factorization::FactorizationError;
 use crate::parameters::GlopParameters;
 use crate::pricing::DynamicMaximum;
 use crate::primal_edge_norms::PrimalEdgeNorms;
+use crate::random::SharedRandom;
 use crate::update_row::UpdateRow;
 use crate::variables_info::VariablesInfo;
 
@@ -71,7 +70,7 @@ pub struct ReducedCosts<'a> {
     reduced_costs: Vec<f64>,
     basic_objective_left_inverse: Vec<f64>,
     dual_feasibility_tolerance: f64,
-    random: StdRng,
+    random: SharedRandom,
     deterministic_time: f64,
 }
 
@@ -84,6 +83,25 @@ impl<'a> ReducedCosts<'a> {
         variables_info: &'a VariablesInfo,
         basis_factorization: &'a BasisRepresentation,
         seed: u64,
+    ) -> Self {
+        Self::new_with_random(
+            matrix,
+            objective,
+            basis,
+            variables_info,
+            basis_factorization,
+            SharedRandom::new(seed),
+        )
+    }
+
+    #[must_use]
+    pub fn new_with_random(
+        matrix: &'a CompactSparseMatrix,
+        objective: &DenseRow,
+        basis: &'a RowToColMapping,
+        variables_info: &'a VariablesInfo,
+        basis_factorization: &'a BasisRepresentation,
+        random: SharedRandom,
     ) -> Self {
         Self {
             matrix,
@@ -104,7 +122,7 @@ impl<'a> ReducedCosts<'a> {
             reduced_costs: Vec::new(),
             basic_objective_left_inverse: Vec::new(),
             dual_feasibility_tolerance: 0.0,
-            random: StdRng::seed_from_u64(seed),
+            random,
             deterministic_time: 0.0,
         }
     }
@@ -280,7 +298,7 @@ impl<'a> ReducedCosts<'a> {
         for column in 0..structural_size {
             let index = ColIndex::from_usize(column);
             let objective = self.objective[index];
-            let magnitude = (1.0 + self.random.random::<f64>())
+            let magnitude = (1.0 + self.random.uniform_unit_f64())
                 * (self.parameters.relative_cost_perturbation * objective.abs()
                     + self.parameters.relative_max_cost_perturbation * maximum);
             self.cost_perturbations[column] = match self.variables_info.variable_types()[index] {
@@ -477,9 +495,14 @@ pub struct PrimalPrices {
 impl PrimalPrices {
     #[must_use]
     pub fn new(seed: u64) -> Self {
+        Self::new_with_random(SharedRandom::new(seed))
+    }
+
+    #[must_use]
+    pub fn new_with_random(random: SharedRandom) -> Self {
         Self {
             recompute: true,
-            prices: DynamicMaximum::new(seed),
+            prices: DynamicMaximum::new_with_random(random),
         }
     }
 

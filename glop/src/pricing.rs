@@ -10,11 +10,7 @@
     clippy::float_cmp
 )]
 
-use std::cmp::Ordering;
-use std::collections::BinaryHeap;
-
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use crate::random::SharedRandom;
 
 const TOP_K: usize = 31;
 
@@ -24,38 +20,14 @@ struct HeapElement {
     value: f64,
 }
 
-impl PartialEq for HeapElement {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value && self.index == other.index
-    }
-}
-
-impl Eq for HeapElement {}
-
-// Reverse the value ordering: BinaryHeap's root is GLOP's minimum threshold.
-impl Ord for HeapElement {
-    fn cmp(&self, other: &Self) -> Ordering {
-        other
-            .value
-            .total_cmp(&self.value)
-            .then_with(|| other.index.cmp(&self.index))
-    }
-}
-
-impl PartialOrd for HeapElement {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct DynamicMaximum {
     values: Vec<f64>,
     is_candidate: Vec<bool>,
     threshold: f64,
-    tops: BinaryHeap<HeapElement>,
+    tops: Vec<HeapElement>,
     equivalent_choices: Vec<usize>,
-    random: StdRng,
+    random: SharedRandom,
 }
 
 impl Default for DynamicMaximum {
@@ -67,13 +39,18 @@ impl Default for DynamicMaximum {
 impl DynamicMaximum {
     #[must_use]
     pub fn new(seed: u64) -> Self {
+        Self::new_with_random(SharedRandom::new(seed))
+    }
+
+    #[must_use]
+    pub fn new_with_random(random: SharedRandom) -> Self {
         Self {
             values: Vec::new(),
             is_candidate: Vec::new(),
             threshold: f64::NEG_INFINITY,
-            tops: BinaryHeap::new(),
+            tops: Vec::new(),
             equivalent_choices: Vec::new(),
-            random: StdRng::seed_from_u64(seed),
+            random,
         }
     }
 
@@ -125,9 +102,12 @@ impl DynamicMaximum {
         self.equivalent_choices.clear();
 
         if !self.tops.is_empty() {
-            let mut valid = BinaryHeap::new();
-            for element in self.tops.drain() {
+            let mut new_size = 0;
+            for old_position in 0..self.tops.len() {
+                let element = self.tops[old_position];
                 if self.is_candidate[element.index] && self.values[element.index] == element.value {
+                    self.tops[new_size] = element;
+                    new_size += 1;
                     if element.value >= best_value {
                         if element.value == best_value {
                             self.equivalent_choices.push(element.index);
@@ -137,10 +117,9 @@ impl DynamicMaximum {
                             best_position = Some(element.index);
                         }
                     }
-                    valid.push(element);
                 }
             }
-            self.tops = valid;
+            self.tops.truncate(new_size);
             if !self.tops.is_empty() {
                 return self.randomize_if_many_choices(best_position);
             }
@@ -176,7 +155,7 @@ impl DynamicMaximum {
         if let Some(best) = best {
             self.equivalent_choices.push(best);
         }
-        let choice = self.random.random_range(0..self.equivalent_choices.len());
+        let choice = self.random.uniform_index(self.equivalent_choices.len());
         Some(self.equivalent_choices[choice])
     }
 
@@ -188,29 +167,74 @@ impl DynamicMaximum {
                 value,
             });
             if self.tops.len() == TOP_K {
-                self.threshold = self
-                    .tops
-                    .peek()
-                    .map_or(f64::NEG_INFINITY, |entry| entry.value);
+                self.make_heap();
+                self.threshold = self.tops[0].value;
             }
             return;
         }
-        if value == self.tops.peek().expect("full top-k heap").value {
-            if self.random.random_bool(0.5) {
-                self.tops.pop();
-                self.tops.push(HeapElement {
-                    index: position,
-                    value,
-                });
+        if value == self.tops[0].value {
+            if self.random.bernoulli_half() {
+                self.tops[0].index = position;
             }
             return;
         }
-        self.tops.pop();
-        self.tops.push(HeapElement {
+        let mut heap_position = 0;
+        while heap_position < TOP_K / 2 {
+            let left = 2 * heap_position + 1;
+            let right = left + 1;
+            let next = if self.tops[left].value > self.tops[right].value {
+                if value <= self.tops[right].value {
+                    break;
+                }
+                right
+            } else {
+                if value <= self.tops[left].value {
+                    break;
+                }
+                left
+            };
+            self.tops[heap_position] = self.tops[next];
+            heap_position = next;
+        }
+        self.tops[heap_position] = HeapElement {
             index: position,
             value,
-        });
-        self.threshold = self.tops.peek().expect("nonempty top-k heap").value;
+        };
+        self.threshold = self.tops[0].value;
+    }
+
+    /// Reproduces libc++'s `std::make_heap()` ordering. Equal-valued elements
+    /// are intentionally not ordered by index because the vector order affects
+    /// both later tie draws and GLOP's shared random stream.
+    fn make_heap(&mut self) {
+        for start in (0..=(self.tops.len() - 2) / 2).rev() {
+            let mut child = 2 * start + 1;
+            if child + 1 < self.tops.len() && self.tops[child].value > self.tops[child + 1].value {
+                child += 1;
+            }
+            if self.tops[child].value > self.tops[start].value {
+                continue;
+            }
+            let top = self.tops[start];
+            let mut hole = start;
+            loop {
+                self.tops[hole] = self.tops[child];
+                hole = child;
+                if (self.tops.len() - 2) / 2 < child {
+                    break;
+                }
+                child = 2 * child + 1;
+                if child + 1 < self.tops.len()
+                    && self.tops[child].value > self.tops[child + 1].value
+                {
+                    child += 1;
+                }
+                if self.tops[child].value > top.value {
+                    break;
+                }
+            }
+            self.tops[hole] = top;
+        }
     }
 }
 
@@ -234,5 +258,19 @@ mod tests {
             prices.dense_add_or_update(index, -(index as f64));
         }
         assert_eq!(prices.get_maximum(), Some(0));
+    }
+
+    #[test]
+    fn tied_heap_sequence_matches_glop() {
+        let mut prices = DynamicMaximum::new(1);
+        prices.clear_and_resize(100);
+        for index in 0..100 {
+            prices.add_or_update(index, (index % 7) as f64);
+        }
+        let expected = [27, 76, 90, 97, 41, 20, 69, 13, 62, 55];
+        for index in expected {
+            assert_eq!(prices.get_maximum(), Some(index));
+            prices.remove(index);
+        }
     }
 }

@@ -16,6 +16,7 @@ pub mod parameters;
 pub mod pricing;
 pub mod primal_edge_norms;
 pub mod primal_ratio_test;
+pub mod random;
 pub mod rank_one_update;
 pub mod reduced_costs;
 pub mod revised_simplex;

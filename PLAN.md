@@ -471,7 +471,12 @@ the ported `DynamicMaximum` dual prices, exact dual edge norms, sparse BTRAN
 and update-row computation, Harris bound-flipping ratio test, incremental
 reduced-cost and norm updates, middle-product basis updates, boxed-variable
 flips, precision-triggered refactorization, and final optimality/unboundedness
-checks. The dual objective limit follows GLOP's shifted/scaled external
+checks. Degenerate dual pivots now use GLOP's cost shifts, including the
+minimum reduced-cost displacement, incremental shifted reduced costs, removal
+of all shifts at a candidate termination, and refactorized reoptimization.
+Imprecise pivots also increase the LU pivot threshold before rebuilding the
+basis when fewer than ten updates have accumulated, matching `UpdateAndPivot()`.
+The dual objective limit follows GLOP's shifted/scaled external
 coordinates and is tested separately. One- and two-pivot regressions cover
 optimal solves, a dedicated-phase-I regression starts from a dual-infeasible
 basis, and a dual-ray regression covers primal infeasibility. The CLI and Netlib validator expose an
@@ -479,11 +484,30 @@ opt-in dual mode; all smallest-50 models pass status, objective, and independent
 primal/dual feasibility validation with a 10-second per-model limit using the
 dual driver throughout. The nondefault transformed-problem dual Phase-I
 alternative is not yet connected and currently falls back to the primal driver.
+On the full 98-model corpus, 93 models pass the same validation with a
+10-second wall limit; `dfl001`, `maros-r7`, `pilot87`, `qap12`, and `qap15`
+time out, and no model now terminates abnormally. In particular, the cost-shift
+port resolves the former `ABNORMAL` results on `perold`, `pilot`, and `pilot87`.
+An iteration-prefix differential adapter now records initial and current basis
+mappings, the initial LU column permutation, Phase-I prices, dual edge norms,
+values, and reduced costs from both implementations. It proves that `perold`'s
+crash basis, initial LU permutation, post-permutation basis, and first pivot all
+agree exactly. Before the second pivot attempt, however, native GLOP
+refactorizes and incorporates a nontrivial LU column permutation while Rust
+retains its first middle-product update. The resulting row-coordinate mismatch
+attaches dual edge norms to different basic columns and the basic-column sets
+first diverge at pivot 12. Basis permutations now update Rust's Phase-I pricing
+vector and dual edge norms as `PermuteBasis()` does upstream, so the remaining
+target is the preceding basis-update/refactorization decision. GLOP's exact
+shared `std::mt19937_64` stream, libc++/Abseil distributions, and isolated tied
+top-31 pricing sequence agree exactly; this is not a tolerance or RNG defect.
+With scaling and preprocessing disabled, the current trace finishes `perold`
+in 967 Rust iterations versus 1049 in native GLOP.
 
 This is not yet a validated Phase-4 port. The primal phase-I objective update is
 not yet connected to GLOP's incremental `ReducedCosts` orchestration; the
 nondefault transformed dual Phase-I loop and dual reoptimization after cleanup,
-perturbation and cost-shift orchestration, full
+initial random cost perturbation, full
 termination/reoptimization checks, and complete incremental warm-start cases
 remain to be translated. The reproducible `tools/validate_netlib_solve.py`
 gate passes status, objective, and independent primal/dual feasibility checks

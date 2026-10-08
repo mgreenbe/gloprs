@@ -559,7 +559,8 @@ impl TriangularMatrix {
             let column = row_permutation[permuted_row];
             debug_assert_ne!(column, invalid);
             for position in self.starts[column]..self.starts[column + 1] {
-                scratchpad[self.rows[position]] -= self.coefficients[position] * pivot;
+                let row = self.rows[position];
+                scratchpad[row] = (-self.coefficients[position]).mul_add(pivot, scratchpad[row]);
             }
         }
         lower.clear();
@@ -670,7 +671,7 @@ impl TriangularMatrix {
                         coefficient
                     };
                     for (row, entry_coefficient) in self.column(column) {
-                        rhs[row] -= coefficient * entry_coefficient;
+                        rhs[row] = (-coefficient).mul_add(entry_coefficient, rhs[row]);
                     }
                 }
             }
@@ -688,7 +689,8 @@ impl TriangularMatrix {
                         pivot
                     };
                     for position in (self.starts[column]..self.starts[column + 1]).rev() {
-                        rhs[self.rows[position]] -= self.coefficients[position] * pivot;
+                        let row = self.rows[position];
+                        rhs[row] = (-self.coefficients[position]).mul_add(pivot, rhs[row]);
                     }
                 }
             }
@@ -723,7 +725,7 @@ impl TriangularMatrix {
                 pivot
             };
             for (row, coefficient) in self.column(column) {
-                rhs[row] -= pivot * coefficient;
+                rhs[row] = (-pivot).mul_add(coefficient, rhs[row]);
             }
         }
         Ok(())
@@ -838,7 +840,7 @@ impl TriangularMatrix {
             };
             rhs[row] = pivot;
             for (entry_row, coefficient) in self.column(row) {
-                rhs[entry_row] -= pivot * coefficient;
+                rhs[entry_row] = (-pivot).mul_add(coefficient, rhs[entry_row]);
             }
             non_zeros[write] = non_zeros[read];
             write += 1;
@@ -866,7 +868,7 @@ impl TriangularMatrix {
             };
             rhs[row] = pivot;
             for (entry_row, coefficient) in self.column(row) {
-                rhs[entry_row] -= pivot * coefficient;
+                rhs[entry_row] = (-pivot).mul_add(coefficient, rhs[entry_row]);
             }
             new_start -= 1;
             non_zeros[new_start] = typed_row;
