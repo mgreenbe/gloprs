@@ -103,11 +103,15 @@ impl DualEdgeNorms {
 
     /// Checks the maintained norm against the precise leaving-row inverse.
     #[must_use]
-    pub fn test_precision(&mut self, leaving_row: usize, unit_row_left_inverse: &[f64]) -> bool {
+    pub fn test_precision(
+        &mut self,
+        leaving_row: usize,
+        unit_row_left_inverse: &ScatteredRow,
+    ) -> bool {
         if self.recompute_edge_squared_norms {
             return true;
         }
-        let leaving_squared_norm = squared_norm(unit_row_left_inverse);
+        let leaving_squared_norm = squared_norm(unit_row_left_inverse.values().as_slice());
         let old_squared_norm = self.edge_squared_norms[leaving_row];
         let precise_norm = leaving_squared_norm.sqrt();
         let estimated_accuracy = (precise_norm - old_squared_norm.sqrt()) / precise_norm;
@@ -140,13 +144,16 @@ impl DualEdgeNorms {
         basis: &BasisRepresentation,
         leaving_row: usize,
         direction: &[f64],
-        unit_row_left_inverse: &[f64],
+        unit_row_left_inverse: &ScatteredRow,
     ) -> Result<(), FactorizationError> {
         if self.recompute_edge_squared_norms {
             return Ok(());
         }
         let n = basis.dimension();
-        if leaving_row >= n || direction.len() != n || unit_row_left_inverse.len() != n {
+        if leaving_row >= n
+            || direction.len() != n
+            || unit_row_left_inverse.values().len().to_usize() != n
+        {
             return Err(FactorizationError::DimensionMismatch);
         }
 
@@ -154,13 +161,7 @@ impl DualEdgeNorms {
         // nonzero positions produced by the preceding unit-row left solve and
         // therefore takes the sparse/hyper-sparse solve path. Preserve that
         // numerical path instead of silently switching to the dense solve.
-        let mut left_inverse = ScatteredRow::new(ColIndex::from_usize(n));
-        for (row, &value) in unit_row_left_inverse.iter().enumerate() {
-            if value != 0.0 {
-                left_inverse.set(ColIndex::from_usize(row), value);
-            }
-        }
-        let tau = basis.right_solve_for_tau(&left_inverse)?;
+        let tau = basis.right_solve_for_tau(unit_row_left_inverse)?;
         let pivot = direction[leaving_row];
         let new_leaving_squared_norm = self.edge_squared_norms[leaving_row] / (pivot * pivot);
         let factor = 2.0 / pivot;

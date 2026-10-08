@@ -208,6 +208,11 @@ impl UpdateRow {
     }
 
     #[must_use]
+    pub const fn unit_row_left_inverse_scattered(&self) -> &ScatteredRow {
+        &self.unit_row_left_inverse
+    }
+
+    #[must_use]
     pub fn coefficients(&self) -> &[f64] {
         &self.coefficients
     }

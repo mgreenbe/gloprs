@@ -67,9 +67,9 @@ fn main() {
         .left_solve_for_unit_row(leaving, &mut left_inverse_scattered)
         .unwrap();
     let left_inverse = left_inverse_scattered.values().as_slice().to_vec();
-    let precise = norms.test_precision(leaving, &left_inverse);
+    let precise = norms.test_precision(leaving, &left_inverse_scattered);
     norms
-        .update_before_basis_pivot(&basis, leaving, &direction, &left_inverse)
+        .update_before_basis_pivot(&basis, leaving, &direction, &left_inverse_scattered)
         .unwrap();
     let updated = norms.edge_squared_norms(&basis).unwrap().to_vec();
 
