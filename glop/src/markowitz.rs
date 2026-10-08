@@ -956,7 +956,9 @@ pub(crate) fn factorize(
         for &(row, value) in &result.upper[step] {
             upper_columns[step].push((result.row_permutation[row], value));
         }
-        lower_columns[step].sort_unstable_by_key(|entry| entry.0);
+        // GLOP applies the final row permutation in place and deliberately
+        // retains each L column's construction order. Transpose solves observe
+        // that order through floating-point rounding, so do not sort L here.
         upper_columns[step].sort_unstable_by_key(|entry| entry.0);
         debug_assert!(
             upper_columns[step].iter().all(|entry| entry.0 < step),

@@ -523,8 +523,14 @@ impl LuFactorization {
         {
             let (values, non_zeros) = rhs.mutable_parts();
             self.transpose_upper
-                .solve_with_nonzeros(values, non_zeros)
-                .map_err(|_| FactorizationError::DimensionMismatch)?;
+                .compute_rows_to_consider_in_sorted_order(non_zeros);
+            if non_zeros.is_empty() {
+                self.upper
+                    .transpose_solve(values)
+                    .map_err(|_| FactorizationError::DimensionMismatch)?;
+            } else {
+                self.upper.transpose_hyper_sparse_solve(values, non_zeros);
+            }
         }
         rhs.sort_non_zeros_if_needed();
         Ok(())
@@ -548,8 +554,15 @@ impl LuFactorization {
         {
             let (values, non_zeros) = rhs.mutable_parts();
             self.transpose_lower
-                .solve_with_nonzeros(values, non_zeros)
-                .map_err(|_| FactorizationError::DimensionMismatch)?;
+                .compute_rows_to_consider_in_sorted_order(non_zeros);
+            if non_zeros.is_empty() {
+                self.lower
+                    .transpose_solve(values)
+                    .map_err(|_| FactorizationError::DimensionMismatch)?;
+            } else {
+                self.lower
+                    .transpose_hyper_sparse_solve_with_reversed_nonzeros(values, non_zeros);
+            }
         }
         self.permute_scattered(rhs, &self.inverse_row_permutation);
         Ok(())
@@ -580,8 +593,15 @@ impl LuFactorization {
         {
             let (values, non_zeros) = rhs.mutable_parts();
             self.transpose_lower
-                .solve_with_nonzeros(values, non_zeros)
-                .map_err(|_| FactorizationError::DimensionMismatch)?;
+                .compute_rows_to_consider_in_sorted_order(non_zeros);
+            if non_zeros.is_empty() {
+                self.lower
+                    .transpose_solve(values)
+                    .map_err(|_| FactorizationError::DimensionMismatch)?;
+            } else {
+                self.lower
+                    .transpose_hyper_sparse_solve_with_reversed_nonzeros(values, non_zeros);
+            }
         }
         result_before_permutation.clear();
         if rhs.non_zeros().is_empty() {
@@ -800,9 +820,35 @@ impl LuFactorization {
         if row >= self.dimension() {
             return Err(FactorizationError::DimensionMismatch);
         }
+        let permuted_row = if self.column_permutation.is_empty() {
+            row
+        } else {
+            self.column_permutation[row]
+        };
         let mut rhs = ScatteredRow::new(ColIndex::from_usize(self.dimension()));
-        rhs.set(ColIndex::from_usize(row), 1.0);
-        self.transpose_solve_with_nonzeros(&mut rhs)?;
+        rhs.set(ColIndex::from_usize(permuted_row), 1.0);
+        {
+            let (values, non_zeros) = rhs.mutable_parts();
+            self.transpose_upper
+                .compute_rows_to_consider_in_sorted_order(non_zeros);
+            if non_zeros.is_empty() {
+                self.transpose_upper
+                    .lower_solve_starting_at(permuted_row, values)
+                    .map_err(|_| FactorizationError::DimensionMismatch)?;
+            } else {
+                self.transpose_upper.hyper_sparse_solve(values, non_zeros);
+                self.transpose_lower
+                    .compute_rows_to_consider_in_sorted_order(non_zeros);
+            }
+            if non_zeros.is_empty() {
+                self.transpose_lower
+                    .solve(values)
+                    .map_err(|_| FactorizationError::DimensionMismatch)?;
+            } else {
+                self.transpose_lower
+                    .hyper_sparse_solve_with_reversed_nonzeros(values, non_zeros);
+            }
+        }
         Ok(scattered_squared_norm(&rhs))
     }
 

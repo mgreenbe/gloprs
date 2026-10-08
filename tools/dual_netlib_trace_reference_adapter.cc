@@ -86,6 +86,9 @@ int main(int argc, char** argv) {
   }
   simplex.GetBasisFactorization().RightSolve(&phase_one_rhs);
   const auto norms = simplex.GetDualSquaredNorms();
+  std::cout << "\nnorms";
+  for (const double norm : norms) std::cout << ' ' << norm;
+  std::cout << '\n';
   std::vector<std::tuple<double, int, int, double, double>> prices;
   for (int row = 0; row < lp.num_constraints().value(); ++row) {
     const glop::RowIndex row_index(row);

@@ -509,10 +509,14 @@ Using the ported four-accumulator kernel removed the former pivot-46
 divergence. A subsequent audit found that Rust unconditionally forced a second
 LU rebuild after dedicated dual Phase I where GLOP's conditional
 `Refactorize()` is a no-op; preserving the existing factorization removes the
-resulting basis-order and random-stream drift. The complete entering column,
-leaving basic column, and leaving-row trajectory now agrees for the first 132
-`perold` pivots. Pivot 133 is an exact ratio-test tie exposed by remaining
-numerical drift in the recomputed basic values and dual prices. The trajectory
+resulting basis-order and random-stream drift. A later file-for-file audit
+found that the 132-pivot `perold` prefix used a numerically equivalent but
+algorithmically different left solve. GLOP computes the symbolic closure from
+the explicitly transposed factor, then performs numerical transpose
+substitution on the original factor. The Rust port now preserves that split.
+The faithful path currently agrees for the first 45 `perold` pivots, after
+which remaining factor-storage or arithmetic differences change an exact
+pricing tie. The trajectory
 audit also found two Phase-II orchestration mismatches. GLOP applies pending
 boxed-variable flips before updating dual prices for the preceding direction
 at the start of the next iteration; Rust now preserves that order instead of
@@ -520,13 +524,39 @@ updating at the end of the preceding iteration. More importantly, a dense
 FTRAN result from a boxed-variable flip now takes GLOP's full
 `RecomputeDualPrices()` path instead of incrementally updating every row. The
 latter difference retained stale top-31 heap entries and gave exact ties the
-wrong multiplicity. A smallest-25 audit now finds complete pivot-sequence
+wrong multiplicity. The incremental reduced-cost update now uses an explicit
+fused multiply-add, matching the contraction emitted for GLOP's
+`rc[col] += new_leaving_reduced_cost * update_coeffs[col]` in the optimized
+native build. Full reduced-cost recomputation now likewise uses GLOP's
+four-accumulator compact-column scalar product for structural columns and its
+direct dual-value subtraction for trailing slacks; the scalar-product
+accumulators use the fused operations emitted by the optimized native build.
+The basic-objective left inverse now goes through GLOP's scattered-row
+dense-sentinel solve (`LeftSolveUWithNonZeros`, middle-product updates, then
+`LeftSolveLWithNonZeros`) rather than the separate packed dense transpose
+solve. This restores `blend`'s exact trajectory and preserves the sparse solve
+architecture used upstream.
+This moves `scorpion`'s first divergence from pivot 21 to pivot 163, `israel`'s
+from pivot 21 to pivot 107, makes `capri` and `vtp.base` agree completely, and moves `lotfi`'s
+first divergence from pivot 18 to pivot 59. A smallest-25 audit now finds
+complete pivot-sequence
 agreement for `afiro`, `sc50a`, `sc50b`, `kb2`, `sc105`, `adlittle`,
-`stocfor1`, `blend`, `scagr7`, `share2b`, `recipe`, and `share1b`. Of the
-remaining 13, `vtp.base` now agrees through 15 pivots rather than only three,
-and `boeing2` through 62 rather than 26.
+`stocfor1`, `blend`, `scagr7`, `share2b`, `recipe`, `share1b`, `capri`, and
+`vtp.base`. Of the remaining 11, `boeing2` agrees through 62 pivots rather than
+26.
 With scaling and preprocessing disabled, the current trace finishes `perold`
-in 885 Rust iterations versus 1049 in native GLOP.
+in 785 Rust iterations versus 1049 in native GLOP.
+
+The former `vtp.base` pivot-16 discrepancy exposed the symbolic/numerical split
+in GLOP's hypersparse left solve. Matching that split and explicitly
+contracting scalar tail updates makes the localized unit-row and tau stages
+bit-identical and extends the common trajectory through 77 pivots. Pivot 78
+then exposed an orchestration mismatch: after a pivot-triggered refactorization,
+GLOP permutes and retains its incrementally updated dual norms, while Rust
+permuted and then cleared them, forcing an exact recomputation. Retaining those
+norms makes all 141 `vtp.base` pivots agree. Exact initialization still uses
+GLOP's specialized transpose-factor norm solve rather than the general left
+solve.
 
 This is not yet a validated Phase-4 port. The primal phase-I objective update is
 not yet connected to GLOP's incremental `ReducedCosts` orchestration; the

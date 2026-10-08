@@ -935,19 +935,28 @@ impl RevisedSimplex {
                 objective[column] + self.cost_perturbations[column]
             })
             .collect();
-        let dual = self
-            .basis_factorization
+        let mut dual = lp_data::scattered_vector::ScatteredRow::new(ColIndex::from_usize(
+            self.num_rows.to_usize(),
+        ));
+        dual.values_mut()
+            .as_mut_slice()
+            .copy_from_slice(&basic_objective);
+        self.basis_factorization
             .as_ref()
             .unwrap()
-            .transpose_solve(&basic_objective)?;
-        self.dual_values = DenseColumn::from_vec(dual.clone());
-        for column in 0..self.num_cols.to_usize() {
+            .transpose_solve_with_nonzeros(&mut dual)?;
+        self.dual_values = DenseColumn::from_vec(dual.values().as_slice().to_vec());
+        let dual_row = dual.values();
+        let first_slack = self.num_cols.to_usize() - self.num_rows.to_usize();
+        for column in 0..first_slack {
             let index = ColIndex::from_usize(column);
-            let mut value = objective[index] + self.cost_perturbations[index];
-            for entry in self.matrix.column(index) {
-                value -= dual[entry.index().to_usize()] * entry.coefficient();
-            }
-            self.reduced_costs[index] = value;
+            self.reduced_costs[index] = objective[index] + self.cost_perturbations[index]
+                - self.compact_matrix.column_scalar_product(index, dual_row);
+        }
+        for column in first_slack..self.num_cols.to_usize() {
+            let index = ColIndex::from_usize(column);
+            self.reduced_costs[index] = objective[index] + self.cost_perturbations[index]
+                - dual_row[ColIndex::from_usize(column - first_slack)];
         }
         Ok(())
     }
@@ -1703,9 +1712,6 @@ impl RevisedSimplex {
                 || self.basis_factorization.as_ref().unwrap().is_refactorized()
                 || self.dual_edge_norms.needs_basis_refactorization()
             {
-                if self.basis_factorization.as_ref().unwrap().is_refactorized() {
-                    self.dual_edge_norms.clear();
-                }
                 prices_initialized = false;
             } else {
                 self.update_dual_phase_one_prices_for_columns(&changed_columns, false)?;
@@ -1978,9 +1984,6 @@ impl RevisedSimplex {
             if self.basis_factorization.as_ref().unwrap().is_refactorized()
                 || self.dual_edge_norms.needs_basis_refactorization()
             {
-                if self.basis_factorization.as_ref().unwrap().is_refactorized() {
-                    self.dual_edge_norms.clear();
-                }
                 self.dual_prices.clear();
                 pending_price_rows.clear();
             } else {

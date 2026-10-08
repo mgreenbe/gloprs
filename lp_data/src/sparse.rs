@@ -218,24 +218,26 @@ impl CompactSparseMatrix {
         let mut entry = start;
         let (mut result1, mut result2, mut result3, mut result4) = (0.0, 0.0, 0.0, 0.0);
         while entry < shifted_end {
-            result1 += self.coefficients[entry] * vector[ColIndex::new(self.rows[entry].value())];
-            result2 +=
-                self.coefficients[entry + 1] * vector[ColIndex::new(self.rows[entry + 1].value())];
-            result3 +=
-                self.coefficients[entry + 2] * vector[ColIndex::new(self.rows[entry + 2].value())];
-            result4 +=
-                self.coefficients[entry + 3] * vector[ColIndex::new(self.rows[entry + 3].value())];
+            result1 = self.coefficients[entry]
+                .mul_add(vector[ColIndex::new(self.rows[entry].value())], result1);
+            result2 = self.coefficients[entry + 1]
+                .mul_add(vector[ColIndex::new(self.rows[entry + 1].value())], result2);
+            result3 = self.coefficients[entry + 2]
+                .mul_add(vector[ColIndex::new(self.rows[entry + 2].value())], result3);
+            result4 = self.coefficients[entry + 3]
+                .mul_add(vector[ColIndex::new(self.rows[entry + 3].value())], result4);
             entry += 4;
         }
         let mut result = result1 + result2 + result3 + result4;
         if entry < end {
-            result += self.coefficients[entry] * vector[ColIndex::new(self.rows[entry].value())];
+            result = self.coefficients[entry]
+                .mul_add(vector[ColIndex::new(self.rows[entry].value())], result);
             if entry + 1 < end {
-                result += self.coefficients[entry + 1]
-                    * vector[ColIndex::new(self.rows[entry + 1].value())];
+                result = self.coefficients[entry + 1]
+                    .mul_add(vector[ColIndex::new(self.rows[entry + 1].value())], result);
                 if entry + 2 < end {
-                    result += self.coefficients[entry + 2]
-                        * vector[ColIndex::new(self.rows[entry + 2].value())];
+                    result = self.coefficients[entry + 2]
+                        .mul_add(vector[ColIndex::new(self.rows[entry + 2].value())], result);
                 }
             }
         }
@@ -918,6 +920,28 @@ mod tests {
                 .iter()
                 .collect::<Vec<_>>(),
             vec![(RowIndex::new(0), 2.0), (RowIndex::new(1), 2.0)]
+        );
+    }
+
+    #[test]
+    fn compact_column_scalar_product_preserves_fused_native_rounding() {
+        let mut compact = CompactSparseMatrix::default();
+        compact.reset(RowIndex::new(3));
+        compact.add_dense_column(&DenseColumn::from_vec(vec![1.0, 1.0, -48.0]));
+
+        // These are operands from lotfi's reduced-cost recomputation. The
+        // optimized upstream kernel contracts the final multiply-add, leaving
+        // a small nonzero residual instead of rounding the two terms to exact
+        // cancellation.
+        let first = f64::from_bits(0xbf3f_7510_4d55_1d6a);
+        let third = f64::from_bits(0xbee4_f8b5_88e3_68f1);
+        let vector = DenseRow::from_vec(vec![first, 0.0, third]);
+        let expected = (-48.0_f64).mul_add(third, first);
+
+        assert_ne!(expected, 0.0);
+        assert_eq!(
+            compact.column_scalar_product(ColIndex::new(0), &vector),
+            expected
         );
     }
 }

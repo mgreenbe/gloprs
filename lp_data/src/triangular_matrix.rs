@@ -933,7 +933,7 @@ impl TriangularMatrix {
             position += 4;
         }
         while position < end {
-            sum -= self.coefficients[position] * rhs[self.rows[position]];
+            sum = (-self.coefficients[position]).mul_add(rhs[self.rows[position]], sum);
             position += 1;
         }
         sum
@@ -952,7 +952,7 @@ impl TriangularMatrix {
         }
         while end > start {
             end -= 1;
-            sum -= self.coefficients[end] * rhs[self.rows[end]];
+            sum = (-self.coefficients[end]).mul_add(rhs[self.rows[end]], sum);
         }
         sum
     }

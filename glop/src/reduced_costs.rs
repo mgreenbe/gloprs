@@ -13,7 +13,7 @@
 )]
 
 use lp_data::lp_types::{ColIndex, DenseRow, RowIndex, RowToColMapping, VariableType, VectorIndex};
-use lp_data::scattered_vector::ScatteredColumn;
+use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow};
 use lp_data::sparse::CompactSparseMatrix;
 
 use crate::basis_representation::BasisRepresentation;
@@ -43,7 +43,8 @@ pub fn update_reduced_cost_values_before_basis_pivot(
     }
     let new_leaving_cost = entering_cost / -pivot;
     for &column in update_row.non_zero_positions() {
-        reduced_costs[column] += new_leaving_cost * update_row.coefficient(column);
+        reduced_costs[column] =
+            new_leaving_cost.mul_add(update_row.coefficient(column), reduced_costs[column]);
     }
     reduced_costs[leaving_column.to_usize()] = new_leaving_cost;
     reduced_costs[entering_column.to_usize()] = 0.0;
@@ -68,7 +69,7 @@ pub struct ReducedCosts<'a> {
     basic_objective: Vec<f64>,
     cost_perturbations: Vec<f64>,
     reduced_costs: Vec<f64>,
-    basic_objective_left_inverse: Vec<f64>,
+    basic_objective_left_inverse: DenseRow,
     dual_feasibility_tolerance: f64,
     random: SharedRandom,
     deterministic_time: f64,
@@ -120,7 +121,7 @@ impl<'a> ReducedCosts<'a> {
             basic_objective: Vec::new(),
             cost_perturbations: Vec::new(),
             reduced_costs: Vec::new(),
-            basic_objective_left_inverse: Vec::new(),
+            basic_objective_left_inverse: DenseRow::new(),
             dual_feasibility_tolerance: 0.0,
             random,
             deterministic_time: 0.0,
@@ -165,7 +166,7 @@ impl<'a> ReducedCosts<'a> {
 
     pub fn dual_values(&mut self) -> Result<&[f64], FactorizationError> {
         self.compute_basic_objective_left_inverse()?;
-        Ok(&self.basic_objective_left_inverse)
+        Ok(self.basic_objective_left_inverse.as_slice())
     }
 
     pub fn test_entering_reduced_cost_precision(
@@ -414,9 +415,14 @@ impl<'a> ReducedCosts<'a> {
         if self.recompute_basic_objective {
             self.compute_basic_objective();
         }
-        self.basic_objective_left_inverse = self
-            .basis_factorization
-            .transpose_solve(&self.basic_objective)?;
+        let mut left_inverse = ScatteredRow::new(ColIndex::from_usize(self.basic_objective.len()));
+        left_inverse
+            .values_mut()
+            .as_mut_slice()
+            .copy_from_slice(&self.basic_objective);
+        self.basis_factorization
+            .transpose_solve_with_nonzeros(&mut left_inverse)?;
+        self.basic_objective_left_inverse = left_inverse.values().clone();
         self.recompute_basic_objective_left_inverse = false;
         Ok(())
     }
@@ -432,10 +438,7 @@ impl<'a> ReducedCosts<'a> {
             self.reduced_costs[column] = self.objective[index] + self.cost_perturbations[column]
                 - self
                     .matrix
-                    .column(index)
-                    .iter()
-                    .map(|(row, value)| self.basic_objective_left_inverse[row.to_usize()] * value)
-                    .sum::<f64>();
+                    .column_scalar_product(index, &self.basic_objective_left_inverse);
             if self.variables_info.is_basic().contains(index) {
                 residual = residual.max(self.reduced_costs[column].abs());
             }
@@ -443,7 +446,7 @@ impl<'a> ReducedCosts<'a> {
         for column in first_slack..columns {
             let index = ColIndex::from_usize(column);
             self.reduced_costs[column] = self.objective[index] + self.cost_perturbations[column]
-                - self.basic_objective_left_inverse[column - first_slack];
+                - self.basic_objective_left_inverse[ColIndex::from_usize(column - first_slack)];
             if self.variables_info.is_basic().contains(index) {
                 residual = residual.max(self.reduced_costs[column].abs());
             }
