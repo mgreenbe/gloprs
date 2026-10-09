@@ -7,6 +7,7 @@
 use lp_data::lp_types::{ColBitVec, ColIndex, VectorIndex, deterministic_time_for_fp_operations};
 use lp_data::scattered_vector::ScatteredRow;
 use lp_data::sparse::SparseMatrix;
+use lp_data::sparse_vector::SparseColumn;
 
 use crate::basis_representation::BasisRepresentation;
 use crate::lu_factorization::FactorizationError;
@@ -17,6 +18,35 @@ pub enum UpdateRowAlgorithm {
     Column,
     Row,
     RowHypersparse,
+}
+
+fn column_scalar_product(column: &SparseColumn, values: &[f64]) -> f64 {
+    let mut position = 0;
+    let shifted_end = column.num_entries().saturating_sub(3);
+    let (mut result1, mut result2, mut result3, mut result4) = (0.0, 0.0, 0.0, 0.0);
+    while position < shifted_end {
+        result1 = column
+            .coefficient(position)
+            .mul_add(values[column.index(position).to_usize()], result1);
+        result2 = column
+            .coefficient(position + 1)
+            .mul_add(values[column.index(position + 1).to_usize()], result2);
+        result3 = column
+            .coefficient(position + 2)
+            .mul_add(values[column.index(position + 2).to_usize()], result3);
+        result4 = column
+            .coefficient(position + 3)
+            .mul_add(values[column.index(position + 3).to_usize()], result4);
+        position += 4;
+    }
+    let mut result = result1 + result2 + result3 + result4;
+    while position < column.num_entries() {
+        result = column
+            .coefficient(position)
+            .mul_add(values[column.index(position).to_usize()], result);
+        position += 1;
+    }
+    result
 }
 
 #[derive(Clone, Debug)]
@@ -270,13 +300,10 @@ impl UpdateRow {
         output[basis_columns[leaving_row]] = 1.0;
         for typed_column in not_basic.iter_ones() {
             let column = typed_column.to_usize();
-            let coefficient = matrix
-                .column(ColIndex::from_usize(column))
-                .into_iter()
-                .map(|entry| {
-                    self.left_inverse_value(entry.index().to_usize()) * entry.coefficient()
-                })
-                .sum::<f64>();
+            let coefficient = column_scalar_product(
+                matrix.column(ColIndex::from_usize(column)),
+                self.unit_row_left_inverse.values().as_slice(),
+            );
             if coefficient.abs() > self.drop_tolerance {
                 output[column] = coefficient;
             }
@@ -330,7 +357,9 @@ impl UpdateRow {
         for &row in &self.filtered_non_zeros {
             let multiplier = self.left_inverse_value(row);
             for entry in self.transposed_matrix.column(ColIndex::from_usize(row)) {
-                self.coefficients[entry.index().to_usize()] += multiplier * entry.coefficient();
+                let column = entry.index().to_usize();
+                self.coefficients[column] =
+                    multiplier.mul_add(entry.coefficient(), self.coefficients[column]);
             }
         }
         self.rebuild_non_zeros(relevant);
@@ -390,13 +419,10 @@ impl UpdateRow {
         self.non_zero_positions.clear();
         for typed_column in relevant.iter_ones() {
             let column = typed_column.to_usize();
-            let coefficient = matrix
-                .column(ColIndex::from_usize(column))
-                .into_iter()
-                .map(|entry| {
-                    self.left_inverse_value(entry.index().to_usize()) * entry.coefficient()
-                })
-                .sum::<f64>();
+            let coefficient = column_scalar_product(
+                matrix.column(ColIndex::from_usize(column)),
+                self.unit_row_left_inverse.values().as_slice(),
+            );
             if coefficient.abs() > self.drop_tolerance {
                 self.coefficients[column] = coefficient;
                 self.non_zero_positions.push(column);
@@ -437,11 +463,7 @@ pub fn compute_update_row(
     let left_inverse = basis.transpose_solve(&unit)?;
     let mut result = vec![0.0; matrix.num_cols().to_usize()];
     for (column, value) in result.iter_mut().enumerate() {
-        *value = matrix
-            .column(ColIndex::from_usize(column))
-            .into_iter()
-            .map(|entry| left_inverse[entry.index().to_usize()] * entry.coefficient())
-            .sum();
+        *value = column_scalar_product(matrix.column(ColIndex::from_usize(column)), &left_inverse);
     }
     Ok(result)
 }

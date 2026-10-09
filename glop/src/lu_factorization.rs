@@ -13,6 +13,7 @@ use lp_data::lp_types::{
 use lp_data::lp_utils::squared_norm;
 use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow, ScatteredVector};
 use lp_data::sparse::SparseMatrix;
+use lp_data::sparse_vector::SparseColumn;
 use lp_data::triangular_matrix::{Triangle, TriangularMatrix};
 
 use crate::markowitz;
@@ -403,8 +404,11 @@ impl LuFactorization {
             return Err(FactorizationError::DimensionMismatch);
         }
         let mut work = rhs.to_vec();
-        self.upper
-            .solve(&mut work)
+        // GLOP performs this solve through the explicitly stored transpose of
+        // U. Solving U directly is algebraically equivalent, but traverses the
+        // entries in a different order and therefore changes rounding.
+        self.transpose_upper
+            .transpose_solve(&mut work)
             .map_err(|_| FactorizationError::DimensionMismatch)?;
         if self.inverse_column_permutation.is_empty() {
             return Ok(work);
@@ -456,12 +460,84 @@ impl LuFactorization {
         }
         self.permute_scattered(rhs, &self.row_permutation);
         {
-            let (values, non_zeros) = rhs.mutable_parts();
+            let (_values, non_zeros) = rhs.mutable_parts();
             self.lower
-                .solve_with_nonzeros(values, non_zeros)
-                .map_err(|_| FactorizationError::DimensionMismatch)?;
+                .compute_rows_to_consider_in_sorted_order(non_zeros);
         }
-        rhs.sort_non_zeros_if_needed();
+        rhs.mark_non_zeros_sorted();
+        {
+            let (values, non_zeros) = rhs.mutable_parts();
+            if non_zeros.is_empty() {
+                self.lower
+                    .solve(values)
+                    .map_err(|_| FactorizationError::DimensionMismatch)?;
+            } else {
+                self.lower.hyper_sparse_solve(values, non_zeros);
+            }
+        }
+        Ok(())
+    }
+
+    /// Applies `L^-1 P` directly to a sparse problem column.
+    ///
+    /// This is GLOP's `RightSolveLForColumnView()`, including its specialized
+    /// dense fallback beginning at the first relevant nonidentity column.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension mismatch.
+    pub fn right_solve_lower_for_column(
+        &self,
+        column: &SparseColumn,
+        result: &mut ScatteredColumn,
+    ) -> Result<(), FactorizationError> {
+        result.clear();
+        result.clear_sparse_mask();
+        if self.is_identity_factorization {
+            let (values, non_zeros) = result.mutable_parts();
+            for entry in column {
+                if entry.index().to_usize() >= values.len() {
+                    return Err(FactorizationError::DimensionMismatch);
+                }
+                values[entry.index().to_usize()] = entry.coefficient();
+                non_zeros.push(entry.index());
+            }
+            return Ok(());
+        }
+        if result.len().to_usize() != self.dimension() {
+            return Err(FactorizationError::DimensionMismatch);
+        }
+        let mut first_column_to_consider = self.dimension();
+        let limit = self.lower.first_non_identity_column();
+        {
+            let (values, non_zeros) = result.mutable_parts();
+            for entry in column {
+                if entry.index().to_usize() >= self.dimension() {
+                    return Err(FactorizationError::DimensionMismatch);
+                }
+                let permuted_row = self.row_permutation[entry.index().to_usize()];
+                values[permuted_row] = entry.coefficient();
+                non_zeros.push(RowIndex::from_usize(permuted_row));
+                if permuted_row >= limit && !self.lower.column_is_diagonal_only(permuted_row) {
+                    first_column_to_consider = first_column_to_consider.min(permuted_row);
+                }
+            }
+            self.lower
+                .compute_rows_to_consider_in_sorted_order(non_zeros);
+        }
+        result.mark_non_zeros_sorted();
+        let (values, non_zeros) = result.mutable_parts();
+        if non_zeros.is_empty() {
+            self.lower
+                .lower_solve_starting_at(first_column_to_consider, values)
+                .map_err(|_| FactorizationError::DimensionMismatch)?;
+        } else {
+            self.lower.hyper_sparse_solve(values, non_zeros);
+        }
+        // Like GLOP, the position list is authoritative here. Leave Rust's
+        // auxiliary membership cache cleared so a later rank-one update can
+        // record a structurally reached zero that becomes numerically nonzero.
+        result.clear_sparse_mask();
         Ok(())
     }
 
@@ -481,13 +557,28 @@ impl LuFactorization {
             return Err(FactorizationError::DimensionMismatch);
         }
         {
-            let (values, non_zeros) = rhs.mutable_parts();
+            let (_values, non_zeros) = rhs.mutable_parts();
+            // GLOP uses U to compute the structural closure, but performs the
+            // numerical solve as a transpose solve on its explicitly stored
+            // transpose. Preserve that split: the two formulations are
+            // algebraically equivalent but do not have the same floating-
+            // point traversal order.
             self.upper
-                .solve_with_nonzeros(values, non_zeros)
-                .map_err(|_| FactorizationError::DimensionMismatch)?;
+                .compute_rows_to_consider_in_sorted_order(non_zeros);
+        }
+        rhs.mark_non_zeros_sorted();
+        {
+            let (values, non_zeros) = rhs.mutable_parts();
+            if non_zeros.is_empty() {
+                self.transpose_upper
+                    .transpose_solve(values)
+                    .map_err(|_| FactorizationError::DimensionMismatch)?;
+            } else {
+                self.transpose_upper
+                    .transpose_hyper_sparse_solve_with_reversed_nonzeros(values, non_zeros);
+            }
         }
         self.permute_scattered(rhs, &self.inverse_column_permutation);
-        rhs.sort_non_zeros_if_needed();
         Ok(())
     }
 
@@ -521,9 +612,13 @@ impl LuFactorization {
         }
         self.permute_scattered(rhs, &self.column_permutation);
         {
-            let (values, non_zeros) = rhs.mutable_parts();
+            let (_values, non_zeros) = rhs.mutable_parts();
             self.transpose_upper
                 .compute_rows_to_consider_in_sorted_order(non_zeros);
+        }
+        rhs.mark_non_zeros_sorted();
+        {
+            let (values, non_zeros) = rhs.mutable_parts();
             if non_zeros.is_empty() {
                 self.upper
                     .transpose_solve(values)
@@ -532,8 +627,67 @@ impl LuFactorization {
                 self.upper.transpose_hyper_sparse_solve(values, non_zeros);
             }
         }
-        rhs.sort_non_zeros_if_needed();
         Ok(())
+    }
+
+    /// Applies `U^-T Q^T` to a unit row, using the same specialized path as
+    /// GLOP's `LeftSolveUForUnitRow()`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension error for an invalid row or result vector.
+    pub fn left_solve_upper_for_unit_row(
+        &self,
+        row: usize,
+        result: &mut ScatteredRow,
+    ) -> Result<usize, FactorizationError> {
+        if self.is_identity_factorization {
+            if row >= result.len().to_usize() {
+                return Err(FactorizationError::DimensionMismatch);
+            }
+            debug_assert!(result.values().as_slice().iter().all(|&value| value == 0.0));
+            debug_assert!(result.non_zeros().is_empty());
+            let column = ColIndex::from_usize(row);
+            let (values, non_zeros) = result.mutable_parts();
+            values[row] = 1.0;
+            non_zeros.push(column);
+            return Ok(row);
+        }
+        if row >= self.dimension() || result.len().to_usize() != self.dimension() {
+            return Err(FactorizationError::DimensionMismatch);
+        }
+        debug_assert!(result.values().as_slice().iter().all(|&value| value == 0.0));
+        debug_assert!(result.non_zeros().is_empty());
+        let permuted_row = if self.column_permutation.is_empty() {
+            row
+        } else {
+            self.column_permutation[row]
+        };
+        {
+            let (values, non_zeros) = result.mutable_parts();
+            values[permuted_row] = 1.0;
+            non_zeros.push(ColIndex::from_usize(permuted_row));
+        }
+        if self.transpose_upper.column_is_diagonal_only(permuted_row) {
+            let diagonal = self.transpose_upper.diagonal(permuted_row);
+            result.values_mut()[ColIndex::from_usize(permuted_row)] /= diagonal;
+        } else {
+            {
+                let (_values, non_zeros) = result.mutable_parts();
+                self.transpose_upper
+                    .compute_rows_to_consider_in_sorted_order(non_zeros);
+            }
+            result.mark_non_zeros_sorted();
+            let (values, non_zeros) = result.mutable_parts();
+            if non_zeros.is_empty() {
+                self.transpose_upper
+                    .lower_solve_starting_at(permuted_row, values)
+                    .map_err(|_| FactorizationError::DimensionMismatch)?;
+            } else {
+                self.transpose_upper.hyper_sparse_solve(values, non_zeros);
+            }
+        }
+        Ok(permuted_row)
     }
 
     /// Applies `P^T L^-T` while preserving sparse positions.
@@ -552,9 +706,13 @@ impl LuFactorization {
             return Err(FactorizationError::DimensionMismatch);
         }
         {
-            let (values, non_zeros) = rhs.mutable_parts();
+            let (_values, non_zeros) = rhs.mutable_parts();
             self.transpose_lower
                 .compute_rows_to_consider_in_sorted_order(non_zeros);
+        }
+        rhs.mark_non_zeros_sorted();
+        {
+            let (values, non_zeros) = rhs.mutable_parts();
             if non_zeros.is_empty() {
                 self.lower
                     .transpose_solve(values)
@@ -591,9 +749,13 @@ impl LuFactorization {
             return Err(FactorizationError::DimensionMismatch);
         }
         {
-            let (values, non_zeros) = rhs.mutable_parts();
+            let (_values, non_zeros) = rhs.mutable_parts();
             self.transpose_lower
                 .compute_rows_to_consider_in_sorted_order(non_zeros);
+        }
+        rhs.mark_non_zeros_sorted();
+        {
+            let (values, non_zeros) = rhs.mutable_parts();
             if non_zeros.is_empty() {
                 self.lower
                     .transpose_solve(values)
@@ -619,6 +781,9 @@ impl LuFactorization {
             }
         }
         self.permute_scattered(rhs, &self.inverse_row_permutation);
+        if !rhs.non_zeros().is_empty() {
+            rhs.mark_non_zeros_unsorted();
+        }
         Ok(true)
     }
 
@@ -780,6 +945,11 @@ impl LuFactorization {
         };
         let mut result: Vec<_> = self.upper.column(column).collect();
         result.push((column, self.upper.diagonal(column)));
+        // GLOP's GetColumnOfU() materializes through
+        // TriangularMatrix::CopyColumnToSparseColumn(), whose CleanUp() sorts
+        // the copied entries. This order is distinct from U's physical column
+        // order, which triangular solves deliberately preserve.
+        result.sort_unstable_by_key(|entry| entry.0);
         result
     }
 
@@ -1062,6 +1232,39 @@ mod tests {
     }
 
     #[test]
+    fn dense_upper_solve_uses_the_same_transposed_factor_path_as_glop() {
+        let values: &[&[f64]] = &[
+            &[4.0, 1.0e16, 3.0, -7.0, 11.0],
+            &[0.0, -3.0, -1.0e16, 5.0, -13.0],
+            &[0.0, 0.0, 2.0, 1.0e-16, 17.0],
+            &[0.0, 0.0, 0.0, 5.0, -19.0],
+            &[0.0, 0.0, 0.0, 0.0, 7.0],
+        ];
+        let factorization = LuFactorization::factorize(&matrix(values), 0.1).unwrap();
+        let rhs = [1.0, -2.0, 3.0, -4.0, 5.0];
+
+        let dense = factorization.right_solve_upper(&rhs).unwrap();
+        let mut scattered = ScatteredColumn::new(RowIndex::from_usize(rhs.len()));
+        scattered.values_mut().as_mut_slice().copy_from_slice(&rhs);
+        factorization
+            .right_solve_upper_with_nonzeros(&mut scattered)
+            .unwrap();
+
+        assert_eq!(
+            dense
+                .iter()
+                .map(|value| value.to_bits())
+                .collect::<Vec<_>>(),
+            scattered
+                .values()
+                .as_slice()
+                .iter()
+                .map(|value| value.to_bits())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn scattered_permutation_invalidates_source_coordinate_membership_bits() {
         let factorization = LuFactorization::new();
         let mut vector = ScatteredColumn::new(RowIndex::new(3));
@@ -1079,6 +1282,54 @@ mod tests {
                 .map(|index| index.to_usize())
                 .collect::<Vec<_>>(),
             [1, 0]
+        );
+    }
+
+    #[test]
+    fn problem_column_lower_solve_leaves_membership_cache_temporary() {
+        let n = 100;
+        let mut columns = vec![Vec::new(); n];
+        columns[0].push((1, 1.0));
+        let mut factorization = LuFactorization::new();
+        factorization.is_identity_factorization = false;
+        factorization.lower =
+            TriangularMatrix::from_columns(&columns, vec![1.0; n], Triangle::Lower, true).unwrap();
+        factorization.row_permutation = (0..n).collect();
+
+        let mut column = SparseColumn::new();
+        column.add_entry(RowIndex::new(0), 1.0);
+        column.add_entry(RowIndex::new(1), 1.0);
+        let mut result = ScatteredColumn::new(RowIndex::from_usize(n));
+        factorization
+            .right_solve_lower_for_column(&column, &mut result)
+            .unwrap();
+
+        assert_eq!(result.value(RowIndex::new(1)).to_bits(), 0.0_f64.to_bits());
+        assert!(!result.non_zeros().contains(&RowIndex::new(1)));
+        result.add(RowIndex::new(1), 2.0);
+        assert!(result.non_zeros().contains(&RowIndex::new(1)));
+    }
+
+    #[test]
+    fn column_of_upper_cleans_the_copy_without_reordering_the_factor() {
+        let mut columns = vec![Vec::new(); 4];
+        columns[3] = vec![(2, 2.0), (0, 3.0), (1, 4.0)];
+        let mut factorization = LuFactorization::new();
+        factorization.is_identity_factorization = false;
+        factorization.upper =
+            TriangularMatrix::from_columns(&columns, vec![1.0; 4], Triangle::Upper, false).unwrap();
+
+        assert_eq!(
+            factorization.upper.column(3).collect::<Vec<_>>(),
+            columns[3]
+        );
+        assert_eq!(
+            factorization.column_of_upper(3),
+            vec![(0, 3.0), (1, 4.0), (2, 2.0), (3, 1.0)]
+        );
+        assert_eq!(
+            factorization.upper.column(3).collect::<Vec<_>>(),
+            columns[3]
         );
     }
 

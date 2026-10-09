@@ -926,10 +926,17 @@ impl TriangularMatrix {
         let mut position = self.starts[column];
         let end = self.starts[column + 1];
         while position + 3 < end {
-            sum -= self.coefficients[position] * rhs[self.rows[position]]
-                + self.coefficients[position + 1] * rhs[self.rows[position + 1]]
-                + self.coefficients[position + 2] * rhs[self.rows[position + 2]]
-                + self.coefficients[position + 3] * rhs[self.rows[position + 3]];
+            // This is the contraction sequence emitted for GLOP's four-term
+            // expression by the pinned optimized Apple Clang build: one
+            // rounded multiply for i+1, then FMAs for i, i+2, and i+3.
+            let mut four_term_sum = self.coefficients[position + 1] * rhs[self.rows[position + 1]];
+            four_term_sum =
+                self.coefficients[position].mul_add(rhs[self.rows[position]], four_term_sum);
+            four_term_sum = self.coefficients[position + 2]
+                .mul_add(rhs[self.rows[position + 2]], four_term_sum);
+            four_term_sum = self.coefficients[position + 3]
+                .mul_add(rhs[self.rows[position + 3]], four_term_sum);
+            sum -= four_term_sum;
             position += 4;
         }
         while position < end {
@@ -944,10 +951,17 @@ impl TriangularMatrix {
         let start = self.starts[column];
         let mut end = self.starts[column + 1];
         while end >= start + 4 {
-            sum -= self.coefficients[end - 1] * rhs[self.rows[end - 1]]
-                + self.coefficients[end - 2] * rhs[self.rows[end - 2]]
-                + self.coefficients[end - 3] * rhs[self.rows[end - 3]]
-                + self.coefficients[end - 4] * rhs[self.rows[end - 4]];
+            // This is the contraction sequence emitted for GLOP's four-term
+            // expression by the pinned optimized Apple Clang build: one
+            // rounded multiply for i-1, then FMAs for i, i-2, and i-3.
+            let mut four_term_sum = self.coefficients[end - 2] * rhs[self.rows[end - 2]];
+            four_term_sum =
+                self.coefficients[end - 1].mul_add(rhs[self.rows[end - 1]], four_term_sum);
+            four_term_sum =
+                self.coefficients[end - 3].mul_add(rhs[self.rows[end - 3]], four_term_sum);
+            four_term_sum =
+                self.coefficients[end - 4].mul_add(rhs[self.rows[end - 4]], four_term_sum);
+            sum -= four_term_sum;
             end -= 4;
         }
         while end > start {

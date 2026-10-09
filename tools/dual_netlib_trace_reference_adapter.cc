@@ -55,9 +55,23 @@ int main(int argc, char** argv) {
   for (int column = 0; column < total_columns; ++column) {
     std::cout << ' ' << simplex.GetVariableValue(glop::ColIndex(column));
   }
+  std::cout << "\nvalue_bits";
+  for (int column = 0; column < total_columns; ++column) {
+    const double value = simplex.GetVariableValue(glop::ColIndex(column));
+    uint64_t bits;
+    std::memcpy(&bits, &value, sizeof(bits));
+    std::cout << ' ' << bits;
+  }
   std::cout << "\nreduced";
   for (int column = 0; column < total_columns; ++column) {
     std::cout << ' ' << simplex.GetReducedCost(glop::ColIndex(column));
+  }
+  std::cout << "\nreduced_bits";
+  for (int column = 0; column < total_columns; ++column) {
+    const double value = simplex.GetReducedCost(glop::ColIndex(column));
+    uint64_t bits;
+    std::memcpy(&bits, &value, sizeof(bits));
+    std::cout << ' ' << bits;
   }
   glop::ScatteredColumn phase_one_rhs;
   phase_one_rhs.values.AssignToZero(lp.num_constraints());
@@ -88,6 +102,12 @@ int main(int argc, char** argv) {
   const auto norms = simplex.GetDualSquaredNorms();
   std::cout << "\nnorms";
   for (const double norm : norms) std::cout << ' ' << norm;
+  std::cout << "\nnorm_bits";
+  for (const double norm : norms) {
+    uint64_t bits;
+    std::memcpy(&bits, &norm, sizeof(bits));
+    std::cout << ' ' << bits;
+  }
   std::cout << '\n';
   std::vector<std::tuple<double, int, int, double, double>> prices;
   for (int row = 0; row < lp.num_constraints().value(); ++row) {

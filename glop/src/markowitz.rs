@@ -878,7 +878,11 @@ fn compute(matrix: MatrixView<'_>, parameters: &GlopParameters) -> MarkowitzResu
         let mut lower_column = SparseColumn::new();
         lower_column.reserve(residual.num_entries().saturating_sub(1));
         for entry in residual {
-            if entry.index().to_usize() != pivot.row {
+            // TriangularMatrix::AddAndNormalizeTriangularColumn() upstream
+            // drops numerical cancellations instead of retaining structural
+            // zeroes in L. Besides wasting work, retaining one changes the
+            // sparse transpose-solve reachability and its accumulation order.
+            if entry.index().to_usize() != pivot.row && entry.coefficient() != 0.0 {
                 lower_column.add_entry(entry.index(), entry.coefficient() / pivot_value);
             }
         }
@@ -957,9 +961,9 @@ pub(crate) fn factorize(
             upper_columns[step].push((result.row_permutation[row], value));
         }
         // GLOP applies the final row permutation in place and deliberately
-        // retains each L column's construction order. Transpose solves observe
-        // that order through floating-point rounding, so do not sort L here.
-        upper_columns[step].sort_unstable_by_key(|entry| entry.0);
+        // retains each factor column's construction order. Transpose solves
+        // observe that order through floating-point rounding, so do not sort
+        // either L or U here.
         debug_assert!(
             upper_columns[step].iter().all(|entry| entry.0 < step),
             "non-triangular upper column {step}: {:?}",
@@ -1102,5 +1106,38 @@ mod tests {
         residual.add_entry(RowIndex::new(1), 3.0);
 
         assert_eq!(structural_singleton_row(&residual, &pattern, 2), Some(1));
+    }
+
+    #[test]
+    fn factorization_drops_exact_cancellations_from_lower_factor() {
+        // Eliminating the first column cancels one entry of the second
+        // column exactly. Upstream's AddAndNormalizeTriangularColumn() does
+        // not store that zero in L.
+        let mut matrix = SparseMatrix::new();
+        matrix.populate_from_zero(RowIndex::new(3), ColIndex::new(3));
+        for (column, entries) in [
+            [(0, 1.0), (1, 1.0)].as_slice(),
+            [(0, 1.0), (1, 1.0), (2, 1.0)].as_slice(),
+            [(1, 1.0), (2, 1.0)].as_slice(),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            for &(row, coefficient) in entries {
+                matrix
+                    .mutable_column(ColIndex::from_usize(column))
+                    .add_entry(RowIndex::from_usize(row), coefficient);
+            }
+        }
+
+        let result = factorize(&matrix, &GlopParameters::default()).unwrap();
+
+        assert!(
+            result
+                .lower_columns
+                .iter()
+                .flatten()
+                .all(|entry| entry.1 != 0.0)
+        );
     }
 }

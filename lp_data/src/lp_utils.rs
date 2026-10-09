@@ -114,16 +114,28 @@ pub fn partial_scalar_product(dense: &[f64], sparse: &SparseColumn, end: usize) 
 pub fn squared_norm(data: &[f64]) -> f64 {
     let mut sums = [0.0; 4];
     let chunks = data.len() / 4;
-    for chunk in 0..chunks {
+    // Match the pinned optimized GLOP build: LLVM vectorizes complete batches
+    // of four four-value chunks with separately rounded multiplies/adds, then
+    // contracts the scalar remainder into the four accumulators. The clearing
+    // kernel below uses batches of eight chunks.
+    let vectorized_chunks = (chunks / 4) * 4;
+    for chunk in 0..vectorized_chunks {
         let i = 4 * chunk;
         sums[0] += data[i] * data[i];
         sums[1] += data[i + 1] * data[i + 1];
         sums[2] += data[i + 2] * data[i + 2];
         sums[3] += data[i + 3] * data[i + 3];
     }
+    for chunk in vectorized_chunks..chunks {
+        let i = 4 * chunk;
+        sums[0] = data[i].mul_add(data[i], sums[0]);
+        sums[1] = data[i + 1].mul_add(data[i + 1], sums[1]);
+        sums[2] = data[i + 2].mul_add(data[i + 2], sums[2]);
+        sums[3] = data[i + 3].mul_add(data[i + 3], sums[3]);
+    }
     let mut sum = sums[0] + sums[1] + sums[2] + sums[3];
     for &value in &data[4 * chunks..] {
-        sum += value * value;
+        sum = value.mul_add(value, sum);
     }
     sum
 }
@@ -132,7 +144,8 @@ pub fn squared_norm(data: &[f64]) -> f64 {
 pub fn squared_norm_and_reset_to_zero(data: &mut [f64]) -> f64 {
     let mut sums = [0.0; 4];
     let chunks = data.len() / 4;
-    for chunk in 0..chunks {
+    let vectorized_chunks = (chunks / 8) * 8;
+    for chunk in 0..vectorized_chunks {
         let i = 4 * chunk;
         sums[0] += data[i] * data[i];
         sums[1] += data[i + 1] * data[i + 1];
@@ -140,9 +153,17 @@ pub fn squared_norm_and_reset_to_zero(data: &mut [f64]) -> f64 {
         sums[3] += data[i + 3] * data[i + 3];
         data[i..i + 4].fill(0.0);
     }
+    for chunk in vectorized_chunks..chunks {
+        let i = 4 * chunk;
+        sums[0] = data[i].mul_add(data[i], sums[0]);
+        sums[1] = data[i + 1].mul_add(data[i + 1], sums[1]);
+        sums[2] = data[i + 2].mul_add(data[i + 2], sums[2]);
+        sums[3] = data[i + 3].mul_add(data[i + 3], sums[3]);
+        data[i..i + 4].fill(0.0);
+    }
     let mut sum = sums[0] + sums[1] + sums[2] + sums[3];
     for value in &mut data[4 * chunks..] {
-        sum += *value * *value;
+        sum = value.mul_add(*value, sum);
         *value = 0.0;
     }
     sum
@@ -156,7 +177,7 @@ pub fn sparse_squared_norm(sparse: &SparseColumn) -> f64 {
 }
 
 #[must_use]
-pub fn scattered_squared_norm(scattered: &ScatteredColumn) -> f64 {
+pub fn scattered_squared_norm<I: VectorIndex + Ord>(scattered: &ScatteredVector<I>) -> f64 {
     if scattered.should_use_dense_iteration(0.8) {
         squared_norm(scattered.values().as_slice())
     } else {
@@ -178,7 +199,7 @@ pub fn precise_sparse_squared_norm(sparse: &SparseColumn) -> f64 {
 }
 
 #[must_use]
-pub fn precise_scattered_squared_norm(scattered: &ScatteredColumn) -> f64 {
+pub fn precise_scattered_squared_norm<I: VectorIndex + Ord>(scattered: &ScatteredVector<I>) -> f64 {
     if scattered.should_use_dense_iteration(0.8) {
         precise_squared_norm(scattered.values().as_slice())
     } else {

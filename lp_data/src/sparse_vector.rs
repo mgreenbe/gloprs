@@ -466,7 +466,7 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
             return;
         }
         for entry in self {
-            dense[entry.index] += multiplier * entry.coefficient;
+            dense[entry.index] = multiplier.mul_add(entry.coefficient, dense[entry.index]);
         }
     }
 

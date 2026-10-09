@@ -6,6 +6,7 @@
 use std::cell::{Cell, RefCell};
 
 use lp_data::lp_types::{ColIndex, RowIndex, VectorIndex, deterministic_time_for_fp_operations};
+use lp_data::lp_utils::clear_and_resize_vector_with_non_zeros;
 use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow};
 use lp_data::sparse::{CompactSparseMatrix, SparseMatrix};
 use lp_data::sparse_vector::SparseColumn;
@@ -62,11 +63,11 @@ impl EtaMatrix {
         let mut value = values[self.column];
         if let Some(entries) = &self.sparse_coefficients {
             for &(row, coefficient) in entries {
-                value -= values[row] * coefficient;
+                value = (-values[row]).mul_add(coefficient, value);
             }
         } else {
             for (row, &coefficient) in self.coefficients.iter().enumerate() {
-                value -= values[row] * coefficient;
+                value = (-values[row]).mul_add(coefficient, value);
             }
         }
         values[self.column] = value / self.pivot;
@@ -81,7 +82,7 @@ impl EtaMatrix {
             if column == self.column {
                 contains_column = true;
             } else {
-                value -= values[column] * self.coefficients[column];
+                value = (-values[column]).mul_add(self.coefficients[column], value);
             }
         }
         values[self.column] = value / self.pivot;
@@ -97,11 +98,11 @@ impl EtaMatrix {
         let multiplier = values[self.column] / self.pivot;
         if let Some(entries) = &self.sparse_coefficients {
             for &(row, coefficient) in entries {
-                values[row] -= coefficient * multiplier;
+                values[row] = (-coefficient).mul_add(multiplier, values[row]);
             }
         } else {
             for (row, &coefficient) in self.coefficients.iter().enumerate() {
-                values[row] -= coefficient * multiplier;
+                values[row] = (-coefficient).mul_add(multiplier, values[row]);
             }
         }
         values[self.column] = multiplier;
@@ -411,9 +412,12 @@ impl BasisRepresentation {
         if row >= self.dimension() || result.len().to_usize() != self.dimension() {
             return Err(FactorizationError::DimensionMismatch);
         }
+        clear_and_resize_vector_with_non_zeros(ColIndex::from_usize(self.dimension()), result);
         if !self.parameters.use_middle_product_form_update {
-            result.clear();
-            result.set(ColIndex::from_usize(row), 1.0);
+            let column = ColIndex::from_usize(row);
+            let (values, positions) = result.mutable_parts();
+            values[row] = 1.0;
+            positions.push(column);
             {
                 let (values, positions) = result.mutable_parts();
                 self.eta_updates.sparse_left_solve(values, positions);
@@ -432,19 +436,23 @@ impl BasisRepresentation {
             }
             mapping[row]
         };
-        result.clear();
         if let Some(column) = stored_column {
-            for (stored_row, value) in self.left_storage.borrow().column(column).iter() {
-                result.set(ColIndex::from_usize(stored_row.to_usize()), value);
+            let storage = self.left_storage.borrow();
+            let (values, positions) = result.mutable_parts();
+            for (stored_row, value) in storage.column(column).iter() {
+                values[stored_row.to_usize()] = value;
+                positions.push(ColIndex::from_usize(stored_row.to_usize()));
             }
         } else {
-            result.set(ColIndex::from_usize(row), 1.0);
-            self.factorization.left_solve_upper_with_nonzeros(result)?;
+            let start = self
+                .factorization
+                .left_solve_upper_for_unit_row(row, result)?;
             result.sort_non_zeros_if_needed();
             let mut storage = self.left_storage.borrow_mut();
             let column = storage.num_cols();
             if result.non_zeros().is_empty() {
-                for (position, &value) in result.values().as_slice().iter().enumerate() {
+                for (position, &value) in result.values().as_slice().iter().enumerate().skip(start)
+                {
                     if value != 0.0 {
                         storage.add_entry_to_current_column(
                             lp_data::lp_types::RowIndex::from_usize(position),
@@ -601,19 +609,8 @@ impl BasisRepresentation {
             self.bump_deterministic_time_for_solve(result.num_non_zeros_estimate());
             return Ok(());
         }
-        result.clear();
-        // `clear()` only resets positions recorded by the preceding solve.
-        // The membership bitset is a temporary cache and can retain unrelated
-        // stale bits, so clear it while the empty position list selects the
-        // dense bucket reset before scattering the next problem column.
-        result.clear_sparse_mask();
-        for entry in column {
-            if entry.index().to_usize() >= self.dimension() {
-                return Err(FactorizationError::DimensionMismatch);
-            }
-            result.set(entry.index(), entry.coefficient());
-        }
-        self.factorization.right_solve_lower_with_nonzeros(result)?;
+        self.factorization
+            .right_solve_lower_for_column(column, result)?;
         self.updates.right_solve_with_nonzeros(result);
 
         let mut storage = self.right_storage.borrow_mut();
@@ -1298,6 +1295,37 @@ mod tests {
         basis.refactorize().unwrap();
         assert_eq!(basis.left_storage.borrow().num_cols(), ColIndex::new(0));
         assert!(basis.left_pool_mapping.borrow().is_empty());
+    }
+
+    #[test]
+    fn unit_row_solve_uses_upstream_density_aware_workspace_clear() {
+        let size = 40;
+        let mut columns = Vec::with_capacity(size);
+        for column in 0..size {
+            let mut entries = vec![0.0; size];
+            entries[column] = 1.0;
+            columns.push(entries);
+        }
+        let column_refs = columns.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        let basis = BasisRepresentation::new(matrix(&column_refs), 0.1, 10).unwrap();
+        let mut result = ScatteredRow::new(ColIndex::from_usize(size));
+
+        // Two recorded positions reach GLOP's 5% dense-clear boundary. The
+        // unrecorded value models dense workspace state outside that sparse
+        // support and must therefore be cleared as well.
+        result.set(ColIndex::new(0), 2.0);
+        result.set(ColIndex::new(1), 3.0);
+        result.values_mut()[ColIndex::new(10)] = 4.0;
+
+        basis.left_solve_for_unit_row(5, &mut result).unwrap();
+
+        for (column, &value) in result.values().as_slice().iter().enumerate() {
+            assert_eq!(
+                value.to_bits(),
+                if column == 5 { 1.0_f64 } else { 0.0_f64 }.to_bits()
+            );
+        }
+        assert_eq!(result.non_zeros(), &[ColIndex::new(5)]);
     }
 
     #[test]

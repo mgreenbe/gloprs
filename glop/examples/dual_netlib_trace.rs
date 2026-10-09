@@ -6,6 +6,7 @@ use glop::time_limit::TimeLimit;
 use lp_data::lp_types::{ColIndex, RowIndex, VectorIndex};
 use lp_data::mps_reader::parse_mps_file;
 
+#[allow(clippy::too_many_lines)]
 fn main() {
     let mut arguments = env::args_os().skip(1);
     let path = arguments.next().expect("missing MPS path");
@@ -72,6 +73,13 @@ fn main() {
     {
         print!(" {value:.17}");
     }
+    print!("\nnorm_bits");
+    for &value in simplex
+        .dual_edge_squared_norms()
+        .expect("failed to obtain dual norms")
+    {
+        print!(" {}", value.to_bits());
+    }
     println!();
     print!("basis");
     for row in 0..model.num_constraints().to_usize() {
@@ -85,11 +93,27 @@ fn main() {
             simplex.variable_value(ColIndex::from_usize(column))
         );
     }
+    print!("\nvalue_bits");
+    for column in 0..total_columns {
+        print!(
+            " {}",
+            simplex
+                .variable_value(ColIndex::from_usize(column))
+                .to_bits()
+        );
+    }
     print!("\nreduced");
     for column in 0..total_columns {
         print!(
             " {:.17}",
             simplex.reduced_cost(ColIndex::from_usize(column))
+        );
+    }
+    print!("\nreduced_bits");
+    for column in 0..total_columns {
+        print!(
+            " {}",
+            simplex.reduced_cost(ColIndex::from_usize(column)).to_bits()
         );
     }
     println!();

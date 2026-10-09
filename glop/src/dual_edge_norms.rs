@@ -5,7 +5,7 @@
 //! current basis an explicit method argument instead of a stored reference.
 
 use lp_data::lp_types::{ColIndex, VectorIndex};
-use lp_data::lp_utils::squared_norm;
+use lp_data::lp_utils::scattered_squared_norm;
 use lp_data::permutation::ColumnPermutation;
 use lp_data::scattered_vector::ScatteredRow;
 
@@ -111,7 +111,10 @@ impl DualEdgeNorms {
         if self.recompute_edge_squared_norms {
             return true;
         }
-        let leaving_squared_norm = squared_norm(unit_row_left_inverse.values().as_slice());
+        // `TransposedView(unit_row_left_inverse)` remains a scattered vector
+        // upstream: its squared norm follows the same sparse/dense iteration
+        // choice rather than unconditionally traversing the dense storage.
+        let leaving_squared_norm = scattered_squared_norm(unit_row_left_inverse);
         let old_squared_norm = self.edge_squared_norms[leaving_row];
         let precise_norm = leaving_squared_norm.sqrt();
         let estimated_accuracy = (precise_norm - old_squared_norm.sqrt()) / precise_norm;

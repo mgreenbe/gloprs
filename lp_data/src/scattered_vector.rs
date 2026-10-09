@@ -140,8 +140,24 @@ impl<I: VectorIndex + Ord> ScatteredVector<I> {
     }
 
     pub fn mutable_parts(&mut self) -> (&mut [Fractional], &mut Vec<I>) {
-        self.non_zeros_are_sorted = false;
+        // These fields are public in GLOP's `ScatteredVector`; taking mutable
+        // references does not itself invalidate its temporary sortedness flag.
+        // The low-level solve routines preserve that behavior deliberately.
         (self.values.as_mut_slice(), &mut self.non_zeros)
+    }
+
+    /// Records that the position list is sorted.
+    ///
+    /// GLOP exposes this temporary cache flag to its sparse kernels.  Keep its
+    /// updates explicit so that subsequent reductions use the same traversal
+    /// order as upstream.
+    pub fn mark_non_zeros_sorted(&mut self) {
+        self.non_zeros_are_sorted = true;
+    }
+
+    /// Records that the position list may no longer be sorted.
+    pub fn mark_non_zeros_unsorted(&mut self) {
+        self.non_zeros_are_sorted = false;
     }
 
     #[must_use]

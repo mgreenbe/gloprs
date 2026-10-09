@@ -246,8 +246,76 @@ impl RevisedSimplex {
                 self.run_primal_phase(SimplexPhase::Optimization, time_limit)?;
             }
         }
+        self.reoptimize_after_cleanup(time_limit)?;
         self.finish_solution()?;
         self.starting_values.clear();
+        Ok(())
+    }
+
+    /// Removes temporary shifts and reoptimizes if the precise, refactorized
+    /// solution no longer satisfies the requested primal or dual tolerance.
+    ///
+    /// This is the cleanup/reoptimization loop in GLOP's `Minimize()`.  It is
+    /// deliberately outside the individual primal and dual drivers: removing
+    /// a stabilization shift can make the opposite simplex algorithm the
+    /// appropriate one for the next pass.
+    fn reoptimize_after_cleanup(
+        &mut self,
+        time_limit: &mut TimeLimit,
+    ) -> Result<(), FactorizationError> {
+        if self.objective_limit_reached {
+            return Ok(());
+        }
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let maximum_reoptimizations = self.parameters.max_number_of_reoptimizations as usize;
+        for reoptimization in 0..=maximum_reoptimizations {
+            if !matches!(
+                self.problem_status,
+                ProblemStatus::Optimal
+                    | ProblemStatus::PrimalFeasible
+                    | ProblemStatus::DualFeasible
+            ) {
+                break;
+            }
+
+            self.remove_cost_shifts();
+            self.basis_factorization.as_mut().unwrap().refactorize()?;
+            self.incorporate_basis_permutation();
+            self.update_row.as_mut().unwrap().invalidate();
+            self.initialize_values()?;
+            let objective = self.objective.clone();
+            self.compute_reduced_costs(&objective)?;
+
+            if self.problem_status == ProblemStatus::Optimal {
+                let primal_infeasibility = self.maximum_primal_infeasibility();
+                let dual_infeasibility = self.maximum_dual_infeasibility();
+                if primal_infeasibility > self.parameters.primal_feasibility_tolerance {
+                    if reoptimization == maximum_reoptimizations {
+                        break;
+                    }
+                    self.problem_status = ProblemStatus::DualFeasible;
+                } else if dual_infeasibility > self.parameters.dual_feasibility_tolerance {
+                    if reoptimization == maximum_reoptimizations {
+                        break;
+                    }
+                    self.problem_status = ProblemStatus::PrimalFeasible;
+                } else {
+                    break;
+                }
+            }
+
+            if time_limit.limit_reached()
+                || self.num_iterations
+                    >= u64::try_from(self.parameters.max_number_of_iterations).unwrap_or(u64::MAX)
+            {
+                break;
+            }
+            if self.problem_status == ProblemStatus::PrimalFeasible {
+                self.run_primal_phase(SimplexPhase::Optimization, time_limit)?;
+            } else if self.problem_status == ProblemStatus::DualFeasible {
+                self.run_dual_phase_two(time_limit)?;
+            }
+        }
         Ok(())
     }
 
@@ -389,9 +457,19 @@ impl RevisedSimplex {
         }
         if update_basic_values && !changed.is_empty() {
             let mut rhs = ScatteredColumn::new(self.num_rows);
+            let mut use_dense = false;
             for (column, delta) in changed {
-                self.compact_matrix
-                    .column_add_multiple_to_scattered_column(column, delta, &mut rhs);
+                if use_dense {
+                    self.compact_matrix.column_add_multiple_to_dense_column(
+                        column,
+                        delta,
+                        rhs.values_mut(),
+                    );
+                } else {
+                    self.compact_matrix
+                        .column_add_multiple_to_scattered_column(column, delta, &mut rhs);
+                    use_dense = rhs.should_use_dense_iteration(0.8);
+                }
             }
             rhs.clear_sparse_mask();
             rhs.clear_non_zeros_if_too_dense(0.8);
@@ -897,7 +975,8 @@ impl RevisedSimplex {
             };
             variable_values[index] = value;
             for entry in self.matrix.column(index) {
-                rhs[entry.index().to_usize()] -= entry.coefficient() * value;
+                let row = entry.index().to_usize();
+                rhs[row] = (-entry.coefficient()).mul_add(value, rhs[row]);
             }
         }
         let basic = basis_factorization.solve(&rhs)?;
@@ -1031,7 +1110,10 @@ impl RevisedSimplex {
             for row in 0..self.num_rows.to_usize() {
                 let coefficient = direction.value(RowIndex::from_usize(row));
                 for entry in self.matrix.column(self.basis[RowIndex::from_usize(row)]) {
-                    residual[entry.index().to_usize()] += entry.coefficient() * coefficient;
+                    let residual_row = entry.index().to_usize();
+                    residual[residual_row] = entry
+                        .coefficient()
+                        .mul_add(coefficient, residual[residual_row]);
                 }
             }
             for entry in self.matrix.column(entering) {
@@ -1317,7 +1399,9 @@ impl RevisedSimplex {
                 step = (self.variable_values[leaving] - target_bound) / direction.value(row);
             }
             for entry in &direction {
-                self.variable_values[self.basis[entry.row()]] -= entry.coefficient() * step;
+                let column = self.basis[entry.row()];
+                self.variable_values[column] =
+                    (-entry.coefficient()).mul_add(step, self.variable_values[column]);
             }
             self.variable_values[entering] += step;
 
@@ -1734,13 +1818,11 @@ impl RevisedSimplex {
     fn run_dual_phase_two(&mut self, time_limit: &mut TimeLimit) -> Result<(), FactorizationError> {
         let mut reduced_costs_precise =
             self.basis_factorization.as_ref().unwrap().is_refactorized();
+        let mut recompute_reduced_costs_after_refactorization = false;
         self.recompute_dual_prices()?;
         let mut pending_price_rows = Vec::new();
         loop {
-            if time_limit.limit_reached()
-                || self.num_iterations
-                    >= u64::try_from(self.parameters.max_number_of_iterations).unwrap_or(u64::MAX)
-            {
+            if time_limit.limit_reached() {
                 self.problem_status = ProblemStatus::DualFeasible;
                 return Ok(());
             }
@@ -1754,14 +1836,22 @@ impl RevisedSimplex {
                 self.incorporate_basis_permutation();
                 self.update_row.as_mut().unwrap().invalidate();
                 reduced_costs_precise = false;
+                recompute_reduced_costs_after_refactorization = true;
             }
             if self.basis_factorization.as_ref().unwrap().is_refactorized()
                 && !reduced_costs_precise
             {
-                let objective = self.objective.clone();
-                self.compute_reduced_costs(&objective)?;
+                // GLOP deliberately preserves incrementally updated reduced
+                // costs across a routine update-count refactorization. It
+                // only makes them precise when refactorization was explicitly
+                // requested by the iteration loop (old_refactorize_value).
+                if recompute_reduced_costs_after_refactorization {
+                    let objective = self.objective.clone();
+                    self.compute_reduced_costs(&objective)?;
+                    reduced_costs_precise = true;
+                    recompute_reduced_costs_after_refactorization = false;
+                }
                 self.initialize_values()?;
-                reduced_costs_precise = true;
                 self.recompute_dual_prices()?;
                 pending_price_rows.clear();
                 if self.dual_objective_limit != f64::INFINITY
@@ -1780,7 +1870,6 @@ impl RevisedSimplex {
                 self.update_dual_prices(&pending_price_rows)?;
                 pending_price_rows.clear();
             }
-
             let Some(leaving_position) = self.dual_prices.get_maximum() else {
                 if !self.basis_factorization.as_ref().unwrap().is_refactorized()
                     || !reduced_costs_precise
@@ -1794,6 +1883,7 @@ impl RevisedSimplex {
                     self.incorporate_basis_permutation();
                     self.update_row.as_mut().unwrap().invalidate();
                     reduced_costs_precise = false;
+                    recompute_reduced_costs_after_refactorization = true;
                     continue;
                 }
                 self.problem_status = ProblemStatus::Optimal;
@@ -1855,6 +1945,7 @@ impl RevisedSimplex {
                         .force_refactorization()?;
                     self.incorporate_basis_permutation();
                     self.update_row.as_mut().unwrap().invalidate();
+                    recompute_reduced_costs_after_refactorization = true;
                     continue;
                 }
                 self.problem_status = ProblemStatus::DualUnbounded;
@@ -1873,6 +1964,28 @@ impl RevisedSimplex {
                 return Ok(());
             };
 
+            // GLOP first rejects a small update-row coefficient before doing
+            // FTRAN. This is distinct from the direction-relative pivot test
+            // below and requests a precise, refactorized retry when the
+            // incremental reduced costs are not yet precise.
+            let entering_coefficient = self
+                .update_row
+                .as_ref()
+                .unwrap()
+                .coefficient(entering.to_usize());
+            if entering_coefficient.abs() < self.parameters.dual_small_pivot_threshold
+                && !reduced_costs_precise
+            {
+                self.basis_factorization
+                    .as_mut()
+                    .unwrap()
+                    .force_refactorization()?;
+                self.incorporate_basis_permutation();
+                self.update_row.as_mut().unwrap().invalidate();
+                recompute_reduced_costs_after_refactorization = true;
+                continue;
+            }
+
             let direction = self.direction(entering)?;
             let pivot = direction.value(leaving_row);
             let direction_norm = direction
@@ -1889,6 +2002,7 @@ impl RevisedSimplex {
                     .force_refactorization()?;
                 self.incorporate_basis_permutation();
                 self.update_row.as_mut().unwrap().invalidate();
+                recompute_reduced_costs_after_refactorization = true;
                 continue;
             }
             if pivot.abs() <= 1e-20 {
@@ -1896,16 +2010,18 @@ impl RevisedSimplex {
                     step: leaving_position,
                 });
             }
-
-            let entering_coefficient = self
-                .update_row
-                .as_ref()
-                .unwrap()
-                .coefficient(entering.to_usize());
+            // Match DualMinimize(): test the iteration limit only after
+            // pricing and pivot validation, so a basis that is already
+            // optimal at the limit is still reported as optimal.
+            if self.num_iterations
+                == u64::try_from(self.parameters.max_number_of_iterations).unwrap_or(u64::MAX)
+            {
+                self.problem_status = ProblemStatus::DualFeasible;
+                return Ok(());
+            }
             let increasing_reduced_cost_needed =
                 (cost_variation > 0.0) == (entering_coefficient > 0.0);
             self.shift_cost_if_needed(increasing_reduced_cost_needed, entering);
-
             update_reduced_cost_values_before_basis_pivot(
                 self.reduced_costs.as_mut_slice(),
                 entering,
@@ -1924,7 +2040,9 @@ impl RevisedSimplex {
             )?;
             let step = (self.variable_values[leaving_column] - target_bound) / pivot;
             for entry in &direction {
-                self.variable_values[self.basis[entry.row()]] -= entry.coefficient() * step;
+                let column = self.basis[entry.row()];
+                self.variable_values[column] =
+                    (-entry.coefficient()).mul_add(step, self.variable_values[column]);
             }
             self.variable_values[entering] += step;
 
@@ -1953,6 +2071,7 @@ impl RevisedSimplex {
                         leaving_position,
                         self.matrix.column(entering).clone(),
                     )?;
+                recompute_reduced_costs_after_refactorization = true;
             } else {
                 self.basis_factorization
                     .as_mut()
@@ -2154,13 +2273,30 @@ impl RevisedSimplex {
         })
     }
 
+    fn maximum_dual_infeasibility(&self) -> f64 {
+        let info = self.variables_info.as_ref().unwrap();
+        (0..self.num_cols.to_usize()).fold(0.0_f64, |maximum, column| {
+            let column = ColIndex::from_usize(column);
+            let reduced_cost = self.reduced_costs[column];
+            let mut infeasibility = 0.0_f64;
+            if info.can_increase().contains(column) {
+                infeasibility = infeasibility.max(-reduced_cost);
+            }
+            if info.can_decrease().contains(column) {
+                infeasibility = infeasibility.max(reduced_cost);
+            }
+            maximum.max(infeasibility)
+        })
+    }
+
     fn correct_errors_on_variable_values(&mut self) -> Result<(), FactorizationError> {
         let mut residual = vec![0.0; self.num_rows.to_usize()];
         for column in 0..self.num_cols.to_usize() {
             let column = ColIndex::from_usize(column);
             let value = self.variable_values[column];
             for entry in self.matrix.column(column) {
-                residual[entry.index().to_usize()] += entry.coefficient() * value;
+                let row = entry.index().to_usize();
+                residual[row] = entry.coefficient().mul_add(value, residual[row]);
             }
         }
         let maximum = residual
@@ -2177,7 +2313,8 @@ impl RevisedSimplex {
         for column in info.not_basic().iter_ones() {
             let value = self.variable_values[column];
             for entry in self.matrix.column(column) {
-                rhs[entry.index().to_usize()] -= entry.coefficient() * value;
+                let row = entry.index().to_usize();
+                rhs[row] = (-entry.coefficient()).mul_add(value, rhs[row]);
             }
         }
         let basic = self.basis_factorization.as_ref().unwrap().solve(&rhs)?;

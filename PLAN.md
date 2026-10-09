@@ -514,10 +514,14 @@ found that the 132-pivot `perold` prefix used a numerically equivalent but
 algorithmically different left solve. GLOP computes the symbolic closure from
 the explicitly transposed factor, then performs numerical transpose
 substitution on the original factor. The Rust port now preserves that split.
-The faithful path currently agrees for the first 45 `perold` pivots, after
-which remaining factor-storage or arithmetic differences change an exact
-pricing tie. The trajectory
-audit also found two Phase-II orchestration mismatches. GLOP applies pending
+The faithful path now agrees for the first 47 `perold` pivots. The former
+pivot-46 tie was caused by constructing cached unit-row partial solves through
+the generic symbolic hypersparse path. GLOP instead uses
+`LeftSolveUForUnitRow()`, whose unit-RHS starting-column solve retains tiny
+numerically nonzero residual entries outside that symbolic closure. Porting
+that specialized path makes the affected middle-product update and Phase-I
+price bit-identical; a later exact pricing tie first changes pivot 48. The
+trajectory audit also found two Phase-II orchestration mismatches. GLOP applies pending
 boxed-variable flips before updating dual prices for the preceding direction
 at the start of the next iteration; Rust now preserves that order instead of
 updating at the end of the preceding iteration. More importantly, a dense
@@ -527,7 +531,12 @@ latter difference retained stale top-31 heap entries and gave exact ties the
 wrong multiplicity. The incremental reduced-cost update now uses an explicit
 fused multiply-add, matching the contraction emitted for GLOP's
 `rc[col] += new_leaving_reduced_cost * update_coeffs[col]` in the optimized
-native build. Full reduced-cost recomputation now likewise uses GLOP's
+native build. An audit of the other direct multiply-accumulate kernels now
+also preserves native contraction in pivot value updates, eta solves, dense
+row-wise update-row products, sparse-to-dense updates, and matrix residual/RHS
+construction. It deliberately leaves separately materialized products and
+multi-accumulator reductions unchanged. Full reduced-cost recomputation now
+likewise uses GLOP's
 four-accumulator compact-column scalar product for structural columns and its
 direct dual-value subtraction for trailing slacks; the scalar-product
 accumulators use the fused operations emitted by the optimized native build.
@@ -537,13 +546,108 @@ dense-sentinel solve (`LeftSolveUWithNonZeros`, middle-product updates, then
 solve. This restores `blend`'s exact trajectory and preserves the sparse solve
 architecture used upstream.
 This moves `scorpion`'s first divergence from pivot 21 to pivot 163, `israel`'s
-from pivot 21 to pivot 107, makes `capri` and `vtp.base` agree completely, and moves `lotfi`'s
-first divergence from pivot 18 to pivot 59. A smallest-25 audit now finds
-complete pivot-sequence
-agreement for `afiro`, `sc50a`, `sc50b`, `kb2`, `sc105`, `adlittle`,
-`stocfor1`, `blend`, `scagr7`, `share2b`, `recipe`, `share1b`, `capri`, and
-`vtp.base`. Of the remaining 11, `boeing2` agrees through 62 pivots rather than
-26.
+from pivot 21 to pivot 148, makes `capri`, `vtp.base`, and `boeing2` agree
+completely, and moves `lotfi`'s first divergence from pivot 18 to pivot 175. A
+newer smallest-25 audit after the subsequent solve-path fixes finds complete
+pivot-sequence agreement for 22 models:
+`afiro`, `sc50a`, `sc50b`, `kb2`, `sc105`, `adlittle`, `stocfor1`, `blend`,
+`scagr7`, `sc205`, `share2b`, `recipe`, `lotfi`, `vtp.base`, `share1b`, `capri`,
+`scagr25`, `boeing2`, `scorpion`, `sctap1`, `scfxm1`, and `bandm`. In `bore3d`,
+the former pivot-39 row-coordinate split was caused by omitting GLOP's
+pre-FTRAN `dual_small_pivot_threshold` retry. Porting that branch, separately
+from the later direction-relative pivot check, extends exact agreement through
+pivot 65; pivot 66 now chooses native column 250 versus Rust column 249 while
+leaving the same row and basic column. The other first divergent pivot is 149
+for `israel`. The former
+`brandy` pivot-120 split was caused by retaining an exact numerical
+cancellation as a structural zero in an L column during the routine LU rebuild
+after pivot 64. GLOP's `AddAndNormalizeTriangularColumn()` removes such entries;
+doing the same restores the native 167-iteration count and exact final basis.
+
+The next path audit found the right-solve counterpart of the earlier
+left-solve representation mismatch. GLOP's `RightSolveUWithNonZeros()` uses
+`U` to compute the structural closure, then performs numerical substitution as
+a transpose solve on the explicitly stored `U^T`; Rust had performed both
+parts directly on `U`. Preserving GLOP's split removes the first post-update
+solve discrepancy in `scfxm1`, extends `lotfi` by another five common pivots,
+and extends `sctap1` by fifty common pivots. The remaining `scfxm1` difference
+is localized to the FTRAN at pivot 4. Its post-lower and post-middle-product
+vectors agree exactly; the first mismatch was one ulp in the optimized
+four-product block of the transpose-lower `U^T` solve. Disassembly of the
+pinned ARM64 GLOP build shows one rounded multiply for entry `i - 1`, followed
+by fused multiply-adds for entries `i`, `i - 2`, and `i - 3`, before subtracting
+the block sum. Reproducing that exact contraction sequence makes all 367
+`scfxm1`, 236 `sctap1`, and 369 `bandm` pivots identical while restoring
+`israel`'s prior 147-pivot prefix.
+The direct Rust translation of
+`RightSolveLForColumnView()` is now enabled. Its initial `scagr25` failure was
+caused by scattering through `ScatteredVector::set()`: a structurally reached
+entry that solved to zero retained a Rust-only membership bit, so a later
+rank-one update changed it to `1.2000000000000002` without adding it back to
+the authoritative position list. Scattering directly into values and positions
+and leaving the auxiliary mask cleared matches GLOP's temporary-cache protocol.
+`scagr25` follows all 482 native pivots and the smallest-25 solve gate
+passes status, objective, and primal and dual feasibility.
+The next `israel` audit confirms that pivot 148 is an ordinary Harris-ratio
+choice between columns 229 and 230: both update-row coefficients agree, but
+accumulated reduced-cost rounding reverses their order. Tracing the preceding
+exact recomputation localizes the first one-ulp difference to the dense
+`U^{-T}` solve. ARM64 disassembly shows that its forward four-product block
+starts with a rounded product for `i + 1`, followed by FMAs for `i`, `i + 2`,
+and `i + 3`; Rust now preserves that contraction order too. The remaining
+difference was storage-order, not algebra. A direct pre-conversion trace proves
+that Rust's Markowitz `U` construction order already agrees with upstream
+entry-for-entry and bit-for-bit, so the provisional sort has been removed and
+triangular solves now observe GLOP's physical column order. This exposed an
+earlier pivot-143 tie. Tracing BTRAN through `U^{-T}`, the rank-one middle
+product, and `L^{-T}` localized the first drift to the middle-product solve:
+GLOP's `GetColumnOfU()` does not expose physical storage directly, but copies
+the requested column to a `SparseColumn` and calls `CleanUp()`, sorting that
+temporary before constructing the rank-one update. Rust now likewise sorts
+only the accessor copy while leaving the triangular factor untouched. The
+affected rank-one vectors and multipliers become bit-identical, and `israel`
+again selects native column 101 at pivot 143. A fresh audit then invalidated
+the older attribution of pivot 148 to that exact solve: its input and output
+are now bit-identical. The first incremental drift is at Phase-II iteration 97,
+where upstream's column-wise update row uses its four-accumulator
+`ColumnScalarProduct()` but Rust used a linear sum. Matching that reduction and
+GLOP's policy of retaining incremental reduced costs across normal
+update-count refactorizations makes pivot 148 exact. Pivot 149 is the next
+target (native column 230, Rust column 236). A complete elementary-update
+trace corrected its initial attribution to the rank-one portion of BTRAN: the
+seven stored `u`/`v`/`mu` triples, input vector, scalar multipliers, every
+intermediate vector, and the final rank-one output agree bit-for-bit. The
+following `L^{-T}` result and every relevant update-row coefficient agree too,
+as does the complete reduced-cost vector after pivot 148. A cache trace then
+showed that pivot 149 computes the common leaving row 157 as a cache miss in
+both implementations and produces the same `U^{-T}` vector; the complete
+BTRAN and ratio-test inputs are exact. Columns 230 and 236 are an exact
+entering tie. Native selects 230 and Rust selects 236 because Rust has consumed
+two extra shared-RNG draws in `DynamicMaximum::UpdateTopK()`: earlier price
+updates for rows 128, 105, and 90 meet Rust's heap threshold, while the native
+heap sees only its row-162 threshold tie in the corresponding interval. The
+remaining localization target is therefore the earlier dual-price/top-31 heap
+state divergence, not BTRAN arithmetic. The native differential suite still
+confirms the important path distinction that optimized GLOP contracts dense
+rank-one updates while its sparse scattered path passes a separately rounded
+product to `Add()`; Rust deliberately retains that behavior.
+An operation-for-operation pricing trace now localizes the first price-value
+difference to the first Phase-II dual-price recomputation. Its bounds and dual
+edge norm are exact, but basic column 169 differs by one ulp. The complete
+right-hand side passed to the post-Phase-I basic-value solve is bit-identical;
+the one-ulp difference is introduced by the refactorized-basis right solve
+itself. A stage trace proves that the lower solve and middle product are exact;
+the dense upper solve was the mismatch. Upstream solves through its explicitly
+stored transpose of `U`, while Rust directly traversed column-stored `U`.
+Routing the dense path through `transpose_upper` makes all three stages exact,
+restores native column 230 at pivot 149, and reconciles every remaining
+`israel` basis through native termination at iteration 287. Rust also now
+places the iteration-limit test after pricing and pivot validation, as
+`DualMinimize()` does, so a model proved optimal exactly at the limit reports
+`OPTIMAL` rather than `DUAL_FEASIBLE`. The boxed-variable update path now also
+matches upstream's sparse-to-dense accumulation switch at 80% density; that
+was a real algorithmic/performance discrepancy, although it does not change
+this `israel` solve because the switch is not reached there.
 With scaling and preprocessing disabled, the current trace finishes `perold`
 in 785 Rust iterations versus 1049 in native GLOP.
 

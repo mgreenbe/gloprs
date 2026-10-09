@@ -8,7 +8,8 @@ pub fn residual(matrix: &SparseMatrix, solution: &[f64], rhs: &[f64]) -> Vec<f64
     let mut result: Vec<f64> = rhs.iter().map(|value| -*value).collect();
     for (column, &value) in solution.iter().enumerate() {
         for entry in matrix.column(ColIndex::from_usize(column)) {
-            result[entry.index().to_usize()] += entry.coefficient() * value;
+            let row = entry.index().to_usize();
+            result[row] = entry.coefficient().mul_add(value, result[row]);
         }
     }
     result

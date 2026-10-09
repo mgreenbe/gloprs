@@ -166,7 +166,8 @@ impl<'a> VariableValues<'a> {
         debug_assert!(step.is_finite());
         for entry in direction {
             let column = self.basis[entry.row()];
-            self.variable_values[column] -= entry.coefficient() * step;
+            self.variable_values[column] =
+                (-entry.coefficient()).mul_add(step, self.variable_values[column]);
         }
         self.variable_values[entering_column] += step;
     }
@@ -185,14 +186,22 @@ impl<'a> VariableValues<'a> {
             return Ok(());
         }
         let mut rhs = ScatteredColumn::new(self.matrix.num_rows());
+        let mut use_dense = false;
         for &column in columns_to_update {
             let old_value = self.variable_values[column];
             self.set_non_basic_variable_value_from_status(column);
-            self.matrix.column_add_multiple_to_scattered_column(
-                column,
-                self.variable_values[column] - old_value,
-                &mut rhs,
-            );
+            let multiplier = self.variable_values[column] - old_value;
+            if use_dense {
+                self.matrix.column_add_multiple_to_dense_column(
+                    column,
+                    multiplier,
+                    rhs.values_mut(),
+                );
+            } else {
+                self.matrix
+                    .column_add_multiple_to_scattered_column(column, multiplier, &mut rhs);
+                use_dense = rhs.should_use_dense_iteration(0.8);
+            }
         }
         rhs.clear_sparse_mask();
         rhs.clear_non_zeros_if_too_dense(0.8);
