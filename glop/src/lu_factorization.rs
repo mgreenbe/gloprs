@@ -804,11 +804,14 @@ impl LuFactorization {
         }
         result_before_permutation.clear();
         if rhs.non_zeros().is_empty() {
-            for (row, &value) in rhs.values().as_slice().iter().enumerate() {
-                if value != 0.0 {
-                    result_before_permutation.set(RowIndex::from_usize(row), value);
-                }
-            }
+            // An empty position list is GLOP's dense-vector sentinel. Preserve
+            // it in the cached, pre-permutation result: rebuilding the exact
+            // support here would make RightSolveForTau() select a different
+            // numerical kernel from upstream.
+            result_before_permutation
+                .values_mut()
+                .as_mut_slice()
+                .copy_from_slice(rhs.values().as_slice());
         } else {
             for entry in rhs.iter() {
                 result_before_permutation.set(

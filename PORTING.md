@@ -40,9 +40,27 @@ localized `vtp.base` unit-row/tau solve bit-identical. A subsequent audit found
 that Rust cleared dual norms after a pivot-triggered refactorization even after
 permuting them into the new basis order; GLOP retains those incrementally
 updated norms. Removing that clear makes all 141 `vtp.base` pivots agree and
-moves the common `scorpion` and `israel` prefixes to 162 and 106 pivots. The
-faithful `perold` prefix is currently 45. Exact dual-edge norm initialization
-separately retains GLOP's specialized transpose-factor solve.
+moves the common `scorpion` and `israel` prefixes to 162 and 106 pivots. Exact
+dual-edge norm initialization separately retains GLOP's specialized
+transpose-factor solve. The later `perold` audit found that the optimized tau
+cache rebuilt an exact sparse support from GLOP's dense-vector sentinel. That
+selected a sparse rank-one solve where upstream selected its dense kernel,
+eventually changing a pricing-heap Bernoulli draw and the pivot-139 tie. The
+cache now preserves populated values with an empty nonzero list exactly as
+upstream does. All 1,049 `perold` pivots, the final ordered basis, reduced-cost
+bits, and dual-norm bits now agree with native GLOP; remaining value-bit
+differences are signed zeros.
+A fresh 10-second-per-model native audit has 93 exact terminal path
+fingerprints—status, iteration count, and ordered basis—and two timeouts
+(`qap12` and `qap15`). The correction also reconciles `fit2p`; the remaining
+`maros-r7` discrepancy came from replacing the basis-factorization object after
+rejecting its triangular crash basis. Upstream reinitializes the same object
+with the all-slack basis and retains the rejected factorization's deterministic
+cost for its dynamic refactorization clock. Rust now preserves that lifecycle,
+avoiding its premature pivot-65 refactorization. All 4,954 `maros-r7` pivots,
+the final ordered basis, reduced costs, and dual norms are bit-identical; its
+four value-bit differences are signed zeros. The remaining terminal path
+mismatches are `pilot`, `pilot.we`, and `pilot87`.
 
 The October 2026 solve-path audit also reconciled
 `LuFactorization::RightSolveUWithNonZeros()`: upstream computes reachability

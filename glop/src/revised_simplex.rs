@@ -839,7 +839,7 @@ impl RevisedSimplex {
             > self.parameters.initial_condition_number_threshold
         {
             self.use_all_slack_basis();
-            basis_factorization = BasisRepresentation::new_for_basis(
+            basis_factorization.reinitialize_for_basis(
                 Rc::clone(&self.matrix),
                 &self.basis,
                 &self.parameters,
@@ -871,7 +871,7 @@ impl RevisedSimplex {
                 // numerical failure in that solve rejects TRIANGULAR's crash
                 // just like a factorization or condition-number failure.
                 self.use_all_slack_basis();
-                basis_factorization = BasisRepresentation::new_for_basis(
+                basis_factorization.reinitialize_for_basis(
                     Rc::clone(&self.matrix),
                     &self.basis,
                     &self.parameters,

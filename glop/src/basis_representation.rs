@@ -335,6 +335,34 @@ impl BasisRepresentation {
         Self::initialize(BasisMatrix::View { matrix, columns }, parameters)
     }
 
+    /// Reinitializes this factorization for a replacement basis.
+    ///
+    /// GLOP uses the same `BasisFactorization` object when an advanced crash
+    /// basis is rejected. Its `Clear()` deliberately retains the cumulative
+    /// deterministic clock and the last factorization cost, which the dynamic
+    /// refactorization-period heuristic subsequently uses. Preserve that
+    /// lifecycle instead of replacing the whole object.
+    pub(crate) fn reinitialize_for_basis(
+        &mut self,
+        matrix: Rc<SparseMatrix>,
+        columns: &RowToColMapping,
+        parameters: &GlopParameters,
+    ) -> Result<(), FactorizationError> {
+        let deterministic_time = self.deterministic_time.get();
+        let last_factorization_deterministic_time = self.last_factorization_deterministic_time;
+        let mut replacement = Self::new_for_basis(matrix, columns, parameters)?;
+        replacement
+            .deterministic_time
+            .set(deterministic_time + replacement.deterministic_time.get());
+        if replacement.last_factorization_deterministic_time == 0.0 {
+            replacement.last_factorization_deterministic_time =
+                last_factorization_deterministic_time;
+        }
+        std::mem::swap(&mut replacement.stats, &mut self.stats);
+        *self = replacement;
+        Ok(())
+    }
+
     fn initialize(
         basis: BasisMatrix,
         parameters: &GlopParameters,
@@ -1453,6 +1481,30 @@ mod tests {
     }
 
     #[test]
+    fn optimized_tau_cache_preserves_dense_sentinel() {
+        let basis_matrix = matrix(&[&[2.0, 0.0], &[1.0, 3.0]]);
+        let basis = BasisRepresentation::new(basis_matrix, 0.01, 64).unwrap();
+        let mut input = ScatteredRow::new(ColIndex::new(2));
+        input.values_mut()[ColIndex::new(0)] = 4.0;
+        input.values_mut()[ColIndex::new(1)] = 7.0;
+        basis.right_solve_for_tau(&input).unwrap();
+
+        let mut unit_row = ScatteredRow::new(ColIndex::new(2));
+        basis.left_solve_for_unit_row(0, &mut unit_row).unwrap();
+
+        let tau = basis.tau.borrow();
+        assert!(tau.computation_can_be_optimized);
+        assert!(tau.value.non_zeros().is_empty());
+        assert!(
+            tau.value
+                .values()
+                .as_slice()
+                .iter()
+                .any(|&value| value != 0.0)
+        );
+    }
+
+    #[test]
     fn viewed_basis_refactorizes_from_problem_columns_without_copying_them() {
         let mut problem = SparseMatrix::new();
         problem.populate_from_zero(RowIndex::new(3), ColIndex::new(4));
@@ -1490,6 +1542,50 @@ mod tests {
         .unwrap();
         let rhs = [3.0, -2.0, 5.0];
         assert_eq!(viewed.solve(&rhs).unwrap(), expected.solve(&rhs).unwrap());
+    }
+
+    #[test]
+    fn reinitializing_with_identity_basis_retains_factorization_clock() {
+        let mut problem = SparseMatrix::new();
+        problem.populate_from_zero(RowIndex::new(2), ColIndex::new(4));
+        for (column, entries) in [
+            &[(0, 2.0), (1, 1.0)][..],
+            &[(0, 1.0), (1, 3.0)][..],
+            &[(0, 1.0)][..],
+            &[(1, 1.0)][..],
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            for &(row, coefficient) in entries {
+                problem
+                    .mutable_column(ColIndex::from_usize(column))
+                    .add_entry(RowIndex::from_usize(row), coefficient);
+            }
+        }
+        let problem = Rc::new(problem);
+        let parameters = GlopParameters::default();
+        let crash = RowToColMapping::from_vec(vec![ColIndex::new(0), ColIndex::new(1)]);
+        let mut basis =
+            BasisRepresentation::new_for_basis(Rc::clone(&problem), &crash, &parameters).unwrap();
+        let last_factorization_time = basis.last_factorization_deterministic_time;
+        let cumulative_time = basis.deterministic_time();
+        assert!(last_factorization_time > 0.0);
+
+        let identity = RowToColMapping::from_vec(vec![ColIndex::new(2), ColIndex::new(3)]);
+        basis
+            .reinitialize_for_basis(Rc::clone(&problem), &identity, &parameters)
+            .unwrap();
+
+        assert!(basis.is_identity_basis());
+        assert_eq!(
+            basis.last_factorization_deterministic_time.to_bits(),
+            last_factorization_time.to_bits()
+        );
+        assert_eq!(
+            basis.deterministic_time().to_bits(),
+            cumulative_time.to_bits()
+        );
     }
 
     #[test]

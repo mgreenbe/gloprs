@@ -484,9 +484,9 @@ opt-in dual mode; all smallest-50 models pass status, objective, and independent
 primal/dual feasibility validation with a 10-second per-model limit using the
 dual driver throughout. The nondefault transformed-problem dual Phase-I
 alternative is not yet connected and currently falls back to the primal driver.
-On the full 98-model corpus, 93 models pass the same validation with a
-10-second wall limit; `dfl001`, `maros-r7`, `pilot87`, `qap12`, and `qap15`
-time out, and no model now terminates abnormally. In particular, the cost-shift
+On the full 98-model corpus, 96 models pass the same validation with a
+10-second wall limit; only `qap12` and `qap15` time out, and no model now
+terminates abnormally. In particular, the cost-shift
 port resolves the former `ABNORMAL` results on `perold`, `pilot`, and `pilot87`.
 An iteration-prefix differential adapter now records initial and current basis
 mappings, the initial LU column permutation, Phase-I prices, dual edge norms,
@@ -694,8 +694,28 @@ places the iteration-limit test after pricing and pivot validation, as
 matches upstream's sparse-to-dense accumulation switch at 80% density; that
 was a real algorithmic/performance discrepancy, although it does not change
 this `israel` solve because the switch is not reached there.
-With scaling and preprocessing disabled, the current trace finishes `perold`
-in 785 Rust iterations versus 1049 in native GLOP.
+The remaining `perold` pivot-139 tie was caused by a representation mismatch
+in the optimized dual-edge `tau` cache. When the preceding lower solve became
+dense, GLOP retained populated cached values with an empty nonzero list—the
+dense-vector sentinel—whereas Rust rebuilt an exact sparse support while
+copying the cache. The subsequent rank-one solve consequently selected a
+different numerical kernel. Preserving the empty support makes the early tau
+solve, incremental edge norms, pricing-heap Bernoulli draw at iteration 128,
+and pivot-139 ratio-test draw agree. `perold` now follows native GLOP through
+all 1,049 iterations and finishes with bit-identical ordered basis, reduced
+costs, and dual norms; its remaining value-bit differences are signed zeros.
+A fresh 10-second-per-model native audit has 93 exact terminal path
+fingerprints—status, iteration count, and ordered basis—and two timeouts
+(`qap12` and `qap15`). The same dense-sentinel correction also reconciles
+`fit2p`. The `maros-r7` mismatch was caused by replacing the basis-factorization
+object when its triangular crash basis failed the condition-number check. GLOP
+reinitializes the same object with the all-slack basis and deliberately retains
+the rejected crash factorization's deterministic-time estimate. Retaining that
+estimate prevents a premature update-count refactorization at pivot 65;
+`maros-r7` now matches native GLOP through all 4,954 pivots, with an identical
+final ordered basis and bit-identical reduced costs and dual norms; its four
+value-bit differences are signed zeros. The three remaining terminal path
+mismatches are `pilot`, `pilot.we`, and `pilot87`.
 
 The former `vtp.base` pivot-16 discrepancy exposed the symbolic/numerical split
 in GLOP's hypersparse left solve. Matching that split and explicitly
