@@ -36,7 +36,9 @@ use crate::pricing::DynamicMaximum;
 use crate::primal_edge_norms::{PricingRule as EdgePricingRule, PrimalEdgeNorms};
 use crate::primal_ratio_test::{LeavingChoice, choose_leaving_variable_row};
 use crate::random::SharedRandom;
-use crate::reduced_costs::{PrimalPrices, update_reduced_cost_values_before_basis_pivot};
+use crate::reduced_costs::{
+    PrimalPrices, perturb_costs_into, update_reduced_cost_values_before_basis_pivot,
+};
 use crate::time_limit::TimeLimit;
 use crate::update_row::UpdateRow;
 use crate::variables_info::{BasisState, VariablesInfo};
@@ -240,6 +242,9 @@ impl RevisedSimplex {
 
         let mut ran_dual = false;
         if self.parameters.use_dual_simplex {
+            if self.parameters.perturb_costs_in_dual_simplex {
+                self.perturb_costs();
+            }
             ran_dual = self.prepare_and_run_dual_phase_two(time_limit)?;
         }
         if !ran_dual {
@@ -1048,6 +1053,17 @@ impl RevisedSimplex {
         self.cost_perturbations[column] -= value + delta;
         self.reduced_costs[column] = -delta;
         self.has_cost_shift = true;
+    }
+
+    fn perturb_costs(&mut self) {
+        perturb_costs_into(
+            &self.objective,
+            self.variables_info.as_ref().unwrap(),
+            self.first_slack_col.to_usize(),
+            &self.parameters,
+            &self.random,
+            self.cost_perturbations.as_mut_slice(),
+        );
     }
 
     fn remove_cost_shifts(&mut self) {

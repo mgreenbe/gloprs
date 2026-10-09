@@ -136,6 +136,38 @@ fn dual_phase_two_repairs_a_dual_feasible_primal_infeasible_basis() {
 }
 
 #[test]
+fn dual_cost_perturbation_is_removed_before_accepting_optimality() {
+    // A nonbasic column's reduced cost must also return to its original value.
+    let mut lp = LinearProgram::default();
+    let x = lp.create_new_variable();
+    let y = lp.create_new_variable();
+    let row = lp.create_new_constraint();
+    lp.set_variable_bounds(x, 0.0, f64::INFINITY);
+    lp.set_variable_bounds(y, 0.0, f64::INFINITY);
+    lp.set_constraint_bounds(row, 1.0, f64::INFINITY);
+    lp.set_coefficient(row, x, 1.0);
+    lp.set_objective_coefficient(x, 1.0);
+    lp.set_objective_coefficient(y, 3.0);
+    lp.clean_up();
+
+    let mut simplex = RevisedSimplex::new();
+    simplex.set_parameters(&GlopParameters {
+        use_dual_simplex: true,
+        perturb_costs_in_dual_simplex: true,
+        ..GlopParameters::default()
+    });
+    simplex
+        .solve(&lp, &mut TimeLimit::new(f64::INFINITY, f64::INFINITY))
+        .unwrap();
+
+    assert_eq!(simplex.problem_status(), ProblemStatus::Optimal);
+    assert!((simplex.variable_value(x) - 1.0).abs() < 1e-12);
+    assert!((simplex.objective_value() - 1.0).abs() < 1e-12);
+    assert!((simplex.reduced_cost(y) - 3.0).abs() < 1e-12);
+    assert_eq!(simplex.number_of_iterations(), 1);
+}
+
+#[test]
 fn dual_reports_optimality_at_the_exact_iteration_limit() {
     let mut lp = LinearProgram::default();
     let x = lp.create_new_variable();

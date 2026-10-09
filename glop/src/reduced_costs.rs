@@ -51,6 +51,42 @@ pub fn update_reduced_cost_values_before_basis_pivot(
     true
 }
 
+/// Fills the initial dual cost perturbations in GLOP's structural-column order.
+/// Every structural column consumes one shared RNG draw, even when its type
+/// causes the resulting magnitude to be discarded.
+pub(crate) fn perturb_costs_into(
+    objective: &DenseRow,
+    variables_info: &VariablesInfo,
+    structural_size: usize,
+    parameters: &GlopParameters,
+    random: &SharedRandom,
+    output: &mut [f64],
+) {
+    debug_assert_eq!(objective.len().to_usize(), output.len());
+    let mut maximum = 0.0_f64;
+    for column in 0..structural_size {
+        maximum = maximum.max(objective[ColIndex::from_usize(column)].abs());
+    }
+    output.fill(0.0);
+    for (column, slot) in output.iter_mut().enumerate().take(structural_size) {
+        let index = ColIndex::from_usize(column);
+        let cost = objective[index];
+        // The pinned optimized GLOP build contracts this inner sum.
+        let scale = parameters.relative_cost_perturbation.mul_add(
+            cost.abs(),
+            parameters.relative_max_cost_perturbation * maximum,
+        );
+        let magnitude = (1.0 + random.uniform_unit_f64()) * scale;
+        *slot = match variables_info.variable_types()[index] {
+            VariableType::LowerBounded => magnitude,
+            VariableType::UpperBounded => -magnitude,
+            VariableType::UpperAndLowerBounded if cost > 0.0 => magnitude,
+            VariableType::UpperAndLowerBounded if cost < 0.0 => -magnitude,
+            _ => 0.0,
+        };
+    }
+}
+
 #[derive(Debug)]
 pub struct ReducedCosts<'a> {
     matrix: &'a CompactSparseMatrix,
@@ -292,24 +328,15 @@ impl<'a> ReducedCosts<'a> {
 
     pub fn perturb_costs(&mut self) {
         let structural_size = self.matrix.num_cols().to_usize() - self.matrix.num_rows().to_usize();
-        let maximum = (0..structural_size)
-            .map(|column| self.objective[ColIndex::from_usize(column)].abs())
-            .fold(0.0, f64::max);
         self.cost_perturbations = vec![0.0; self.matrix.num_cols().to_usize()];
-        for column in 0..structural_size {
-            let index = ColIndex::from_usize(column);
-            let objective = self.objective[index];
-            let magnitude = (1.0 + self.random.uniform_unit_f64())
-                * (self.parameters.relative_cost_perturbation * objective.abs()
-                    + self.parameters.relative_max_cost_perturbation * maximum);
-            self.cost_perturbations[column] = match self.variables_info.variable_types()[index] {
-                VariableType::LowerBounded => magnitude,
-                VariableType::UpperBounded => -magnitude,
-                VariableType::UpperAndLowerBounded if objective > 0.0 => magnitude,
-                VariableType::UpperAndLowerBounded if objective < 0.0 => -magnitude,
-                _ => 0.0,
-            };
-        }
+        perturb_costs_into(
+            &self.objective,
+            self.variables_info,
+            structural_size,
+            &self.parameters,
+            &self.random,
+            &mut self.cost_perturbations,
+        );
     }
 
     pub fn shift_cost_if_needed(&mut self, increasing_reduced_cost_needed: bool, column: ColIndex) {

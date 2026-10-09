@@ -7,6 +7,7 @@
 #include <cmath>
 #include <iomanip>
 #include <iostream>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
@@ -18,7 +19,7 @@
 
 int main(int argc, char** argv) {
   namespace glop = operations_research::glop;
-  if (argc != 3) return EXIT_FAILURE;
+  if (argc != 3 && argc != 4) return EXIT_FAILURE;
   const auto model = glop::MpsFileToMPModelProto(argv[1]);
   if (!model.ok()) return EXIT_FAILURE;
   glop::LinearProgram lp;
@@ -27,6 +28,10 @@ int main(int argc, char** argv) {
   glop::GlopParameters parameters;
   parameters.set_use_scaling(false);
   parameters.set_use_dual_simplex(true);
+  if (argc == 4) {
+    if (std::string_view(argv[3]) != "perturb") return EXIT_FAILURE;
+    parameters.set_perturb_costs_in_dual_simplex(true);
+  }
   parameters.set_max_number_of_iterations(std::stoll(argv[2]));
   glop::RevisedSimplex simplex;
   simplex.SetParameters(parameters);

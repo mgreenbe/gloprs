@@ -750,9 +750,8 @@ solve.
 
 This is not yet a validated Phase-4 port. The primal phase-I objective update is
 not yet connected to GLOP's incremental `ReducedCosts` orchestration; the
-nondefault transformed dual Phase-I loop and dual reoptimization after cleanup,
-initial random cost perturbation, full
-termination/reoptimization checks, and complete incremental warm-start cases
+nondefault transformed dual Phase-I loop, dual reoptimization after cleanup,
+full termination/reoptimization checks, and complete incremental warm-start cases
 remain to be translated. The reproducible `tools/validate_netlib_solve.py`
 gate passes status, objective, and independent primal/dual feasibility checks
 on the 50 smallest Netlib models. With a 60-second per-model limit, all 96
@@ -767,6 +766,17 @@ shift alone makes `grow7` primal-imprecise after cleanup. Until that loop is
 ported, the provisional primal-only driver continues snapping the leaving
 variable to its target bound; this deliberate scaffolding divergence must be
 removed with the dual driver.
+
+The optional initial dual cost perturbation is now connected before the first
+dual solve. It shares the solver RNG with pricing, draws once for every
+structural column (including variable types that do not retain a perturbation),
+and uses the fused scale calculation emitted by the pinned optimized GLOP
+build. A zero-iteration differential check of all 96 fast Netlib models now
+matches native GLOP bit-for-bit in the ordered basis, every reduced cost, and
+every dual edge norm. A focused solve also verifies that cleanup reports the
+original objective. This validates initialization, not the entire optional
+perturbed pivot path: `afiro` still finishes in 12 Rust versus 14 native
+iterations, and its first later path divergence remains to be localized.
 
 Translate the revised-simplex driver and its immediate orchestration:
 
