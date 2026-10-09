@@ -564,6 +564,23 @@ cancellation as a structural zero in an L column during the routine LU rebuild
 after pivot 64. GLOP's `AddAndNormalizeTriangularColumn()` removes such entries;
 doing the same restores the native 167-iteration count and exact final basis.
 
+A renewed `bore3d` audit proved that the basis, reduced costs, dual norms, next
+update-row support, and every update-row coefficient were bit-identical through
+pivot 65, while shared-RNG drift changed the pivot-66 tie. The missing draws
+were caused by a Phase-II orchestration mismatch: GLOP retains
+`direction_.non_zeros` across an iteration retry and reprices those rows again,
+whereas Rust cleared its pending row copy immediately after the first update.
+Retaining it until a successful pivot replaces the direction restores GLOP's
+intentional duplicate `DynamicMaximum` entries and tie draws. `bore3d` now has
+the same 128 iterations, final ordered basis, reduced costs, and dual norms as
+native GLOP. The same audit localized `boeing1`'s first
+basis split to pivot 145 (native enters column 134, Rust column 130); immediately
+before it, the ordered basis, reduced costs, and dual norms are bit-identical
+(apart from a signed zero in a variable value). Sparse basis right solves now
+perform GLOP's final conditional nonzero sort, and breakpoint ordering uses
+ordinary floating-point comparisons so signed zero is not distinguished from
+zero as it would be by `total_cmp()`.
+
 The next path audit found the right-solve counterpart of the earlier
 left-solve representation mismatch. GLOP's `RightSolveUWithNonZeros()` uses
 `U` to compute the structural closure, then performs numerical substitution as

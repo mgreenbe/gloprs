@@ -42,21 +42,48 @@ impl Eq for ColWithRatio {}
 impl Ord for ColWithRatio {
     fn cmp(&self, other: &Self) -> Ordering {
         // std::make_heap uses upstream operator< so the root is the smallest
-        // ratio, then greatest coefficient, then smallest column.
-        other
-            .ratio
-            .total_cmp(&self.ratio)
-            .then_with(|| {
-                self.coefficient_magnitude
-                    .total_cmp(&other.coefficient_magnitude)
-            })
-            .then_with(|| other.column.cmp(&self.column))
+        // ratio, then greatest coefficient, then smallest column.  Use
+        // ordinary comparisons, as GLOP does, so -0.0 and +0.0 remain equal.
+        // `f64::total_cmp()` distinguishes their sign bits and can therefore
+        // suppress an exact entering-variable tie (and its shared-RNG draw).
+        if self.ratio == other.ratio {
+            if self.coefficient_magnitude == other.coefficient_magnitude {
+                other.column.cmp(&self.column)
+            } else if self.coefficient_magnitude > other.coefficient_magnitude {
+                Ordering::Greater
+            } else {
+                Ordering::Less
+            }
+        } else if self.ratio < other.ratio {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        }
     }
 }
 
 impl PartialOrd for ColWithRatio {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+#[cfg(test)]
+mod ordering_tests {
+    use super::*;
+
+    #[test]
+    fn signed_zero_ratios_have_glop_ordering() {
+        let negative = ColWithRatio {
+            column: 7,
+            ratio: -0.0,
+            coefficient_magnitude: 2.0,
+        };
+        let positive = ColWithRatio {
+            ratio: 0.0,
+            ..negative
+        };
+        assert_eq!(negative.cmp(&positive), Ordering::Equal);
     }
 }
 

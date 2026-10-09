@@ -1867,8 +1867,11 @@ impl RevisedSimplex {
                 self.make_boxed_variables_dual_feasible(&candidates, true)?;
             }
             if !pending_price_rows.is_empty() {
+                // Upstream retains `direction_.non_zeros` until a successful
+                // pivot replaces the direction. A retry therefore reprices
+                // the same rows again, including the duplicate heap entries
+                // and shared-RNG draws that this can deliberately create.
                 self.update_dual_prices(&pending_price_rows)?;
-                pending_price_rows.clear();
             }
             let Some(leaving_position) = self.dual_prices.get_maximum() else {
                 if !self.basis_factorization.as_ref().unwrap().is_refactorized()

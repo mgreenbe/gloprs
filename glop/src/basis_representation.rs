@@ -367,6 +367,7 @@ impl BasisRepresentation {
         self.factorization.right_solve_lower_with_nonzeros(rhs)?;
         self.updates.right_solve_with_nonzeros(rhs);
         self.factorization.right_solve_upper_with_nonzeros(rhs)?;
+        rhs.sort_non_zeros_if_needed();
         self.bump_deterministic_time_for_solve(rhs.num_non_zeros_estimate());
         Ok(())
     }
