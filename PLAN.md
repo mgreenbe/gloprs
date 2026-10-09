@@ -483,7 +483,8 @@ basis, and a dual-ray regression covers primal infeasibility. The CLI and Netlib
 opt-in dual mode; all smallest-50 models pass status, objective, and independent
 primal/dual feasibility validation with a 10-second per-model limit using the
 dual driver throughout. The nondefault transformed-problem dual Phase-I
-alternative is not yet connected and currently falls back to the primal driver.
+alternative was still falling back to the primal driver at this stage; it is
+now connected and validated separately below.
 On the full 98-model corpus, 96 models pass the same validation with a
 10-second wall limit; only `qap12` and `qap15` time out, and no model now
 terminates abnormally. In particular, the cost-shift
@@ -749,8 +750,8 @@ GLOP's specialized transpose-factor norm solve rather than the general left
 solve.
 
 This is not yet a validated Phase-4 port. The primal phase-I objective update is
-not yet connected to GLOP's incremental `ReducedCosts` orchestration; the
-nondefault transformed dual Phase-I loop, dual reoptimization after cleanup,
+not yet connected to GLOP's incremental `ReducedCosts` orchestration; dual
+reoptimization after cleanup,
 full termination/reoptimization checks, and complete incremental warm-start cases
 remain to be translated. The reproducible `tools/validate_netlib_solve.py`
 gate passes status, objective, and independent primal/dual feasibility checks
@@ -774,9 +775,43 @@ and uses the fused scale calculation emitted by the pinned optimized GLOP
 build. A zero-iteration differential check of all 96 fast Netlib models now
 matches native GLOP bit-for-bit in the ordered basis, every reduced cost, and
 every dual edge norm. A focused solve also verifies that cleanup reports the
-original objective. This validates initialization, not the entire optional
-perturbed pivot path: `afiro` still finishes in 12 Rust versus 14 native
-iterations, and its first later path divergence remains to be localized.
+original objective. A full 96-model, 20-second-per-model perturbed audit
+initially found 56 terminal-state discrepancies. The first `afiro` split was
+caused by omitting GLOP's final Phase-I check when the basis was not yet
+refactorized: GLOP clears cost perturbations and retries even without an
+explicit cost shift. Restoring that check makes `afiro` match its native
+14-iteration path, ordered basis, reduced-cost bits, and dual-norm bits.
+Restoring GLOP's random selection among exact primal Harris ties fixes
+`gfrd-pnc` too. The final `scsd6` discrepancy was downstream of another
+unnecessary refactorization: when a candidate's precise reduced cost made it
+invalid, GLOP's `MakeReducedCostsPrecise()` was a no-op on an already precise,
+refactorized basis, whereas Rust forced a new LU factorization. That extra
+factorization permuted the basis, reversing the traversal order of the two
+tied leaving candidates. Rust now retains the current factorization in this
+case and uses a conditional refactorization for the primal final check, as
+upstream does. The full 96-model perturbed audit now matches native GLOP
+exactly on status, iteration count, ordered basis, reduced-cost bits, and
+dual-norm bits, with independent 20-second model limits. Focused `afiro` and
+`scsd6` regressions guard the two resolved pivot-path defects.
+The pinned native terminal states for all 96 perturbed solves are now stored in
+`baselines/netlib-perturbed-dual.json.gz`; an opt-in release integration test
+in `glop/tests/netlib_perturbed_dual.rs` checks input checksums, status,
+iterations, basis updates, ordered basis,
+primal values (modulo signed zero), reduced costs, and dual norms against it.
+The native adapter does not expose pivot events in this mode, so this artifact
+does not claim complete perturbed pivot-sequence coverage.
+
+The nondefault transformed dual Phase I now follows GLOP's auxiliary-bound
+sequence: transform bounds and statuses using the current reduced costs,
+recompute nonbasic and basic values, run dual optimization on the auxiliary
+problem, restore the original bounds and values, and test dual feasibility
+before ordinary Phase II. A focused dual-infeasible model exercises this branch.
+The native/Rust `dual_netlib_trace` adapters accept a `transformed` mode, and
+`tools/validate_transformed_dual.py` compares the 96 fast Netlib models with
+independent 20-second limits. All 96 match exactly in terminal status,
+iteration count, ordered basis, reduced-cost bits, and dual-norm bits. This
+closes that nondefault Phase-I orchestration gap; the remaining Phase-4 items
+above still prevent declaring the whole driver validated.
 
 Translate the revised-simplex driver and its immediate orchestration:
 

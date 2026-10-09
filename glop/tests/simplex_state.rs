@@ -18,6 +18,7 @@ use glop::initial_basis::InitialBasis;
 use glop::parameters::GlopParameters;
 use glop::pricing::DynamicMaximum;
 use glop::primal_ratio_test::{LeavingChoice, choose_leaving_variable_row};
+use glop::random::SharedRandom;
 use glop::reduced_costs::{
     PrimalPrices, ReducedCosts, update_reduced_cost_values_before_basis_pivot,
 };
@@ -162,6 +163,7 @@ fn primal_harris_ratio_test_covers_pivot_flip_and_refactorization() {
     let upper = [10.0, 10.0, 10.0, 10.0];
     let values = [0.0, 0.0, 2.0, 3.0];
     let parameters = GlopParameters::default();
+    let random = SharedRandom::new(1);
     assert_eq!(
         choose_leaving_variable_row(
             ColIndex::new(0),
@@ -174,6 +176,7 @@ fn primal_harris_ratio_test_covers_pivot_flip_and_refactorization() {
             &basis,
             true,
             &parameters,
+            &random,
         ),
         LeavingChoice::Pivot {
             row: RowIndex::new(0),
@@ -195,6 +198,7 @@ fn primal_harris_ratio_test_covers_pivot_flip_and_refactorization() {
             &basis,
             true,
             &parameters,
+            &random,
         ),
         LeavingChoice::BoundFlip { step: 0.5 }
     );
@@ -216,9 +220,47 @@ fn primal_harris_ratio_test_covers_pivot_flip_and_refactorization() {
             &basis,
             false,
             &permissive,
+            &random,
         ),
         LeavingChoice::Refactorize
     );
+}
+
+#[test]
+fn primal_harris_exact_tie_uses_upstream_choice_order_and_shared_rng() {
+    let basis = RowToColMapping::from_vec(vec![ColIndex::new(2), ColIndex::new(3)]);
+    let mut direction = ScatteredColumn::new(RowIndex::new(2));
+    direction.set(RowIndex::new(0), 1.0);
+    direction.set(RowIndex::new(1), 1.0);
+    let lower = [0.0; 4];
+    let upper = [f64::INFINITY; 4];
+    let values = [0.0, 0.0, 1.0, 1.0];
+    let random = SharedRandom::new(1);
+    let oracle = SharedRandom::new(1);
+    // GLOP stores tied candidates #2, #3, ... before appending candidate #1.
+    let expected = [RowIndex::new(1), RowIndex::new(0)][oracle.uniform_index(2)];
+    let choice = choose_leaving_variable_row(
+        ColIndex::new(0),
+        -1.0,
+        &direction,
+        1.0,
+        &values,
+        &lower,
+        &upper,
+        &basis,
+        true,
+        &GlopParameters::default(),
+        &random,
+    );
+    assert_eq!(
+        choice,
+        LeavingChoice::Pivot {
+            row: expected,
+            step: 1.0,
+            target_bound: 0.0,
+        }
+    );
+    assert_eq!(random.uniform_index(100), oracle.uniform_index(100));
 }
 
 #[derive(Clone)]
@@ -848,6 +890,7 @@ fn controlled_multi_pivot_traces_agree_with_native_glop() {
             optimization_rule: glop::parameters::PricingRule::Dantzig,
             ..GlopParameters::default()
         };
+        let random = SharedRandom::new(1);
         let mut iterations = 0_i64;
         for _ in 0..3 {
             let basis_matrix = basis_matrix(&full, basis.as_slice());
@@ -913,6 +956,7 @@ fn controlled_multi_pivot_traces_agree_with_native_glop() {
                 &basis,
                 factorization.is_refactorized(),
                 &parameters,
+                &random,
             ) {
                 LeavingChoice::BoundFlip { .. } => {
                     let status = match info.variable_statuses()[entering] {

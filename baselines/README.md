@@ -37,3 +37,18 @@ with a fresh 20-second wall-clock limit for every model:
 ```text
 cargo test --release -p gloprs-glop --test netlib_trajectories -- --ignored --nocapture
 ```
+
+`netlib-perturbed-dual.json.gz` records pinned native GLOP's results for the
+same 96 models with dual cost perturbation enabled. It contains status,
+iteration and basis-update counts, ordered basis, and bit patterns of primal
+values, reduced costs, and dual edge norms. The input MPS checksum accompanies
+each result. Unlike the trajectory fixture, this adapter does not export native
+pivot events, so this fixture tests complete terminal states rather than pivot
+sequences. Regenerate it from the pinned native adapter and run its opt-in
+20-second-per-model regression with:
+
+```text
+python3 tools/build_glop_reference_adapter.py --source tools/dual_netlib_trace_reference_adapter.cc --output target/native/dual_netlib_trace_reference_adapter
+python3 tools/generate_perturbed_dual_fixture.py
+cargo test --release -p gloprs-glop --test netlib_perturbed_dual -- --ignored
+```

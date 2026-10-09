@@ -9,6 +9,7 @@ use lp_data::lp_types::{ColIndex, RowIndex, RowToColMapping, VectorIndex};
 use lp_data::scattered_vector::ScatteredColumn;
 
 use crate::parameters::GlopParameters;
+use crate::random::SharedRandom;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum LeavingChoice {
@@ -36,6 +37,7 @@ pub fn choose_leaving_variable_row(
     basis: &RowToColMapping,
     basis_is_refactorized: bool,
     parameters: &GlopParameters,
+    random: &SharedRandom,
 ) -> LeavingChoice {
     debug_assert_ne!(reduced_cost, 0.0);
     let entering = entering_column.to_usize();
@@ -88,6 +90,7 @@ pub fn choose_leaving_variable_row(
     }
     let mut leaving_row = None;
     let mut pivot_magnitude = 0.0_f64;
+    let mut equivalent_leaving_choices = Vec::new();
     for (row, ratio) in candidates {
         if ratio > harris_ratio {
             continue;
@@ -96,16 +99,25 @@ pub fn choose_leaving_variable_row(
         if candidate_magnitude < pivot_magnitude {
             continue;
         }
-        if candidate_magnitude == pivot_magnitude
-            && !ratio_more_or_equally_stable(ratio, current_ratio)
-        {
-            continue;
+        if candidate_magnitude == pivot_magnitude {
+            if !ratio_more_or_equally_stable(ratio, current_ratio) {
+                continue;
+            }
+            if ratio == current_ratio {
+                equivalent_leaving_choices.push(row);
+                continue;
+            }
         }
+        equivalent_leaving_choices.clear();
         current_ratio = ratio;
         pivot_magnitude = candidate_magnitude;
         leaving_row = Some(row);
     }
-    let row = leaving_row.expect("a Harris candidate exists when bound flip is rejected");
+    let mut row = leaving_row.expect("a Harris candidate exists when bound flip is rejected");
+    if !equivalent_leaving_choices.is_empty() {
+        equivalent_leaving_choices.push(row);
+        row = equivalent_leaving_choices[random.uniform_index(equivalent_leaving_choices.len())];
+    }
     let step = if current_ratio <= 0.0 {
         minimum_delta / pivot_magnitude
     } else {

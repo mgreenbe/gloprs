@@ -280,3 +280,31 @@ fn dedicated_dual_phase_one_establishes_dual_feasibility() {
     assert!((simplex.variable_value(x) - 1.0).abs() < 1e-9);
     assert!((simplex.objective_value() + 1.0).abs() < 1e-9);
 }
+
+#[test]
+fn transformed_dual_phase_one_establishes_dual_feasibility() {
+    // The all-slack basis has reduced cost -1 for x, so transformed dual
+    // Phase I must repair dual feasibility before optimizing the original LP.
+    let mut lp = LinearProgram::default();
+    let x = lp.create_new_variable();
+    let row = lp.create_new_constraint();
+    lp.set_variable_bounds(x, 0.0, f64::INFINITY);
+    lp.set_constraint_bounds(row, f64::NEG_INFINITY, 1.0);
+    lp.set_coefficient(row, x, 1.0);
+    lp.set_objective_coefficient(x, -1.0);
+    lp.clean_up();
+
+    let mut simplex = RevisedSimplex::new();
+    simplex.set_parameters(&GlopParameters {
+        use_dual_simplex: true,
+        use_dedicated_dual_feasibility_algorithm: false,
+        ..GlopParameters::default()
+    });
+    simplex
+        .solve(&lp, &mut TimeLimit::new(f64::INFINITY, f64::INFINITY))
+        .unwrap();
+
+    assert_eq!(simplex.problem_status(), ProblemStatus::Optimal);
+    assert!((simplex.variable_value(x) - 1.0).abs() < 1e-9);
+    assert!((simplex.objective_value() + 1.0).abs() < 1e-9);
+}

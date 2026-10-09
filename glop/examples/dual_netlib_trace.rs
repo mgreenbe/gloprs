@@ -16,18 +16,24 @@ fn main() {
         .to_string_lossy()
         .parse()
         .expect("invalid iteration limit");
-    let perturb = match arguments.next() {
-        None => false,
-        Some(flag) if flag == "perturb" => true,
-        Some(_) => panic!("unknown option"),
-    };
-    assert!(arguments.next().is_none());
+    let mut perturb = false;
+    let mut transformed = false;
+    for flag in arguments {
+        if flag == "perturb" {
+            perturb = true;
+        } else if flag == "transformed" {
+            transformed = true;
+        } else {
+            panic!("unknown option");
+        }
+    }
 
     let model = parse_mps_file(path).expect("failed to parse MPS");
     let parameters = GlopParameters {
         use_scaling: false,
         use_dual_simplex: true,
         perturb_costs_in_dual_simplex: perturb,
+        use_dedicated_dual_feasibility_algorithm: !transformed,
         max_number_of_iterations: iterations,
         ..GlopParameters::default()
     };

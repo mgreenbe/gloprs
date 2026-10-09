@@ -332,25 +332,29 @@ impl RevisedSimplex {
     ) -> Result<bool, FactorizationError> {
         let objective = self.objective.clone();
         self.compute_reduced_costs(&objective)?;
-        self.variables_info
-            .as_mut()
-            .unwrap()
-            .make_boxed_variable_relevant(false);
+        if self.parameters.use_dedicated_dual_feasibility_algorithm {
+            self.variables_info
+                .as_mut()
+                .unwrap()
+                .make_boxed_variable_relevant(false);
+        }
 
         let info = self.variables_info.as_ref().unwrap();
         let tolerance = self.parameters.dual_feasibility_tolerance;
         let nonboxed_dual_infeasible = info.relevance().iter_ones().any(|column| {
+            if info.non_basic_boxed_variables().contains(column) {
+                return false;
+            }
             let reduced = self.reduced_costs[column];
             (info.can_increase().contains(column) && reduced < -tolerance)
                 || (info.can_decrease().contains(column) && reduced > tolerance)
         });
         if nonboxed_dual_infeasible {
-            if !self.parameters.use_dedicated_dual_feasibility_algorithm {
-                // The transformed-problem alternative remains a separate
-                // Phase-4 path; keep the primal fallback for this nondefault.
-                return Ok(false);
+            if self.parameters.use_dedicated_dual_feasibility_algorithm {
+                self.run_dedicated_dual_phase_one(time_limit)?;
+            } else {
+                self.run_transformed_dual_phase_one(time_limit)?;
             }
-            self.run_dedicated_dual_phase_one(time_limit)?;
             if self.problem_status != ProblemStatus::DualFeasible {
                 return Ok(true);
             }
@@ -379,6 +383,37 @@ impl RevisedSimplex {
         self.problem_status = ProblemStatus::DualFeasible;
         self.run_dual_phase_two(time_limit)?;
         Ok(true)
+    }
+
+    /// GLOP's nondefault dual Phase I: temporarily box every nonfixed
+    /// variable, optimize that auxiliary problem, then restore original bounds.
+    fn run_transformed_dual_phase_one(
+        &mut self,
+        time_limit: &mut TimeLimit,
+    ) -> Result<(), FactorizationError> {
+        let tolerance = self.parameters.dual_feasibility_tolerance;
+        self.variables_info
+            .as_mut()
+            .unwrap()
+            .transform_to_dual_phase_one_problem(tolerance, self.reduced_costs.as_slice());
+        // The transformed bounds fix formerly free nonbasic variables at zero.
+        self.initialize_values()?;
+        self.problem_status = ProblemStatus::DualFeasible;
+        self.run_dual_phase_two(time_limit)?;
+
+        self.variables_info
+            .as_mut()
+            .unwrap()
+            .end_dual_phase_one(tolerance, self.reduced_costs.as_slice());
+        self.initialize_values()?;
+        if self.problem_status == ProblemStatus::Optimal {
+            self.problem_status = if self.maximum_dual_infeasibility() < tolerance + 1e-6 {
+                ProblemStatus::DualFeasible
+            } else {
+                ProblemStatus::DualInfeasible
+            };
+        }
+        Ok(())
     }
 
     fn recompute_dual_prices(&mut self) -> Result<(), FactorizationError> {
@@ -1218,10 +1253,7 @@ impl RevisedSimplex {
                 // This provisional driver does not yet retain that precision
                 // state, so perform the check once explicitly and price again.
                 if !final_check_performed {
-                    self.basis_factorization
-                        .as_mut()
-                        .unwrap()
-                        .force_refactorization()?;
+                    self.basis_factorization.as_mut().unwrap().refactorize()?;
                     self.incorporate_basis_permutation();
                     self.update_row.as_mut().unwrap().invalidate();
                     self.primal_prices.force_recomputation();
@@ -1314,10 +1346,12 @@ impl RevisedSimplex {
                     || (info.can_decrease().contains(entering)
                         && precise_reduced > self.parameters.dual_feasibility_tolerance);
                 if !valid_entering_candidate {
-                    // Matches ReducedCosts::MakeReducedCostsPrecise() after
-                    // TestEnteringReducedCostPrecision() changes the sign or
-                    // feasibility of the selected column.
-                    refactorize_for_precision = true;
+                    // GLOP's MakeReducedCostsPrecise() is a no-op if they are
+                    // already precise. The selected column was just updated
+                    // by the exact BTRAN/FTRAN check above.
+                    if !self.basis_factorization.as_ref().unwrap().is_refactorized() {
+                        refactorize_for_precision = true;
+                    }
                     continue;
                 }
             }
@@ -1342,6 +1376,7 @@ impl RevisedSimplex {
                     &self.basis,
                     self.basis_factorization.as_ref().unwrap().is_refactorized(),
                     &self.parameters,
+                    &self.random,
                 )
             };
             if choice == LeavingChoice::Refactorize {
@@ -1584,7 +1619,11 @@ impl RevisedSimplex {
             self.update_dual_phase_one_prices_for_columns(&columns, !prices_initialized)?;
             prices_initialized = true;
             if self.num_dual_infeasible_positions == 0 {
-                if self.has_cost_shift {
+                // GLOP's final check clears perturbations and retries when
+                // either the basis is not refactorized or a cost was shifted.
+                if !self.basis_factorization.as_ref().unwrap().is_refactorized()
+                    || self.has_cost_shift
+                {
                     self.remove_cost_shifts();
                     self.basis_factorization
                         .as_mut()
