@@ -704,7 +704,7 @@ solve, incremental edge norms, pricing-heap Bernoulli draw at iteration 128,
 and pivot-139 ratio-test draw agree. `perold` now follows native GLOP through
 all 1,049 iterations and finishes with bit-identical ordered basis, reduced
 costs, and dual norms; its remaining value-bit differences are signed zeros.
-A fresh 10-second-per-model native audit has 93 exact terminal path
+A fresh 10-second-per-model native audit has 96 exact terminal path
 fingerprints—status, iteration count, and ordered basis—and two timeouts
 (`qap12` and `qap15`). The same dense-sentinel correction also reconciles
 `fit2p`. The `maros-r7` mismatch was caused by replacing the basis-factorization
@@ -714,8 +714,13 @@ the rejected crash factorization's deterministic-time estimate. Retaining that
 estimate prevents a premature update-count refactorization at pivot 65;
 `maros-r7` now matches native GLOP through all 4,954 pivots, with an identical
 final ordered basis and bit-identical reduced costs and dual norms; its four
-value-bit differences are signed zeros. The three remaining terminal path
-mismatches are `pilot`, `pilot.we`, and `pilot87`.
+value-bit differences are signed zeros. The former `pilot`, `pilot.we`, and
+`pilot87` mismatches were caused by rebuilding an already refactorized LU for
+precision retries and by recomputing reduced costs after refactorizations for
+which GLOP retains its incremental vector. Matching GLOP's conditional
+refactorization state machine makes all three models exact in status,
+iteration count, ordered basis, reduced costs, and dual norms; remaining value
+differences are signed zeros.
 
 The former `vtp.base` pivot-16 discrepancy exposed the symbolic/numerical split
 in GLOP's hypersparse left solve. Matching that split and explicitly

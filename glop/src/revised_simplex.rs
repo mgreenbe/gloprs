@@ -1811,7 +1811,6 @@ impl RevisedSimplex {
                 self.incorporate_basis_permutation();
                 self.update_row.as_mut().unwrap().invalidate();
                 reduced_costs_precise = false;
-                recompute_reduced_costs_after_refactorization = true;
             }
             let basis_is_refactorized =
                 self.basis_factorization.as_ref().unwrap().is_refactorized();
@@ -1928,10 +1927,7 @@ impl RevisedSimplex {
                 );
             let Some(entering) = entering else {
                 if !reduced_costs_precise {
-                    self.basis_factorization
-                        .as_mut()
-                        .unwrap()
-                        .force_refactorization()?;
+                    self.basis_factorization.as_mut().unwrap().refactorize()?;
                     self.incorporate_basis_permutation();
                     self.update_row.as_mut().unwrap().invalidate();
                     recompute_reduced_costs_after_refactorization = true;
@@ -1965,10 +1961,7 @@ impl RevisedSimplex {
             if entering_coefficient.abs() < self.parameters.dual_small_pivot_threshold
                 && !reduced_costs_precise
             {
-                self.basis_factorization
-                    .as_mut()
-                    .unwrap()
-                    .force_refactorization()?;
+                self.basis_factorization.as_mut().unwrap().refactorize()?;
                 self.incorporate_basis_permutation();
                 self.update_row.as_mut().unwrap().invalidate();
                 recompute_reduced_costs_after_refactorization = true;
@@ -1985,10 +1978,7 @@ impl RevisedSimplex {
             if pivot.abs() < self.parameters.small_pivot_threshold * direction_norm
                 && !reduced_costs_precise
             {
-                self.basis_factorization
-                    .as_mut()
-                    .unwrap()
-                    .force_refactorization()?;
+                self.basis_factorization.as_mut().unwrap().refactorize()?;
                 self.incorporate_basis_permutation();
                 self.update_row.as_mut().unwrap().invalidate();
                 recompute_reduced_costs_after_refactorization = true;
@@ -2057,7 +2047,6 @@ impl RevisedSimplex {
                     .as_mut()
                     .unwrap()
                     .update_and_refactorize(leaving_position, entering)?;
-                recompute_reduced_costs_after_refactorization = true;
             } else {
                 self.basis_factorization
                     .as_mut()
