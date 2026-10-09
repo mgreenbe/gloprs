@@ -1838,14 +1838,14 @@ impl RevisedSimplex {
                 reduced_costs_precise = false;
                 recompute_reduced_costs_after_refactorization = true;
             }
-            if self.basis_factorization.as_ref().unwrap().is_refactorized()
-                && !reduced_costs_precise
-            {
+            let basis_is_refactorized =
+                self.basis_factorization.as_ref().unwrap().is_refactorized();
+            if basis_is_refactorized {
                 // GLOP deliberately preserves incrementally updated reduced
                 // costs across a routine update-count refactorization. It
                 // only makes them precise when refactorization was explicitly
                 // requested by the iteration loop (old_refactorize_value).
-                if recompute_reduced_costs_after_refactorization {
+                if !reduced_costs_precise && recompute_reduced_costs_after_refactorization {
                     let objective = self.objective.clone();
                     self.compute_reduced_costs(&objective)?;
                     reduced_costs_precise = true;
@@ -1861,17 +1861,19 @@ impl RevisedSimplex {
                     self.objective_limit_reached = true;
                     return Ok(());
                 }
-            }
-            if !self.bound_flip_candidates.is_empty() {
-                let candidates = std::mem::take(&mut self.bound_flip_candidates);
-                self.make_boxed_variables_dual_feasible(&candidates, true)?;
-            }
-            if !pending_price_rows.is_empty() {
-                // Upstream retains `direction_.non_zeros` until a successful
-                // pivot replaces the direction. A retry therefore reprices
-                // the same rows again, including the duplicate heap entries
-                // and shared-RNG draws that this can deliberately create.
-                self.update_dual_prices(&pending_price_rows)?;
+            } else if !basis_is_refactorized {
+                if !self.bound_flip_candidates.is_empty() {
+                    let candidates = std::mem::take(&mut self.bound_flip_candidates);
+                    self.make_boxed_variables_dual_feasible(&candidates, true)?;
+                }
+                if !pending_price_rows.is_empty() {
+                    // Upstream retains `direction_.non_zeros` until a
+                    // successful pivot replaces the direction. A retry
+                    // therefore reprices the same rows again, including the
+                    // duplicate heap entries and shared-RNG draws that this
+                    // can deliberately create.
+                    self.update_dual_prices(&pending_price_rows)?;
+                }
             }
             let Some(leaving_position) = self.dual_prices.get_maximum() else {
                 if !self.basis_factorization.as_ref().unwrap().is_refactorized()

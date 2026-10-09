@@ -579,7 +579,14 @@ before it, the ordered basis, reduced costs, and dual norms are bit-identical
 (apart from a signed zero in a variable value). Sparse basis right solves now
 perform GLOP's final conditional nonzero sort, and breakpoint ordering uses
 ordinary floating-point comparisons so signed zero is not distinguished from
-zero as it would be by `total_cmp()`.
+zero as it would be by `total_cmp()`. A further audit found that Rust applied
+stale boxed-variable flips and pending price updates after the routine basis
+refactorization at pivot 114; GLOP instead recomputes values and prices and
+skips both incremental updates. The Phase-II branch now matches upstream and
+the resulting state again agrees through pivot 144. The remaining pivot-145
+tie is caused by one missing pricing-heap Bernoulli draw during row-234
+repricing after a dense boxed-variable update, so the boxed-update FTRAN and
+lazy-heap history remain the active `boeing1` localization target.
 
 The next path audit found the right-solve counterpart of the earlier
 left-solve representation mismatch. GLOP's `RightSolveUWithNonZeros()` uses

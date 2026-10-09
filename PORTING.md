@@ -115,23 +115,35 @@ checks the chosen update-row coefficient against
 `dual_small_pivot_threshold` before FTRAN and requests a refactorized precise
 retry; Rust had only the later direction-relative small-pivot check. Porting
 the first check makes the nonidentity basis permutation after pivot 38 and the
-first 65 pivots agree. Pivot 66 is the next difference: native chooses column
-250 and Rust column 249 while both leave the same row and basic column.
-The latest localization found that Rust did not mirror GLOP's explicit
+first 65 pivots agree. Subsequent localization found that Rust did not mirror
+GLOP's explicit
 `non_zeros_are_sorted` cache transitions around hypersparse LU solves. This
 changed the reduction order in an exact dual-edge norm recomputation. The port
 now records all seven upstream sorted/unsorted transitions explicitly; the
 formerly divergent row-24 and row-27 norm states and updates are bit-identical.
-The later pivot-66 choice remains unresolved: native terminates in 128 pivots
-and Rust in 129, with the same final basis set but a different row order.
+The formerly divergent pivot-66 choice is resolved: retaining the preceding
+direction's price rows across retry iterations restores GLOP's duplicate heap
+entries and shared-RNG draws. Both implementations now terminate in 128 pivots
+with the same ordered basis, reduced costs, and dual norms.
 The solver-level cleanup/reoptimization loop is now also ported: after shifts
 are removed, it refactorizes, recomputes the primal and dual state, and switches
 simplex algorithms when the precise solution violates an internal tolerance.
 This resolves `scsd6`, whose common 234-pivot dual trajectory left a
 `1.581e-8` dual infeasibility; both implementations now perform the same final
 primal pivot and finish after 235 iterations with the same ordered basis. The
-smallest-50 audit consequently has 48 exact complete trajectories/final bases;
-`bore3d` and `boeing1` are the two remaining discrepancies.
+smallest-50 audit consequently has 49 exact complete trajectories/final bases;
+`boeing1` is the remaining discrepancy. Its first split is pivot 145: native
+enters column 134 and Rust column 130 from the same eight-way ratio-test tie.
+The ordered basis, reduced costs, and dual norms agree through pivot 144; the
+only reported basic-value difference is a signed zero. The audit exposed and
+fixed a real Phase-II orchestration error: after a routine basis
+refactorization Rust still applied stale bound flips and pending price-row
+updates, whereas GLOP takes the recomputation branch and skips both. That fix
+removes the earlier numerical drift after pivot 114. The residual pivot-145
+split is now localized to one missing `DynamicMaximum` Bernoulli draw while
+repricing row 234 after a dense boxed-variable update; resolving the remaining
+bound-flip FTRAN/heap-history difference is still required before `boeing1`
+can be declared trajectory-identical.
 A literal `RightSolveLForColumnView()` translation is now active. Its initial
 `scagr25` failure exposed a Rust-only stale membership bit: a reached entry
 that solved to zero could later become nonzero without reentering the position
