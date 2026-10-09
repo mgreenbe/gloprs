@@ -209,6 +209,7 @@ impl PrimalEdgeNorms {
         &mut self,
         basis: &BasisRepresentation,
         relevant: &ColBitVec,
+        num_entries_in_relevant_columns: usize,
         entering_column: usize,
         leaving_column: usize,
         leaving_row: usize,
@@ -222,7 +223,13 @@ impl PrimalEdgeNorms {
             return Err(FactorizationError::DimensionMismatch);
         }
         if !self.recompute_edge_squared_norms {
-            update_row.compute_update_row(basis, &self.matrix, relevant, leaving_row)?;
+            update_row.compute_update_row(
+                basis,
+                &self.matrix,
+                relevant,
+                num_entries_in_relevant_columns,
+                leaving_row,
+            )?;
             self.direction_left_inverse = basis.transpose_solve(direction)?;
             self.update_edge_squared_norms(
                 entering_column,
@@ -237,7 +244,13 @@ impl PrimalEdgeNorms {
             if self.num_devex_updates_since_reset > self.devex_weights_reset_period {
                 self.reset_devex_weights = true;
             } else {
-                update_row.compute_update_row(basis, &self.matrix, relevant, leaving_row)?;
+                update_row.compute_update_row(
+                    basis,
+                    &self.matrix,
+                    relevant,
+                    num_entries_in_relevant_columns,
+                    leaving_row,
+                )?;
                 self.update_devex_weights(leaving_column, leaving_row, direction, update_row);
             }
         }

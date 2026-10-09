@@ -264,6 +264,7 @@ fn incremental_primal_edge_norms_agree_with_exact_recomputation() {
         .update_before_basis_pivot(
             &basis,
             &relevant_before,
+            6,
             entering_column,
             leaving_column,
             leaving_row,

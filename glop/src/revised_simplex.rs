@@ -1070,30 +1070,30 @@ impl RevisedSimplex {
         ))
     }
 
-    fn direction(&self, entering: ColIndex) -> Result<ScatteredColumn, FactorizationError> {
-        let mut direction = ScatteredColumn::new(self.num_rows);
+    fn direction(
+        &self,
+        entering: ColIndex,
+        direction: &mut ScatteredColumn,
+    ) -> Result<(), FactorizationError> {
         self.basis_factorization
             .as_ref()
             .unwrap()
             .right_solve_for_problem_column(
                 entering.to_usize(),
                 self.matrix.column(entering),
-                &mut direction,
+                direction,
             )?;
         // An empty position list is GLOP's dense-vector sentinel.  The ratio
         // kernels consume an explicit sparse traversal, so materialize its
         // support here when the selected basis-update representation took the
         // dense solve path.
         if direction.non_zeros().is_empty() {
-            let positions: Vec<_> = direction
-                .values()
-                .as_slice()
-                .iter()
-                .enumerate()
-                .filter(|&(_, &value)| value != 0.0)
-                .map(|(row, _)| RowIndex::from_usize(row))
-                .collect();
-            direction.non_zeros_mut().extend(positions);
+            let (values, non_zeros) = direction.mutable_parts();
+            for (row, &value) in values.iter().enumerate() {
+                if value != 0.0 {
+                    non_zeros.push(RowIndex::from_usize(row));
+                }
+            }
         }
         #[cfg(debug_assertions)]
         {
@@ -1119,7 +1119,7 @@ impl RevisedSimplex {
                 self.num_iterations
             );
         }
-        Ok(direction)
+        Ok(())
     }
 
     fn run_primal_phase(
@@ -1145,6 +1145,7 @@ impl RevisedSimplex {
         let incremental_reduced_costs = phase == SimplexPhase::Optimization;
         let mut recompute_reduced_costs = true;
         let mut refactorize_for_precision = false;
+        let mut direction = ScatteredColumn::new(self.num_rows);
         loop {
             if time_limit.limit_reached()
                 || self.num_iterations
@@ -1225,7 +1226,7 @@ impl RevisedSimplex {
                 }
                 return Ok(());
             };
-            let direction = self.direction(entering)?;
+            self.direction(entering, &mut direction)?;
             final_check_performed = false;
             let entering_edge_norm_is_precise = self
                 .primal_edge_norms
@@ -1411,6 +1412,13 @@ impl RevisedSimplex {
                     .update_before_basis_pivot(
                         self.basis_factorization.as_ref().unwrap(),
                         self.variables_info.as_ref().unwrap().relevance(),
+                        self.variables_info
+                            .as_ref()
+                            .unwrap()
+                            .num_entries_in_relevant_columns()
+                            .value()
+                            .try_into()
+                            .expect("negative relevant entry count"),
                         entering.to_usize(),
                         leaving.to_usize(),
                         row.to_usize(),
@@ -1519,6 +1527,7 @@ impl RevisedSimplex {
             self.basis_factorization.as_ref().unwrap().is_refactorized();
         let mut reduced_costs_recomputed = true;
         let mut prices_initialized = false;
+        let mut direction = ScatteredColumn::new(self.num_rows);
         loop {
             if time_limit.limit_reached() {
                 self.problem_status = ProblemStatus::Init;
@@ -1624,6 +1633,13 @@ impl RevisedSimplex {
                 self.basis_factorization.as_ref().unwrap(),
                 &self.matrix,
                 self.variables_info.as_ref().unwrap().relevance(),
+                self.variables_info
+                    .as_ref()
+                    .unwrap()
+                    .num_entries_in_relevant_columns()
+                    .value()
+                    .try_into()
+                    .expect("negative relevant entry count"),
                 leaving_position,
             )?;
             let entering = self
@@ -1667,7 +1683,7 @@ impl RevisedSimplex {
                 prices_initialized = false;
                 continue;
             }
-            let direction = self.direction(entering)?;
+            self.direction(entering, &mut direction)?;
             let pivot = direction.value(leaving_row);
             let direction_norm = direction
                 .values()
@@ -1796,6 +1812,7 @@ impl RevisedSimplex {
         let mut recompute_reduced_costs_after_refactorization = false;
         self.recompute_dual_prices()?;
         let mut pending_price_rows = Vec::new();
+        let mut direction = ScatteredColumn::new(self.num_rows);
         loop {
             if time_limit.limit_reached() {
                 self.problem_status = ProblemStatus::DualFeasible;
@@ -1912,6 +1929,13 @@ impl RevisedSimplex {
                 self.basis_factorization.as_ref().unwrap(),
                 &self.matrix,
                 self.variables_info.as_ref().unwrap().relevance(),
+                self.variables_info
+                    .as_ref()
+                    .unwrap()
+                    .num_entries_in_relevant_columns()
+                    .value()
+                    .try_into()
+                    .expect("negative relevant entry count"),
                 leaving_position,
             )?;
             let entering = self
@@ -1968,7 +1992,7 @@ impl RevisedSimplex {
                 continue;
             }
 
-            let direction = self.direction(entering)?;
+            self.direction(entering, &mut direction)?;
             let pivot = direction.value(leaving_row);
             let direction_norm = direction
                 .values()

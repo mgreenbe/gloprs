@@ -56,7 +56,7 @@ pub struct UpdateRow {
     unit_row_left_inverse: ScatteredRow,
     filtered_non_zeros: Vec<usize>,
     non_zero_positions: Vec<usize>,
-    non_zero_position_set: Vec<bool>,
+    non_zero_position_set: ColBitVec,
     coefficients: Vec<f64>,
     left_inverse_computed_for: Option<usize>,
     update_row_computed_for: Option<usize>,
@@ -73,7 +73,7 @@ impl UpdateRow {
             unit_row_left_inverse: ScatteredRow::new(ColIndex::new(matrix.num_rows().value())),
             filtered_non_zeros: Vec::new(),
             non_zero_positions: Vec::new(),
-            non_zero_position_set: vec![false; matrix.num_cols().to_usize()],
+            non_zero_position_set: ColBitVec::new(matrix.num_cols()),
             coefficients: vec![0.0; matrix.num_cols().to_usize()],
             left_inverse_computed_for: None,
             update_row_computed_for: None,
@@ -148,6 +148,7 @@ impl UpdateRow {
         basis: &BasisRepresentation,
         matrix: &SparseMatrix,
         relevant: &ColBitVec,
+        num_entries_in_relevant_columns: usize,
         leaving_row: usize,
     ) -> Result<(), FactorizationError> {
         if self.update_row_computed_for == Some(leaving_row) {
@@ -203,10 +204,7 @@ impl UpdateRow {
             return Ok(());
         }
 
-        let column_wise_entries = relevant
-            .iter_ones()
-            .map(|column| matrix.column(column).num_entries())
-            .sum::<usize>();
+        let column_wise_entries = num_entries_in_relevant_columns;
         let row_wise = row_wise_entries as f64;
         if row_wise < 0.5 * column_wise_entries as f64 {
             if row_wise < 1.1 * num_cols as f64 {
@@ -366,31 +364,27 @@ impl UpdateRow {
     }
 
     fn compute_row_wise_hypersparse(&mut self, relevant: &ColBitVec) {
-        for (column, present) in self.non_zero_position_set.iter_mut().enumerate() {
-            if *present {
-                self.coefficients[column] = 0.0;
-                *present = false;
-            }
-        }
+        self.non_zero_position_set
+            .clear_and_resize(ColIndex::from_usize(self.coefficients.len()));
         for &row in &self.filtered_non_zeros {
             let multiplier = self.left_inverse_value(row);
             for entry in self.transposed_matrix.column(ColIndex::from_usize(row)) {
                 let column = entry.index().to_usize();
                 let value = multiplier * entry.coefficient();
-                if self.non_zero_position_set[column] {
+                let position = ColIndex::from_usize(column);
+                if self.non_zero_position_set.contains(position) {
                     self.coefficients[column] += value;
                 } else {
                     self.coefficients[column] = value;
-                    self.non_zero_position_set[column] = true;
+                    self.non_zero_position_set.set(position);
                 }
             }
         }
+        self.non_zero_position_set.intersection(relevant);
         self.non_zero_positions.clear();
-        for column in 0..self.coefficients.len() {
-            if self.non_zero_position_set[column]
-                && relevant.contains(ColIndex::from_usize(column))
-                && self.coefficients[column].abs() > self.drop_tolerance
-            {
+        for position in self.non_zero_position_set.iter_ones() {
+            let column = position.to_usize();
+            if self.coefficients[column].abs() > self.drop_tolerance {
                 self.non_zero_positions.push(column);
             }
         }

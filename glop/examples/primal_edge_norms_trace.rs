@@ -112,6 +112,10 @@ fn main() {
         .update_before_basis_pivot(
             &basis,
             &relevant,
+            relevant
+                .iter_ones()
+                .map(|column| matrix.column(column).num_entries())
+                .sum(),
             entering,
             basis_variables[leaving],
             leaving,

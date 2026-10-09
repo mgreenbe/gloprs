@@ -751,8 +751,29 @@ impl TriangularMatrix {
                 else {
                     return Ok(());
                 };
+                // GLOP carries this entry cursor across columns. The factor's
+                // off-diagonal entries are contiguous, so each solve step
+                // begins exactly where the preceding one stopped.
+                let mut end = self.starts[last_nonzero + 1];
                 for column in (self.first_non_identity_column..=last_nonzero).rev() {
-                    let sum = self.transpose_column_sum_reverse(column, rhs);
+                    let start = self.starts[column];
+                    let mut sum = rhs[column];
+                    while end >= start + 4 {
+                        let mut four_term_sum =
+                            self.coefficients[end - 2] * rhs[self.rows[end - 2]];
+                        four_term_sum = self.coefficients[end - 1]
+                            .mul_add(rhs[self.rows[end - 1]], four_term_sum);
+                        four_term_sum = self.coefficients[end - 3]
+                            .mul_add(rhs[self.rows[end - 3]], four_term_sum);
+                        four_term_sum = self.coefficients[end - 4]
+                            .mul_add(rhs[self.rows[end - 4]], four_term_sum);
+                        sum -= four_term_sum;
+                        end -= 4;
+                    }
+                    while end > start {
+                        end -= 1;
+                        sum = (-self.coefficients[end]).mul_add(rhs[self.rows[end]], sum);
+                    }
                     rhs[column] = if self.unit_diagonal {
                         sum
                     } else {
@@ -979,26 +1000,50 @@ impl TriangularMatrix {
     #[must_use]
     pub fn transpose(&self) -> Self {
         let n = self.dimension();
-        let mut columns = vec![Vec::new(); n];
+        // GLOP's PopulateFromTranspose uses the shifted starts array first as
+        // row counts, then as insertion cursors. This preserves each source
+        // column's traversal order without allocating a vector per output
+        // column.
+        let mut starts = vec![0; n + 2];
+        for &row in &self.rows {
+            starts[row + 2] += 1;
+        }
+        for column in 2..n + 2 {
+            starts[column] += starts[column - 1];
+        }
+        let mut rows = vec![0; self.rows.len()];
+        let mut coefficients = vec![0.0; self.coefficients.len()];
+        starts.pop();
         for column in 0..n {
-            for (row, coefficient) in self.column(column) {
-                columns[row].push((column, coefficient));
+            for index in self.starts[column]..self.starts[column + 1] {
+                let transposed_column = self.rows[index];
+                let destination = starts[transposed_column + 1];
+                starts[transposed_column + 1] += 1;
+                rows[destination] = column;
+                coefficients[destination] = self.coefficients[index];
             }
         }
-        Self::from_columns(
-            &columns,
-            self.diagonal.clone(),
-            match self.triangle {
+        let diagonal = self.diagonal.clone();
+        let first_non_identity_column = Self::first_non_identity(&diagonal, &starts);
+        let pruned_ends = starts.iter().copied().skip(1).collect();
+        Self {
+            num_rows: self.num_rows,
+            starts,
+            rows,
+            coefficients,
+            diagonal,
+            triangle: match self.triangle {
                 Triangle::Lower => Triangle::Upper,
                 Triangle::Upper => Triangle::Lower,
             },
-            self.unit_diagonal,
-        )
-        .map(|mut transpose| {
-            transpose.num_rows = self.num_rows;
-            transpose
-        })
-        .expect("the transpose of a triangular matrix is triangular")
+            unit_diagonal: self.unit_diagonal,
+            first_non_identity_column,
+            symbolic_workspace: RefCell::new(SymbolicWorkspace::default()),
+            permuted_workspace: PermutedLowerWorkspace {
+                pruned_ends,
+                ..PermutedLowerWorkspace::default()
+            },
+        }
     }
 
     pub fn compute_rows_to_consider_with_dfs<I: VectorIndex>(&self, non_zeros: &mut Vec<I>) {

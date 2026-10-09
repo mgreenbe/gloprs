@@ -885,6 +885,35 @@ Exit criteria:
 
 ## Phase 8: performance parity campaign
 
+The first serial, optimized, untraced comparison of the 96 fast Netlib models
+(excluding `qap12` and `qap15`, three timed trials and one warm-up per solver)
+found a 1.358 Rust/native aggregate solve-time ratio. The largest ratios were
+`sierra` 2.833, `ship12l` 2.796, `80bau3b` 2.723, and `stocfor3` 2.447.
+Profiling exposed several upstream correspondence gaps, now corrected: LU
+edge-norm solves reuse sparse scratch space; hypersparse update rows iterate
+set bits instead of scanning the entire column range; update-row density uses
+the already-maintained relevant-entry count; dense triangular transpose solves
+advance a contiguous cursor; direction workspaces persist across pivots; and
+triangular transposes use a counting pass to fill contiguous storage directly.
+The unchanged 96-model native trajectory fixture passes after these changes.
+
+The same comparison rerun now totals 23.800 seconds for native and 29.175
+seconds for Rust (1.226 aggregate ratio; median per-model ratio 1.408). The
+largest absolute excesses are `dfl001` 1.748 seconds, `stocfor3` 0.580,
+`truss` 0.498, and `pilot87` 0.405. The remaining gap is not yet explained or
+accepted as parity: profiles of both `dfl001` and `stocfor3` point strongly to
+repeated LU/Markowitz refactorization. Rust currently constructs a new
+`LuFactorization` and fresh Markowitz workspaces at each rebuild, whereas
+upstream reuses its factorization object and its allocated workspaces. The next
+performance-fidelity task is to make that lifecycle match upstream, then
+reprofile and rerun the serial benchmark and strict trajectory fixture.
+
+Benchmark entry point: `tools/benchmark_netlib_solve.py` with release-built
+`glop/examples/netlib_timing.rs` and the native
+`tools/netlib_timing_reference_adapter.cc`. The timer excludes MPS parsing and
+output, and the benchmark checks native fixture status and iteration count on
+every trial. Local raw comparisons and profiles are in ignored `target/`.
+
 Benchmark native GLOP and `gloprs` on the same machine with pinned compilers and
 equivalent optimized settings. Use repeated runs, warm caches where appropriate,
 and report medians plus dispersion.

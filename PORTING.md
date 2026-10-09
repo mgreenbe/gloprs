@@ -264,6 +264,28 @@ Logging, status macros, file helpers, protobuf helpers, and generated protobuf
 headers are infrastructure replacements, not translation targets. Each source
 module must still be checked for subtle semantics supplied by them.
 
+## Performance-fidelity audit
+
+The first 96-model serial Netlib timing pass found several implementation
+differences that preserved pivot trajectories but cost time. `lu_factorization`
+now reuses the dense zero scratchpad and nonzero-row list in dual-edge norm
+solves; `update_row` uses a bitset for hypersparse column intersections and
+the cached number of entries in relevant columns; `revised_simplex` reuses its
+direction workspace; and `triangular_matrix` uses a persistent entry cursor in
+the dense transpose solve and a counting-pass direct transpose. The strict
+native trajectory fixture still passes. Aggregate Rust/native in-solver time
+fell from 1.358 to 1.226; see `PLAN.md` for the benchmark conditions and
+remaining outliers.
+
+An important remaining lifecycle discrepancy is that
+`basis_representation::force_refactorization()` constructs a fresh
+`LuFactorization` and `markowitz::compute()` constructs fresh workspaces on
+every rebuild. Upstream's `BasisFactorization::ForceRefactorization()` reuses
+the existing `LuFactorization` and its `Markowitz` object. This discrepancy is
+prominent in profiles of `dfl001` and `stocfor3` and remains an active
+performance-fidelity task; it should not be treated as a validated performance
+match merely because numerical trajectories agree.
+
 ## Test inventory caveat
 
 The pinned public tree does not contain the historical file-local unit tests for

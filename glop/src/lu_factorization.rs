@@ -63,6 +63,7 @@ pub struct LuFactorization {
     parameters: GlopParameters,
     deterministic_time_of_last_factorization: f64,
     dense_zero_scratchpad: RefCell<Vec<f64>>,
+    non_zero_rows: RefCell<Vec<RowIndex>>,
     markowitz_stats: StatsGroup,
 }
 
@@ -90,6 +91,7 @@ impl LuFactorization {
             parameters: GlopParameters::default(),
             deterministic_time_of_last_factorization: 0.0,
             dense_zero_scratchpad: RefCell::new(Vec::new()),
+            non_zero_rows: RefCell::new(Vec::new()),
             markowitz_stats: StatsGroup::new("Markowitz"),
         }
     }
@@ -106,6 +108,7 @@ impl LuFactorization {
         self.inverse_row_permutation.clear();
         self.inverse_column_permutation.clear();
         self.dense_zero_scratchpad.get_mut().clear();
+        self.non_zero_rows.get_mut().clear();
         // GLOP's Clear() deliberately retains both SetParameters() state and
         // Markowitz's deterministic time for the last factorization.
     }
@@ -259,6 +262,7 @@ impl LuFactorization {
             parameters: parameters.clone(),
             deterministic_time_of_last_factorization,
             dense_zero_scratchpad: RefCell::new(vec![0.0; rows]),
+            non_zero_rows: RefCell::new(Vec::new()),
             markowitz_stats,
         })
     }
@@ -1007,15 +1011,39 @@ impl LuFactorization {
                 .iter()
                 .fold(0.0, |sum, entry| sum + entry.1 * entry.1));
         }
-        let mut rhs = ScatteredColumn::new(RowIndex::from_usize(self.dimension()));
+        let mut values = self.dense_zero_scratchpad.borrow_mut();
+        let mut non_zeros = self.non_zero_rows.borrow_mut();
+        values.resize(self.dimension(), 0.0);
+        non_zeros.clear();
+        debug_assert!(values.iter().all(|&value| value == 0.0));
         for &(row, value) in entries {
             if row >= self.dimension() {
                 return Err(FactorizationError::DimensionMismatch);
             }
-            rhs.set(RowIndex::from_usize(row), value);
+            let permuted_row = self.row_permutation[row];
+            values[permuted_row] = value;
+            non_zeros.push(RowIndex::from_usize(permuted_row));
         }
-        self.solve_with_nonzeros(&mut rhs)?;
-        Ok(scattered_squared_norm_and_reset(&mut rhs))
+        self.lower
+            .compute_rows_to_consider_in_sorted_order(&mut non_zeros);
+        if non_zeros.is_empty() {
+            self.lower
+                .solve(&mut values)
+                .map_err(|_| FactorizationError::DimensionMismatch)?;
+        } else {
+            self.lower.hyper_sparse_solve(&mut values, &mut non_zeros);
+            self.upper
+                .compute_rows_to_consider_in_sorted_order(&mut non_zeros);
+        }
+        if non_zeros.is_empty() {
+            self.upper
+                .solve(&mut values)
+                .map_err(|_| FactorizationError::DimensionMismatch)?;
+        } else {
+            self.upper
+                .hyper_sparse_solve_with_reversed_nonzeros(&mut values, &mut non_zeros);
+        }
+        Ok(squared_norm_and_reset_rows(&mut values, &non_zeros))
     }
 
     /// Computes `||(A^T)^-1 e_row||_2^2`.
@@ -1035,31 +1063,34 @@ impl LuFactorization {
         } else {
             self.column_permutation[row]
         };
-        let mut rhs = ScatteredRow::new(ColIndex::from_usize(self.dimension()));
-        rhs.set(ColIndex::from_usize(permuted_row), 1.0);
-        {
-            let (values, non_zeros) = rhs.mutable_parts();
+        let mut values = self.dense_zero_scratchpad.borrow_mut();
+        let mut non_zeros = self.non_zero_rows.borrow_mut();
+        values.resize(self.dimension(), 0.0);
+        non_zeros.clear();
+        debug_assert!(values.iter().all(|&value| value == 0.0));
+        values[permuted_row] = 1.0;
+        non_zeros.push(RowIndex::from_usize(permuted_row));
+        self.transpose_upper
+            .compute_rows_to_consider_in_sorted_order(&mut non_zeros);
+        if non_zeros.is_empty() {
             self.transpose_upper
-                .compute_rows_to_consider_in_sorted_order(non_zeros);
-            if non_zeros.is_empty() {
-                self.transpose_upper
-                    .lower_solve_starting_at(permuted_row, values)
-                    .map_err(|_| FactorizationError::DimensionMismatch)?;
-            } else {
-                self.transpose_upper.hyper_sparse_solve(values, non_zeros);
-                self.transpose_lower
-                    .compute_rows_to_consider_in_sorted_order(non_zeros);
-            }
-            if non_zeros.is_empty() {
-                self.transpose_lower
-                    .solve(values)
-                    .map_err(|_| FactorizationError::DimensionMismatch)?;
-            } else {
-                self.transpose_lower
-                    .hyper_sparse_solve_with_reversed_nonzeros(values, non_zeros);
-            }
+                .lower_solve_starting_at(permuted_row, &mut values)
+                .map_err(|_| FactorizationError::DimensionMismatch)?;
+        } else {
+            self.transpose_upper
+                .hyper_sparse_solve(&mut values, &mut non_zeros);
+            self.transpose_lower
+                .compute_rows_to_consider_in_sorted_order(&mut non_zeros);
         }
-        Ok(scattered_squared_norm_and_reset(&mut rhs))
+        if non_zeros.is_empty() {
+            self.transpose_lower
+                .solve(&mut values)
+                .map_err(|_| FactorizationError::DimensionMismatch)?;
+        } else {
+            self.transpose_lower
+                .hyper_sparse_solve_with_reversed_nonzeros(&mut values, &mut non_zeros);
+        }
+        Ok(squared_norm_and_reset_rows(&mut values, &non_zeros))
     }
 
     #[must_use]
@@ -1175,13 +1206,12 @@ impl LuFactorization {
     }
 }
 
-fn scattered_squared_norm_and_reset<I: VectorIndex + Ord>(vector: &mut ScatteredVector<I>) -> f64 {
-    if vector.non_zeros().is_empty() {
-        squared_norm_and_reset_to_zero(vector.values_mut().as_mut_slice())
+fn squared_norm_and_reset_rows(values: &mut [f64], non_zeros: &[RowIndex]) -> f64 {
+    if non_zeros.is_empty() {
+        squared_norm_and_reset_to_zero(values)
     } else {
-        let (values, non_zeros) = vector.mutable_parts();
         let mut sum = 0.0;
-        for &index in non_zeros.iter() {
+        for &index in non_zeros {
             let position = index.to_usize();
             let value = values[position];
             sum += value * value;

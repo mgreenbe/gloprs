@@ -113,7 +113,16 @@ fn reduced_costs_values_and_prices_match_their_definitions() {
     // installs the new leaving reduced cost and removes the entering column.
     let mut update_row = UpdateRow::new(&full);
     update_row
-        .compute_update_row(&factorization, &full, info.relevance(), 0)
+        .compute_update_row(
+            &factorization,
+            &full,
+            info.relevance(),
+            info.num_entries_in_relevant_columns()
+                .value()
+                .try_into()
+                .unwrap(),
+            0,
+        )
         .unwrap();
     let mut incrementally_updated = reduced_values;
     assert!(update_reduced_cost_values_before_basis_pivot(
@@ -603,7 +612,16 @@ fn dual_ratio_tests_agree_with_native_glop() {
         let factorization = BasisRepresentation::new(identity, 0.1, 20).unwrap();
         let mut update = UpdateRow::new(&matrix);
         update
-            .compute_update_row(&factorization, &matrix, info.relevance(), leaving_row)
+            .compute_update_row(
+                &factorization,
+                &matrix,
+                info.relevance(),
+                info.num_entries_in_relevant_columns()
+                    .value()
+                    .try_into()
+                    .unwrap(),
+                leaving_row,
+            )
             .unwrap();
         let mut reduced = ReducedCosts::new(&compact, &objective, &basis, &info, &factorization, 1);
         let mut entering = EnteringVariable::new(1);
