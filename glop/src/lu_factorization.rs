@@ -158,6 +158,43 @@ impl LuFactorization {
         }
         let factors = markowitz::factorize(matrix, parameters)
             .map_err(|step| FactorizationError::Singular { step })?;
+        Self::from_sparse_lu(factors, rows, columns, parameters)
+    }
+
+    pub(crate) fn factorize_selected_with_parameters(
+        matrix: &SparseMatrix,
+        selected_columns: &[usize],
+        parameters: &GlopParameters,
+    ) -> Result<Self, FactorizationError> {
+        parameters
+            .validate()
+            .map_err(FactorizationError::InvalidParameters)?;
+        let rows = matrix.num_rows().to_usize();
+        let columns = selected_columns.len();
+        if rows != columns {
+            return Err(FactorizationError::NonSquare { rows, columns });
+        }
+        for &column in selected_columns {
+            if column >= matrix.num_cols().to_usize() {
+                return Err(FactorizationError::DimensionMismatch);
+            }
+            for entry in matrix.column(ColIndex::from_usize(column)) {
+                if !entry.coefficient().is_finite() {
+                    return Err(FactorizationError::NonFinite);
+                }
+            }
+        }
+        let factors = markowitz::factorize_selected(matrix, selected_columns, parameters)
+            .map_err(|step| FactorizationError::Singular { step })?;
+        Self::from_sparse_lu(factors, rows, columns, parameters)
+    }
+
+    fn from_sparse_lu(
+        factors: markowitz::SparseLu,
+        rows: usize,
+        columns: usize,
+        parameters: &GlopParameters,
+    ) -> Result<Self, FactorizationError> {
         let deterministic_time_of_last_factorization =
             deterministic_time_for_fp_operations(factors.num_fp_operations);
         let lower = TriangularMatrix::from_columns(

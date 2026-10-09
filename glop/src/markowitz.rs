@@ -945,6 +945,20 @@ pub(crate) fn factorize(
 ) -> Result<SparseLu, usize> {
     let n = matrix.num_rows().to_usize();
     let result = compute(MatrixView::full(matrix), parameters);
+    factors_from_result(result, n)
+}
+
+pub(crate) fn factorize_selected(
+    matrix: &SparseMatrix,
+    columns: &[usize],
+    parameters: &GlopParameters,
+) -> Result<SparseLu, usize> {
+    let n = matrix.num_rows().to_usize();
+    let result = compute(MatrixView::selected(matrix, columns), parameters);
+    factors_from_result(result, n)
+}
+
+fn factors_from_result(result: MarkowitzResult, n: usize) -> Result<SparseLu, usize> {
     if result.pivot_rows.len() != n {
         return Err(result.pivot_rows.len());
     }

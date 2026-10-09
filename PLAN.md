@@ -584,9 +584,31 @@ stale boxed-variable flips and pending price updates after the routine basis
 refactorization at pivot 114; GLOP instead recomputes values and prices and
 skips both incremental updates. The Phase-II branch now matches upstream and
 the resulting state again agrees through pivot 144. The remaining pivot-145
-tie is caused by one missing pricing-heap Bernoulli draw during row-234
-repricing after a dense boxed-variable update, so the boxed-update FTRAN and
-lazy-heap history remain the active `boeing1` localization target.
+tie exposed the other missing half of the refactorized branch: GLOP moves all
+dual-infeasible nonbasic boxed variables to their opposite bounds before
+recomputing basic values. Porting that pass removes stale columns 301 and 350
+from the following flip list, restores the row-42/row-234 pricing tie and
+Bernoulli draw, and reconciles every subsequent ordered-basis prefix.
+`boeing1` now terminates optimally after the native 507 iterations with the
+same ordered basis, reduced costs, and dual norms; only two signed-zero value
+bits differ.
+
+The basis factorization now also matches upstream's matrix ownership
+architecture. It keeps an immutable shared view of the original problem matrix
+and a basis-column mapping, so a simplex pivot changes one index and subsequent
+LU refactorizations traverse selected original columns directly. This removes
+the former per-pivot sparse-column clone and cleanup and avoids materializing a
+separate basis matrix.
+
+Future API work may reconsider storing that shared matrix handle in the basis
+representation. Passing an ordinary `&SparseMatrix` into the refactorization
+and norm operations that need it would remove reference-counted ownership, but
+would require threading the borrow through the solver API because safe Rust
+cannot store a reference from one field of `RevisedSimplex` into another field
+of the same movable struct. Keep the current persistent shared view for port
+fidelity unless profiling justifies that broader, deliberately non-upstream API
+change; preserve the selected-column view and do not reintroduce basis-column
+cloning or basis-matrix materialization.
 
 The next path audit found the right-solve counterpart of the earlier
 left-solve representation mismatch. GLOP's `RightSolveUWithNonZeros()` uses

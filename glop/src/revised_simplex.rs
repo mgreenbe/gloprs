@@ -14,6 +14,8 @@
     clippy::too_many_lines
 )]
 
+use std::rc::Rc;
+
 use lp_data::lp_data::LinearProgram;
 use lp_data::lp_types::{
     ColIndex, ConstraintStatus, DenseColumn, DenseRow, INVALID_COL, ProblemStatus, RowIndex,
@@ -64,7 +66,7 @@ pub struct RevisedSimplex {
     num_rows: RowIndex,
     num_cols: ColIndex,
     first_slack_col: ColIndex,
-    matrix: SparseMatrix,
+    matrix: Rc<SparseMatrix>,
     compact_matrix: CompactSparseMatrix,
     objective: DenseRow,
     objective_offset: f64,
@@ -122,7 +124,7 @@ impl RevisedSimplex {
             num_rows: RowIndex::new(0),
             num_cols: ColIndex::new(0),
             first_slack_col: ColIndex::new(0),
-            matrix: SparseMatrix::new(),
+            matrix: Rc::new(SparseMatrix::new()),
             compact_matrix: CompactSparseMatrix::default(),
             objective: DenseRow::new(),
             objective_offset: 0.0,
@@ -691,7 +693,7 @@ impl RevisedSimplex {
             .first_slack_variable()
             .unwrap_or(equation_lp.num_variables());
         self.is_maximization_problem = equation_lp.is_maximization_problem();
-        self.matrix = equation_lp.matrix().clone();
+        self.matrix = Rc::new(equation_lp.matrix().clone());
         self.compact_matrix = CompactSparseMatrix::from_sparse(&self.matrix);
         self.objective = DenseRow::from_vec(
             (0..self.num_cols.to_usize())
@@ -814,8 +816,9 @@ impl RevisedSimplex {
         }
         let triangular_crash_can_fall_back = !has_external_basis
             && self.parameters.initial_basis == InitialBasisHeuristic::Triangular;
-        let mut basis_factorization = match BasisRepresentation::new_with_parameters(
-            self.current_basis_matrix(),
+        let mut basis_factorization = match BasisRepresentation::new_for_basis(
+            Rc::clone(&self.matrix),
+            &self.basis,
             &self.parameters,
         ) {
             Ok(factorization) => factorization,
@@ -824,8 +827,9 @@ impl RevisedSimplex {
                 // basis upstream and reverts to the all-slack basis when that
                 // advanced crash is not factorizable.
                 self.use_all_slack_basis();
-                BasisRepresentation::new_with_parameters(
-                    self.current_basis_matrix(),
+                BasisRepresentation::new_for_basis(
+                    Rc::clone(&self.matrix),
+                    &self.basis,
                     &self.parameters,
                 )?
             }
@@ -835,8 +839,9 @@ impl RevisedSimplex {
             > self.parameters.initial_condition_number_threshold
         {
             self.use_all_slack_basis();
-            basis_factorization = BasisRepresentation::new_with_parameters(
-                self.current_basis_matrix(),
+            basis_factorization = BasisRepresentation::new_for_basis(
+                Rc::clone(&self.matrix),
+                &self.basis,
                 &self.parameters,
             )?;
             if self.trace_enabled {
@@ -866,8 +871,9 @@ impl RevisedSimplex {
                 // numerical failure in that solve rejects TRIANGULAR's crash
                 // just like a factorization or condition-number failure.
                 self.use_all_slack_basis();
-                basis_factorization = BasisRepresentation::new_with_parameters(
-                    self.current_basis_matrix(),
+                basis_factorization = BasisRepresentation::new_for_basis(
+                    Rc::clone(&self.matrix),
+                    &self.basis,
                     &self.parameters,
                 )?;
                 info = info_before_advanced_basis;
@@ -912,21 +918,6 @@ impl RevisedSimplex {
                 })
                 .collect(),
         );
-    }
-
-    fn current_basis_matrix(&self) -> SparseMatrix {
-        let mut basis_matrix = SparseMatrix::new();
-        basis_matrix.populate_from_zero(
-            self.num_rows,
-            ColIndex::from_usize(self.num_rows.to_usize()),
-        );
-        for row in 0..self.num_rows.to_usize() {
-            *basis_matrix.mutable_column(ColIndex::from_usize(row)) = self
-                .matrix
-                .column(self.basis[RowIndex::from_usize(row)])
-                .clone();
-        }
-        basis_matrix
     }
 
     fn strengthen_lu_pivoting_after_early_imprecision(&mut self) -> Result<(), FactorizationError> {
@@ -1475,20 +1466,12 @@ impl RevisedSimplex {
                     self.basis_factorization
                         .as_mut()
                         .unwrap()
-                        .replace_column_and_refactorize(
-                            row.to_usize(),
-                            self.matrix.column(entering).clone(),
-                        )?;
+                        .update_and_refactorize(row.to_usize(), entering)?;
                 } else {
                     self.basis_factorization
                         .as_mut()
                         .unwrap()
-                        .replace_column_after_solve(
-                            entering.to_usize(),
-                            row.to_usize(),
-                            &direction,
-                            self.matrix.column(entering).clone(),
-                        )?;
+                        .update_after_solve(entering, row.to_usize(), &direction)?;
                 }
                 self.incorporate_basis_permutation();
                 self.update_row.as_mut().unwrap().invalidate();
@@ -1774,20 +1757,12 @@ impl RevisedSimplex {
                 self.basis_factorization
                     .as_mut()
                     .unwrap()
-                    .replace_column_and_refactorize(
-                        leaving_position,
-                        self.matrix.column(entering).clone(),
-                    )?;
+                    .update_and_refactorize(leaving_position, entering)?;
             } else {
                 self.basis_factorization
                     .as_mut()
                     .unwrap()
-                    .replace_column_after_solve(
-                        entering.to_usize(),
-                        leaving_position,
-                        &direction,
-                        self.matrix.column(entering).clone(),
-                    )?;
+                    .update_after_solve(entering, leaving_position, &direction)?;
             }
             self.incorporate_basis_permutation();
             self.update_row.as_mut().unwrap().invalidate();
@@ -1851,6 +1826,19 @@ impl RevisedSimplex {
                     reduced_costs_precise = true;
                     recompute_reduced_costs_after_refactorization = false;
                 }
+                // As in GLOP, move every dual-infeasible nonbasic boxed
+                // variable to its opposite bound before recomputing the
+                // basic values. The incremental branch only processes the
+                // preceding ratio test's flip candidates, but a refactorized
+                // basis must refresh the complete boxed set.
+                let boxed: Vec<_> = self
+                    .variables_info
+                    .as_ref()
+                    .unwrap()
+                    .non_basic_boxed_variables()
+                    .iter_ones()
+                    .collect();
+                self.make_boxed_variables_dual_feasible(&boxed, false)?;
                 self.initialize_values()?;
                 self.recompute_dual_prices()?;
                 pending_price_rows.clear();
@@ -1877,14 +1865,10 @@ impl RevisedSimplex {
             }
             let Some(leaving_position) = self.dual_prices.get_maximum() else {
                 if !self.basis_factorization.as_ref().unwrap().is_refactorized()
-                    || !reduced_costs_precise
                     || self.has_cost_shift
                 {
                     self.remove_cost_shifts();
-                    self.basis_factorization
-                        .as_mut()
-                        .unwrap()
-                        .force_refactorization()?;
+                    self.basis_factorization.as_mut().unwrap().refactorize()?;
                     self.incorporate_basis_permutation();
                     self.update_row.as_mut().unwrap().invalidate();
                     reduced_costs_precise = false;
@@ -2072,21 +2056,13 @@ impl RevisedSimplex {
                 self.basis_factorization
                     .as_mut()
                     .unwrap()
-                    .replace_column_and_refactorize(
-                        leaving_position,
-                        self.matrix.column(entering).clone(),
-                    )?;
+                    .update_and_refactorize(leaving_position, entering)?;
                 recompute_reduced_costs_after_refactorization = true;
             } else {
                 self.basis_factorization
                     .as_mut()
                     .unwrap()
-                    .replace_column_after_solve(
-                        entering.to_usize(),
-                        leaving_position,
-                        &direction,
-                        self.matrix.column(entering).clone(),
-                    )?;
+                    .update_after_solve(entering, leaving_position, &direction)?;
             }
             self.incorporate_basis_permutation();
             self.update_row.as_mut().unwrap().invalidate();

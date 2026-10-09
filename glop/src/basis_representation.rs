@@ -4,8 +4,11 @@
 //! and can refactorize from the current basis when the update chain grows.
 
 use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
-use lp_data::lp_types::{ColIndex, RowIndex, VectorIndex, deterministic_time_for_fp_operations};
+use lp_data::lp_types::{
+    ColIndex, RowIndex, RowToColMapping, VectorIndex, deterministic_time_for_fp_operations,
+};
 use lp_data::lp_utils::clear_and_resize_vector_with_non_zeros;
 use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow};
 use lp_data::sparse::{CompactSparseMatrix, SparseMatrix};
@@ -158,8 +161,120 @@ struct TauState {
 }
 
 #[derive(Clone, Debug)]
+enum BasisMatrix {
+    Owned(SparseMatrix),
+    View {
+        matrix: Rc<SparseMatrix>,
+        columns: Vec<usize>,
+    },
+}
+
+enum ReplacementColumn {
+    Owned(SparseColumn),
+    Problem(ColIndex),
+}
+
+impl BasisMatrix {
+    fn dimension(&self) -> usize {
+        match self {
+            Self::Owned(matrix) => matrix.num_rows().to_usize(),
+            Self::View { columns, .. } => columns.len(),
+        }
+    }
+
+    fn install(&mut self, position: usize, replacement: ReplacementColumn) {
+        match (self, replacement) {
+            (Self::Owned(matrix), ReplacementColumn::Owned(column)) => {
+                matrix.replace_column(ColIndex::from_usize(position), column);
+            }
+            (Self::View { columns, .. }, ReplacementColumn::Problem(column)) => {
+                columns[position] = column.to_usize();
+            }
+            _ => panic!("replacement column does not match the basis representation"),
+        }
+    }
+
+    fn apply_column_permutation(&mut self, permutation: &[usize]) {
+        match self {
+            Self::Owned(matrix) => matrix.apply_column_permutation(permutation),
+            Self::View { columns, .. } => {
+                let old = columns.clone();
+                for (source, &destination) in permutation.iter().enumerate() {
+                    columns[destination] = old[source];
+                }
+            }
+        }
+    }
+
+    fn factorize(
+        &self,
+        parameters: &GlopParameters,
+    ) -> Result<LuFactorization, FactorizationError> {
+        match self {
+            Self::Owned(matrix) => LuFactorization::factorize_with_parameters(matrix, parameters),
+            Self::View { matrix, columns } => {
+                LuFactorization::factorize_selected_with_parameters(matrix, columns, parameters)
+            }
+        }
+    }
+
+    fn one_norm(&self) -> f64 {
+        match self {
+            Self::Owned(matrix) => matrix.one_norm(),
+            Self::View { matrix, columns } => columns.iter().fold(0.0, |maximum, &column| {
+                maximum.max(
+                    matrix
+                        .column(ColIndex::from_usize(column))
+                        .iter()
+                        .map(|e| e.coefficient().abs())
+                        .sum(),
+                )
+            }),
+        }
+    }
+
+    fn infinity_norm(&self) -> f64 {
+        match self {
+            Self::Owned(matrix) => matrix.infinity_norm(),
+            Self::View { matrix, columns } => {
+                let mut sums = vec![0.0; matrix.num_rows().to_usize()];
+                for &column in columns {
+                    for entry in matrix.column(ColIndex::from_usize(column)) {
+                        sums[entry.index().to_usize()] += entry.coefficient().abs();
+                    }
+                }
+                sums.into_iter().fold(0.0_f64, f64::max)
+            }
+        }
+    }
+
+    #[allow(clippy::float_cmp)] // GLOP requires an exact unit coefficient.
+    fn is_identity(&self) -> bool {
+        match self {
+            Self::Owned(matrix) => {
+                matrix.num_rows().to_usize() == matrix.num_cols().to_usize()
+                    && (0..matrix.num_cols().to_usize()).all(|position| {
+                        let column = matrix.column(ColIndex::from_usize(position));
+                        column.num_entries() == 1
+                            && column.entry(0).index().to_usize() == position
+                            && column.entry(0).coefficient() == 1.0
+                    })
+            }
+            Self::View { matrix, columns } => {
+                columns.iter().enumerate().all(|(position, &source)| {
+                    let column = matrix.column(ColIndex::from_usize(source));
+                    column.num_entries() == 1
+                        && column.entry(0).index().to_usize() == position
+                        && column.entry(0).coefficient() == 1.0
+                })
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct BasisRepresentation {
-    basis: SparseMatrix,
+    basis: BasisMatrix,
     factorization: LuFactorization,
     updates: RankOneUpdateFactorization,
     eta_updates: EtaFactorization,
@@ -204,23 +319,56 @@ impl BasisRepresentation {
         basis: SparseMatrix,
         parameters: &GlopParameters,
     ) -> Result<Self, FactorizationError> {
-        let is_identity_basis = basis.num_rows().to_usize() == basis.num_cols().to_usize()
-            && (0..basis.num_cols().to_usize()).all(|column| {
-                let basis_column = basis.column(ColIndex::from_usize(column));
-                basis_column.num_entries() == 1
-                    && basis_column.entry(0).index().to_usize() == column
-                    && basis_column.entry(0).coefficient() == 1.0
-            });
+        Self::initialize(BasisMatrix::Owned(basis), parameters)
+    }
+
+    pub(crate) fn new_for_basis(
+        matrix: Rc<SparseMatrix>,
+        columns: &RowToColMapping,
+        parameters: &GlopParameters,
+    ) -> Result<Self, FactorizationError> {
+        let columns = columns
+            .as_slice()
+            .iter()
+            .map(|column| column.to_usize())
+            .collect();
+        Self::initialize(BasisMatrix::View { matrix, columns }, parameters)
+    }
+
+    fn initialize(
+        basis: BasisMatrix,
+        parameters: &GlopParameters,
+    ) -> Result<Self, FactorizationError> {
+        #[allow(clippy::float_cmp)] // GLOP requires an exact unit coefficient.
+        let is_identity_basis = match &basis {
+            BasisMatrix::Owned(matrix) => {
+                matrix.num_rows().to_usize() == matrix.num_cols().to_usize()
+                    && (0..matrix.num_cols().to_usize()).all(|column| {
+                        let basis_column = matrix.column(ColIndex::from_usize(column));
+                        basis_column.num_entries() == 1
+                            && basis_column.entry(0).index().to_usize() == column
+                            && basis_column.entry(0).coefficient() == 1.0
+                    })
+            }
+            BasisMatrix::View { matrix, columns } => {
+                columns.iter().enumerate().all(|(row, &column)| {
+                    let basis_column = matrix.column(ColIndex::from_usize(column));
+                    basis_column.num_entries() == 1
+                        && basis_column.entry(0).index().to_usize() == row
+                        && basis_column.entry(0).coefficient() == 1.0
+                })
+            }
+        };
         let factorization = if is_identity_basis {
             // BasisFactorization::Initialize() leaves its cleared LU object in
             // the dimension-independent identity state for a slack basis.
             LuFactorization::new()
         } else {
-            LuFactorization::factorize_with_parameters(&basis, parameters)?
+            basis.factorize(parameters)?
         };
         let last_factorization_deterministic_time =
             factorization.deterministic_time_of_last_factorization();
-        let dimension = basis.num_rows().to_usize();
+        let dimension = basis.dimension();
         let updates = RankOneUpdateFactorization::default();
         updates.reset_deterministic_time();
         let mut left_storage = CompactSparseMatrix::default();
@@ -270,12 +418,20 @@ impl BasisRepresentation {
 
     #[must_use]
     pub fn dimension(&self) -> usize {
-        self.basis.num_rows().to_usize()
+        self.basis.dimension()
     }
 
+    /// Returns the materialized matrix used by the standalone owning path.
+    ///
+    /// # Panics
+    ///
+    /// Panics for the simplex view-based representation.
     #[must_use]
     pub fn basis(&self) -> &SparseMatrix {
-        &self.basis
+        match &self.basis {
+            BasisMatrix::Owned(matrix) => matrix,
+            BasisMatrix::View { .. } => panic!("a viewed basis is not materialized"),
+        }
     }
 
     #[must_use]
@@ -657,10 +813,40 @@ impl BasisRepresentation {
         problem_column: usize,
         leaving_column: usize,
         direction: &ScatteredColumn,
-        entering_column: SparseColumn,
+        mut entering_column: SparseColumn,
+    ) -> Result<(), FactorizationError> {
+        entering_column.clean_up();
+        self.replace_column_after_solve_impl(
+            problem_column,
+            leaving_column,
+            direction,
+            ReplacementColumn::Owned(entering_column),
+        )
+    }
+
+    pub(crate) fn update_after_solve(
+        &mut self,
+        problem_column: ColIndex,
+        leaving_column: usize,
+        direction: &ScatteredColumn,
+    ) -> Result<(), FactorizationError> {
+        self.replace_column_after_solve_impl(
+            problem_column.to_usize(),
+            leaving_column,
+            direction,
+            ReplacementColumn::Problem(problem_column),
+        )
+    }
+
+    fn replace_column_after_solve_impl(
+        &mut self,
+        problem_column: usize,
+        leaving_column: usize,
+        direction: &ScatteredColumn,
+        entering_column: ReplacementColumn,
     ) -> Result<(), FactorizationError> {
         if self.parameters.use_middle_product_form_update {
-            return self.replace_column_from_partial_solves(
+            return self.replace_column_from_partial_solves_impl(
                 problem_column,
                 leaving_column,
                 entering_column,
@@ -675,8 +861,7 @@ impl BasisRepresentation {
                 || self.last_factorization_deterministic_time
                     < self.updates.deterministic_time_since_last_reset())
         {
-            self.basis
-                .replace_column(ColIndex::from_usize(leaving_column), entering_column);
+            self.basis.install(leaving_column, entering_column);
             self.force_refactorization()?;
             return Ok(());
         }
@@ -685,8 +870,7 @@ impl BasisRepresentation {
                 step: leaving_column,
             }
         })?;
-        self.basis
-            .replace_column(ColIndex::from_usize(leaving_column), entering_column);
+        self.basis.install(leaving_column, entering_column);
         self.eta_updates.update(update);
         Ok(())
     }
@@ -753,7 +937,12 @@ impl BasisRepresentation {
             .left_solve_lower_with_nonzeros(&mut unit_left_inverse)?;
         self.bump_deterministic_time_for_solve(unit_left_inverse.num_non_zeros_estimate());
 
-        self.finish_column_replacement(leaving_column, entering_column, right_update, &left_update)
+        self.finish_column_replacement(
+            leaving_column,
+            ReplacementColumn::Owned(entering_column),
+            right_update,
+            &left_update,
+        )
     }
 
     /// Installs a replacement basis column and rebuilds the LU factors.
@@ -775,7 +964,20 @@ impl BasisRepresentation {
         }
         entering_column.clean_up();
         self.basis
-            .replace_column(ColIndex::from_usize(leaving_column), entering_column);
+            .install(leaving_column, ReplacementColumn::Owned(entering_column));
+        self.force_refactorization()
+    }
+
+    pub(crate) fn update_and_refactorize(
+        &mut self,
+        leaving_column: usize,
+        entering_column: ColIndex,
+    ) -> Result<(), FactorizationError> {
+        if leaving_column >= self.dimension() {
+            return Err(FactorizationError::DimensionMismatch);
+        }
+        self.basis
+            .install(leaving_column, ReplacementColumn::Problem(entering_column));
         self.force_refactorization()
     }
 
@@ -795,10 +997,23 @@ impl BasisRepresentation {
         leaving_column: usize,
         mut entering_column: SparseColumn,
     ) -> Result<(), FactorizationError> {
+        entering_column.clean_up();
+        self.replace_column_from_partial_solves_impl(
+            problem_column,
+            leaving_column,
+            ReplacementColumn::Owned(entering_column),
+        )
+    }
+
+    fn replace_column_from_partial_solves_impl(
+        &mut self,
+        problem_column: usize,
+        leaving_column: usize,
+        entering_column: ReplacementColumn,
+    ) -> Result<(), FactorizationError> {
         if leaving_column >= self.dimension() {
             return Err(FactorizationError::DimensionMismatch);
         }
-        entering_column.clean_up();
         self.tau.get_mut().computation_can_be_optimized = false;
         let right_index = self
             .right_pool_mapping
@@ -813,8 +1028,7 @@ impl BasisRepresentation {
             .copied()
             .flatten();
         let (Some(right_index), Some(left_index)) = (right_index, left_index) else {
-            self.basis
-                .replace_column(ColIndex::from_usize(leaving_column), entering_column);
+            self.basis.install(leaving_column, entering_column);
             self.force_refactorization()?;
             return Ok(());
         };
@@ -833,7 +1047,7 @@ impl BasisRepresentation {
     fn finish_column_replacement(
         &mut self,
         leaving_column: usize,
-        entering_column: SparseColumn,
+        entering_column: ReplacementColumn,
         mut right_update: ScatteredColumn,
         left_update: &ScatteredRow,
     ) -> Result<(), FactorizationError> {
@@ -846,8 +1060,7 @@ impl BasisRepresentation {
             // mapping when Update() elects to refactorize. This type owns its
             // basis, so install the same change before rebuilding LU. No
             // rank-one update is appended on this path.
-            self.basis
-                .replace_column(ColIndex::from_usize(leaving_column), entering_column);
+            self.basis.install(leaving_column, entering_column);
             self.force_refactorization()?;
             return Ok(());
         }
@@ -907,8 +1120,7 @@ impl BasisRepresentation {
                 step: leaving_column,
             });
         }
-        self.basis
-            .replace_column(ColIndex::from_usize(leaving_column), entering_column);
+        self.basis.install(leaving_column, entering_column);
         self.updates.update(update);
         Ok(())
     }
@@ -937,8 +1149,7 @@ impl BasisRepresentation {
             DistributionKind::Integer,
             self.num_updates() as f64,
         );
-        let mut factorization =
-            LuFactorization::factorize_with_parameters(&self.basis, &self.parameters)?;
+        let mut factorization = self.basis.factorize(&self.parameters)?;
         factorization.merge_stats_from(&self.factorization);
         self.factorization = factorization;
         self.last_factorization_deterministic_time = self
@@ -1128,13 +1339,7 @@ impl BasisRepresentation {
 
     #[allow(clippy::float_cmp)] // Pinned GLOP requires an exact unit coefficient.
     pub fn is_identity_basis(&self) -> bool {
-        self.basis.num_rows().to_usize() == self.basis.num_cols().to_usize()
-            && (0..self.dimension()).all(|position| {
-                let basis_column = self.basis.column(ColIndex::from_usize(position));
-                basis_column.num_entries() == 1
-                    && basis_column.entry(0).index().to_usize() == position
-                    && basis_column.entry(0).coefficient() == 1.0
-            })
+        self.basis.is_identity()
     }
 
     fn bump_deterministic_time_for_solve(&self, num_entries: usize) {
@@ -1245,6 +1450,46 @@ mod tests {
         let actual = basis.right_solve_for_tau(&input).unwrap();
 
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn viewed_basis_refactorizes_from_problem_columns_without_copying_them() {
+        let mut problem = SparseMatrix::new();
+        problem.populate_from_zero(RowIndex::new(3), ColIndex::new(4));
+        for (column, values) in [
+            [2.0, 1.0, 0.0],
+            [1.0, 4.0, 1.0],
+            [0.0, 1.0, 3.0],
+            [1.0, 0.0, 2.0],
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            for (row, value) in values.into_iter().enumerate() {
+                if value != 0.0 {
+                    problem
+                        .mutable_column(ColIndex::from_usize(column))
+                        .add_entry(RowIndex::from_usize(row), value);
+                }
+            }
+        }
+        let problem = Rc::new(problem);
+        let columns =
+            RowToColMapping::from_vec(vec![ColIndex::new(0), ColIndex::new(2), ColIndex::new(3)]);
+        let parameters = GlopParameters::default();
+        let mut viewed =
+            BasisRepresentation::new_for_basis(Rc::clone(&problem), &columns, &parameters).unwrap();
+        assert_eq!(Rc::strong_count(&problem), 2);
+
+        viewed.update_and_refactorize(1, ColIndex::new(1)).unwrap();
+        let expected = BasisRepresentation::new(
+            matrix(&[&[2.0, 1.0, 1.0], &[1.0, 4.0, 0.0], &[0.0, 1.0, 2.0]]),
+            parameters.lu_factorization_pivot_threshold,
+            usize::try_from(parameters.basis_refactorization_period).unwrap(),
+        )
+        .unwrap();
+        let rhs = [3.0, -2.0, 5.0];
+        assert_eq!(viewed.solve(&rhs).unwrap(), expected.solve(&rhs).unwrap());
     }
 
     #[test]
