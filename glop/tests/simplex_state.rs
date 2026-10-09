@@ -182,6 +182,7 @@ fn primal_harris_ratio_test_covers_pivot_flip_and_refactorization() {
             row: RowIndex::new(0),
             step: 2.0,
             target_bound: 0.0,
+            exact_tie: false,
         }
     );
     let mut bounded_values = values;
@@ -258,6 +259,7 @@ fn primal_harris_exact_tie_uses_upstream_choice_order_and_shared_rng() {
             row: expected,
             step: 1.0,
             target_bound: 0.0,
+            exact_tie: true,
         }
     );
     assert_eq!(random.uniform_index(100), oracle.uniform_index(100));

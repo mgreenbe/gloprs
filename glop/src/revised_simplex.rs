@@ -49,6 +49,38 @@ pub enum SimplexPhase {
     Optimization,
 }
 
+/// GLOP's `ScalarProduct(basic_objective_, direction_)` dispatches on the
+/// scattered direction: sparse positions use their stored order, while dense
+/// directions accumulate four products per block. The distinction matters
+/// for reduced-cost precision tests near the refactorization threshold.
+fn basic_objective_direction_scalar_product(
+    objective: &DenseRow,
+    basis: &RowToColMapping,
+    direction: &ScatteredColumn,
+) -> f64 {
+    if !direction.should_use_dense_iteration(0.8) {
+        let mut sum = 0.0;
+        for entry in direction {
+            sum += objective[basis[entry.index()]] * entry.coefficient();
+        }
+        return sum;
+    }
+    let values = direction.values().as_slice();
+    let mut sum = 0.0;
+    let blocks = values.len() / 4;
+    for block in 0..blocks {
+        let i = 4 * block;
+        sum += objective[basis[RowIndex::from_usize(i)]] * values[i]
+            + objective[basis[RowIndex::from_usize(i + 1)]] * values[i + 1]
+            + objective[basis[RowIndex::from_usize(i + 2)]] * values[i + 2]
+            + objective[basis[RowIndex::from_usize(i + 3)]] * values[i + 3];
+    }
+    for (i, &value) in values.iter().enumerate().skip(4 * blocks) {
+        sum += objective[basis[RowIndex::from_usize(i)]] * value;
+    }
+    sum
+}
+
 /// A normalized event emitted only when tracing is enabled.
 #[derive(Clone, Debug, PartialEq)]
 pub struct IterationEvent {
@@ -73,6 +105,7 @@ pub struct RevisedSimplex {
     objective: DenseRow,
     objective_offset: f64,
     objective_scaling_factor: f64,
+    solution_objective_value: f64,
     primal_objective_limit: f64,
     dual_objective_limit: f64,
     objective_limit_reached: bool,
@@ -100,12 +133,15 @@ pub struct RevisedSimplex {
     update_row: Option<UpdateRow>,
     primal_ray: DenseRow,
     dual_ray: DenseColumn,
+    dual_ray_row_combination: DenseRow,
     solution_state: BasisState,
     state_for_next_solve: Option<BasisState>,
     starting_values: DenseRow,
     num_iterations: u64,
     trace_enabled: bool,
     trace: Vec<IterationEvent>,
+    phase4_events_enabled: bool,
+    phase4_events: Vec<&'static str>,
     initial_basis_before_permutation: RowToColMapping,
     initial_column_permutation: Vec<usize>,
 }
@@ -131,6 +167,7 @@ impl RevisedSimplex {
             objective: DenseRow::new(),
             objective_offset: 0.0,
             objective_scaling_factor: 1.0,
+            solution_objective_value: 0.0,
             primal_objective_limit: f64::NEG_INFINITY,
             dual_objective_limit: f64::INFINITY,
             objective_limit_reached: false,
@@ -158,12 +195,15 @@ impl RevisedSimplex {
             update_row: None,
             primal_ray: DenseRow::new(),
             dual_ray: DenseColumn::new(),
+            dual_ray_row_combination: DenseRow::new(),
             solution_state: BasisState::default(),
             state_for_next_solve: None,
             starting_values: DenseRow::new(),
             num_iterations: 0,
             trace_enabled: false,
             trace: Vec::new(),
+            phase4_events_enabled: false,
+            phase4_events: Vec::new(),
             initial_basis_before_permutation: RowToColMapping::new(),
             initial_column_permutation: Vec::new(),
         }
@@ -190,6 +230,24 @@ impl RevisedSimplex {
     #[must_use]
     pub fn trace(&self) -> &[IterationEvent] {
         &self.trace
+    }
+
+    /// Enable stable diagnostic tags for Phase-4 algorithmic branches.
+    /// Disabled by default so ordinary solves do not allocate or emit events.
+    pub fn set_phase4_events_enabled(&mut self, enabled: bool) {
+        self.phase4_events_enabled = enabled;
+        self.phase4_events.clear();
+    }
+
+    #[must_use]
+    pub fn phase4_events(&self) -> &[&'static str] {
+        &self.phase4_events
+    }
+
+    fn phase4_event(&mut self, event: &'static str) {
+        if self.phase4_events_enabled {
+            self.phase4_events.push(event);
+        }
     }
 
     #[must_use]
@@ -236,6 +294,10 @@ impl RevisedSimplex {
         linear_program: &LinearProgram,
         time_limit: &mut TimeLimit,
     ) -> Result<(), FactorizationError> {
+        self.phase4_events.clear();
+        if !self.starting_values.is_empty() {
+            self.phase4_event("starting_variable_values");
+        }
         self.initialize(linear_program)?;
         self.trace.clear();
         self.num_iterations = 0;
@@ -243,17 +305,48 @@ impl RevisedSimplex {
         let mut ran_dual = false;
         if self.parameters.use_dual_simplex {
             if self.parameters.perturb_costs_in_dual_simplex {
+                self.phase4_event("dual_cost_perturbation");
                 self.perturb_costs();
             }
             ran_dual = self.prepare_and_run_dual_phase_two(time_limit)?;
         }
         if !ran_dual {
             self.run_primal_phase(SimplexPhase::Feasibility, time_limit)?;
+            // GLOP restores the user objective after Phase I for every
+            // outcome except proven PRIMAL_INFEASIBLE, including an INIT
+            // result at the iteration limit.
+            if self.problem_status == ProblemStatus::Init {
+                let objective = self.objective.clone();
+                self.compute_reduced_costs(&objective)?;
+            }
             if self.problem_status == ProblemStatus::PrimalFeasible && !time_limit.limit_reached() {
-                self.run_primal_phase(SimplexPhase::Optimization, time_limit)?;
+                if self.num_iterations == 0
+                    || self.num_iterations
+                        < u64::try_from(self.parameters.max_number_of_iterations)
+                            .unwrap_or(u64::MAX)
+                {
+                    self.phase4_event("primal_phase_two");
+                    self.run_primal_phase(SimplexPhase::Optimization, time_limit)?;
+                } else {
+                    self.phase4_event("primal_phase_two_skipped_at_limit");
+                }
             }
         }
         self.reoptimize_after_cleanup(time_limit)?;
+        self.validate_terminal_precision();
+        if !self.starting_values.is_empty()
+            && self.parameters.push_to_vertex
+            && self.problem_status == ProblemStatus::Optimal
+            && (0..self.num_cols.to_usize()).any(|column| {
+                let index = ColIndex::from_usize(column);
+                self.variables_info.as_ref().unwrap().variable_statuses()[index]
+                    == VariableStatus::Free
+                    && self.variable_values[index] != 0.0
+            })
+        {
+            self.phase4_event("primal_push");
+            self.run_primal_push(time_limit)?;
+        }
         self.finish_solution()?;
         self.starting_values.clear();
         Ok(())
@@ -294,14 +387,36 @@ impl RevisedSimplex {
             self.compute_reduced_costs(&objective)?;
 
             if self.problem_status == ProblemStatus::Optimal {
+                self.phase4_event("optimal_cleanup");
+                let solution_tolerance = self.parameters.solution_feasibility_tolerance;
+                let primal_residual = self.maximum_primal_residual();
+                let dual_residual = self.maximum_dual_residual(&self.objective);
+                if primal_residual > solution_tolerance || dual_residual > solution_tolerance {
+                    self.phase4_event("optimal_cleanup_residual_rejected");
+                    if self.parameters.change_status_to_imprecise {
+                        self.problem_status = ProblemStatus::Imprecise;
+                    }
+                    break;
+                }
                 let primal_infeasibility = self.maximum_primal_infeasibility();
                 let dual_infeasibility = self.maximum_dual_infeasibility();
-                if primal_infeasibility > self.parameters.primal_feasibility_tolerance {
+                let primal_tolerance =
+                    primal_residual.max(self.parameters.primal_feasibility_tolerance);
+                let dual_tolerance = dual_residual.max(self.parameters.dual_feasibility_tolerance);
+                if primal_infeasibility > primal_tolerance && dual_infeasibility > dual_tolerance {
+                    if self.parameters.change_status_to_imprecise {
+                        self.problem_status = ProblemStatus::Imprecise;
+                    }
+                    break;
+                }
+                if primal_infeasibility > primal_tolerance {
+                    self.phase4_event("cleanup_primal_to_dual");
                     if reoptimization == maximum_reoptimizations {
                         break;
                     }
                     self.problem_status = ProblemStatus::DualFeasible;
-                } else if dual_infeasibility > self.parameters.dual_feasibility_tolerance {
+                } else if dual_infeasibility > dual_tolerance {
+                    self.phase4_event("cleanup_dual_to_primal");
                     if reoptimization == maximum_reoptimizations {
                         break;
                     }
@@ -318,12 +433,292 @@ impl RevisedSimplex {
                 break;
             }
             if self.problem_status == ProblemStatus::PrimalFeasible {
+                self.phase4_event("cleanup_primal_reoptimization");
                 self.run_primal_phase(SimplexPhase::Optimization, time_limit)?;
             } else if self.problem_status == ProblemStatus::DualFeasible {
+                self.phase4_event("cleanup_dual_reoptimization");
                 self.run_dual_phase_two(time_limit)?;
             }
         }
         Ok(())
+    }
+
+    /// GLOP's post-optimal `PrimalPush()`: move each nonbasic super-basic
+    /// variable toward zero or its nearest bound without pricing it by its
+    /// (approximately zero) true reduced cost.
+    fn run_primal_push(&mut self, time_limit: &mut TimeLimit) -> Result<(), FactorizationError> {
+        self.primal_edge_norms.as_mut().unwrap().clear();
+        self.dual_edge_norms.clear();
+        self.update_row.as_mut().unwrap().invalidate();
+        let mut super_basic_cols = Vec::new();
+        for column in 0..self.num_cols.to_usize() {
+            let index = ColIndex::from_usize(column);
+            if self.variables_info.as_ref().unwrap().variable_statuses()[index]
+                == VariableStatus::Free
+                && self.variable_values[index] != 0.0
+            {
+                super_basic_cols.push(index);
+            }
+        }
+        let mut direction = ScatteredColumn::new(self.num_rows);
+        let mut refactorize = false;
+        while let Some(&entering) = super_basic_cols.last() {
+            if time_limit.limit_reached() {
+                break;
+            }
+            if refactorize && !self.basis_factorization.as_ref().unwrap().is_refactorized() {
+                self.basis_factorization.as_mut().unwrap().refactorize()?;
+                self.incorporate_basis_permutation();
+                self.update_row.as_mut().unwrap().invalidate();
+            }
+            refactorize = false;
+            if self.basis_factorization.as_ref().unwrap().is_refactorized() {
+                self.correct_errors_on_variable_values()?;
+            }
+            let entering_value = self.variable_values[entering];
+            let info = self.variables_info.as_ref().unwrap();
+            let unbounded = info.variable_types()[entering] == VariableType::Unconstrained;
+            let fake_reduced_cost = if unbounded {
+                if entering_value > 0.0 { 1.0 } else { -1.0 }
+            } else if entering_value - info.lower_bounds()[entering.to_usize()]
+                <= info.upper_bounds()[entering.to_usize()] - entering_value
+            {
+                1.0
+            } else {
+                -1.0
+            };
+            self.direction(entering, &mut direction)?;
+            let direction_norm = direction
+                .values()
+                .as_slice()
+                .iter()
+                .fold(0.0_f64, |maximum, value| maximum.max(value.abs()));
+            let choice = choose_leaving_variable_row(
+                entering,
+                fake_reduced_cost,
+                &direction,
+                direction_norm,
+                self.variable_values.as_slice(),
+                info.lower_bounds(),
+                info.upper_bounds(),
+                &self.basis,
+                self.basis_factorization.as_ref().unwrap().is_refactorized(),
+                &self.parameters,
+                &self.random,
+            );
+            let (leaving_row, mut step_length, target_bound) = match choice {
+                LeavingChoice::Refactorize => {
+                    refactorize = true;
+                    continue;
+                }
+                LeavingChoice::BoundFlip { step } => (None, step, 0.0),
+                LeavingChoice::Pivot {
+                    row,
+                    step,
+                    target_bound,
+                    ..
+                } => (Some(row), step, target_bound),
+            };
+            super_basic_cols.pop();
+            if step_length.is_infinite() {
+                if unbounded {
+                    step_length = entering_value.abs();
+                } else {
+                    self.problem_status = ProblemStatus::Abnormal;
+                    break;
+                }
+            }
+            let step = if fake_reduced_cost > 0.0 {
+                -step_length
+            } else {
+                step_length
+            };
+            let degenerate = leaving_row.is_some_and(|row| {
+                let leaving = self.basis[row];
+                let movement = -direction.value(row) * step;
+                movement == 0.0
+                    || (movement > 0.0 && self.variable_values[leaving] >= target_bound)
+                    || (movement < 0.0 && self.variable_values[leaving] <= target_bound)
+            });
+            for entry in &direction {
+                let basic = self.basis[entry.row()];
+                self.variable_values[basic] =
+                    (-entry.coefficient()).mul_add(step, self.variable_values[basic]);
+            }
+            self.variable_values[entering] += step;
+            if let Some(row) = leaving_row {
+                self.phase4_event("primal_push_pivot");
+                let leaving = self.basis[row];
+                if !degenerate {
+                    self.variable_values[leaving] = target_bound;
+                }
+                let status = self.status_at_bound(leaving, target_bound);
+                self.variables_info
+                    .as_mut()
+                    .unwrap()
+                    .update_to_nonbasic_status(leaving, status);
+                self.variables_info
+                    .as_mut()
+                    .unwrap()
+                    .update_to_basic_status(entering);
+                self.basis[row] = entering;
+                self.update_row
+                    .as_mut()
+                    .unwrap()
+                    .compute_unit_row_left_inverse(
+                        self.basis_factorization.as_ref().unwrap(),
+                        row.to_usize(),
+                    )?;
+                let pivot_from_update_row = self
+                    .matrix
+                    .column(entering)
+                    .iter()
+                    .map(|entry| {
+                        self.update_row.as_ref().unwrap().unit_row_left_inverse()
+                            [entry.index().to_usize()]
+                            * entry.coefficient()
+                    })
+                    .sum::<f64>();
+                let pivot_from_direction = direction.value(row);
+                let pivot_difference = (pivot_from_update_row - pivot_from_direction).abs();
+                let imprecise_pivot = pivot_difference
+                    > self.parameters.refactorization_threshold
+                        * (1.0 + pivot_from_update_row.abs().min(pivot_from_direction.abs()));
+                if imprecise_pivot {
+                    self.strengthen_lu_pivoting_after_early_imprecision()?;
+                    self.basis_factorization
+                        .as_mut()
+                        .unwrap()
+                        .update_and_refactorize(row.to_usize(), entering)?;
+                } else {
+                    self.basis_factorization
+                        .as_mut()
+                        .unwrap()
+                        .update_after_solve(entering, row.to_usize(), &direction)?;
+                }
+                self.incorporate_basis_permutation();
+                self.update_row.as_mut().unwrap().invalidate();
+            } else if unbounded {
+                self.variable_values[entering] = 0.0;
+            } else if step > 0.0 {
+                self.variables_info
+                    .as_mut()
+                    .unwrap()
+                    .update_to_nonbasic_status(entering, VariableStatus::AtUpperBound);
+                self.variable_values[entering] =
+                    self.variables_info.as_ref().unwrap().upper_bounds()[entering.to_usize()];
+            } else if step < 0.0 {
+                self.variables_info
+                    .as_mut()
+                    .unwrap()
+                    .update_to_nonbasic_status(entering, VariableStatus::AtLowerBound);
+                self.variable_values[entering] =
+                    self.variables_info.as_ref().unwrap().lower_bounds()[entering.to_usize()];
+            }
+            self.num_iterations += 1;
+        }
+        let objective = self.objective.clone();
+        self.compute_reduced_costs(&objective)?;
+        Ok(())
+    }
+
+    /// GLOP's final status check in `SolveInternal()`. Do not treat a status
+    /// reached at a time/iteration limit as precise merely because the loop
+    /// could not run another cleanup pass.
+    fn validate_terminal_precision(&mut self) {
+        let change_status_to_imprecise = self.parameters.change_status_to_imprecise;
+        if !change_status_to_imprecise {
+            self.phase4_event("imprecise_status_disabled");
+        }
+        if self.problem_status == ProblemStatus::DualInfeasible {
+            return;
+        }
+        let tolerance = self.parameters.solution_feasibility_tolerance;
+        // GLOP temporarily replaces objective_ with the Phase-I objective
+        // when primal feasibility fails. This port keeps the user objective
+        // separately and constructs that Phase-I objective on demand.
+        let feasibility_objective = (self.problem_status == ProblemStatus::PrimalInfeasible)
+            .then(|| self.phase_objective(SimplexPhase::Feasibility));
+        let objective = feasibility_objective.as_ref().unwrap_or(&self.objective);
+        if self.maximum_primal_residual() > tolerance
+            || self.maximum_dual_residual(objective) > tolerance
+            || matches!(
+                self.problem_status,
+                ProblemStatus::DualFeasible
+                    | ProblemStatus::DualUnbounded
+                    | ProblemStatus::PrimalInfeasible
+            ) && self.maximum_dual_infeasibility() > tolerance
+            || matches!(
+                self.problem_status,
+                ProblemStatus::PrimalFeasible | ProblemStatus::PrimalUnbounded
+            ) && self.maximum_primal_infeasibility() > tolerance
+        {
+            if change_status_to_imprecise {
+                self.phase4_event("imprecise_final_status");
+                self.problem_status = ProblemStatus::Imprecise;
+            }
+            return;
+        }
+        if self.problem_status == ProblemStatus::PrimalUnbounded {
+            let info = self.variables_info.as_ref().unwrap();
+            let mut min_distance = f64::INFINITY;
+            let mut cost_delta = 0.0;
+            for column in 0..self.num_cols.to_usize() {
+                let ray = self.primal_ray[ColIndex::from_usize(column)];
+                cost_delta += ray * self.objective[ColIndex::from_usize(column)];
+                if ray > 0.0 && info.upper_bounds()[column] != f64::INFINITY {
+                    let distance = (info.upper_bounds()[column]
+                        - self.variable_values[ColIndex::from_usize(column)]
+                        + tolerance)
+                        / ray;
+                    min_distance = min_distance.min(distance);
+                }
+                if ray < 0.0 && info.lower_bounds()[column] != f64::NEG_INFINITY {
+                    let distance = (self.variable_values[ColIndex::from_usize(column)]
+                        - info.lower_bounds()[column]
+                        + tolerance)
+                        / -ray;
+                    min_distance = min_distance.min(distance);
+                }
+            }
+            if min_distance * cost_delta.abs() < 1.0
+                && self.maximum_dual_infeasibility() <= tolerance
+            {
+                self.phase4_event("primal_ray_rejected");
+                self.problem_status = ProblemStatus::Optimal;
+            } else {
+                self.phase4_event("primal_ray_validated");
+            }
+        }
+        if self.problem_status == ProblemStatus::DualUnbounded {
+            let info = self.variables_info.as_ref().unwrap();
+            let mut implied_lower_bound = 0.0;
+            let mut error: f64 = 0.0;
+            for column in 0..self.num_cols.to_usize() {
+                let coefficient = self.dual_ray_row_combination[ColIndex::from_usize(column)];
+                if coefficient > 0.0 {
+                    if info.lower_bounds()[column] == f64::NEG_INFINITY {
+                        error = error.max(coefficient);
+                    } else {
+                        implied_lower_bound += coefficient * info.lower_bounds()[column];
+                    }
+                } else if coefficient < 0.0 {
+                    if info.upper_bounds()[column] == f64::INFINITY {
+                        error = error.max(-coefficient);
+                    } else {
+                        implied_lower_bound += coefficient * info.upper_bounds()[column];
+                    }
+                }
+            }
+            if implied_lower_bound < tolerance || error > tolerance {
+                self.phase4_event("dual_ray_rejected");
+                if change_status_to_imprecise {
+                    self.problem_status = ProblemStatus::Imprecise;
+                }
+            } else {
+                self.phase4_event("dual_ray_validated");
+            }
+        }
     }
 
     fn prepare_and_run_dual_phase_two(
@@ -349,10 +744,15 @@ impl RevisedSimplex {
             (info.can_increase().contains(column) && reduced < -tolerance)
                 || (info.can_decrease().contains(column) && reduced > tolerance)
         });
-        if nonboxed_dual_infeasible {
+        // Native SolveInternal enters the dedicated dual feasibility solve
+        // even when the initial reduced costs are already dual feasible. In
+        // particular its time-limit check then leaves status INIT.
+        if nonboxed_dual_infeasible || self.parameters.use_dedicated_dual_feasibility_algorithm {
             if self.parameters.use_dedicated_dual_feasibility_algorithm {
+                self.phase4_event("dual_dedicated_phase_one");
                 self.run_dedicated_dual_phase_one(time_limit)?;
             } else {
+                self.phase4_event("dual_transformed_phase_one");
                 self.run_transformed_dual_phase_one(time_limit)?;
             }
             if self.problem_status != ProblemStatus::DualFeasible {
@@ -381,6 +781,7 @@ impl RevisedSimplex {
             .make_boxed_variable_relevant(true);
         self.initialize_values()?;
         self.problem_status = ProblemStatus::DualFeasible;
+        self.phase4_event("dual_phase_two");
         self.run_dual_phase_two(time_limit)?;
         Ok(true)
     }
@@ -727,6 +1128,32 @@ impl RevisedSimplex {
         if !equation_lp.is_in_equation_form() {
             equation_lp.add_slack_variables_where_necessary(false);
         }
+        if self.try_reuse_unchanged_matrix_dual(&equation_lp)? {
+            return Ok(());
+        }
+        // A saved basis places its slack statuses immediately after the old
+        // structural columns. When columns are appended, those statuses must
+        // move past the new columns, as in GLOP's incremental initialization.
+        let new_first_slack = equation_lp
+            .first_slack_variable()
+            .unwrap_or(equation_lp.num_variables());
+        let added_columns = if self.num_rows == equation_lp.num_constraints()
+            && self.first_slack_col < new_first_slack
+            && self.state_for_next_solve.as_ref() == Some(&self.solution_state)
+            && self.solution_state.statuses.len() == self.num_cols
+            && (0..self.first_slack_col.to_usize()).all(|column| {
+                let column = ColIndex::from_usize(column);
+                let old = self.matrix.column(column);
+                let new = equation_lp.matrix().column(column);
+                old.num_entries() == new.num_entries()
+                    && old.iter().zip(new.iter()).all(|(left, right)| {
+                        left.row() == right.row() && left.coefficient() == right.coefficient()
+                    })
+            }) {
+            new_first_slack.to_usize() - self.first_slack_col.to_usize()
+        } else {
+            0
+        };
         self.num_rows = equation_lp.num_constraints();
         self.num_cols = equation_lp.num_variables();
         self.first_slack_col = equation_lp
@@ -774,12 +1201,22 @@ impl RevisedSimplex {
             .state_for_next_solve
             .as_ref()
             .is_some_and(|state| !state.is_empty());
+        if has_external_basis {
+            self.phase4_event("warm_start_basis");
+        }
         if let Some(state) = self
             .state_for_next_solve
             .take()
             .filter(|state| !state.is_empty())
         {
-            info.initialize_from_basis_state(self.first_slack_col.to_usize(), 0, &state);
+            if added_columns != 0 {
+                self.phase4_event("warm_added_column_status_remap");
+            }
+            info.initialize_from_basis_state(
+                self.first_slack_col.to_usize(),
+                added_columns,
+                &state,
+            );
         } else {
             info.initialize_to_default_status();
         }
@@ -946,8 +1383,83 @@ impl RevisedSimplex {
         self.update_row = Some(update_row);
         self.primal_ray = DenseRow::new();
         self.dual_ray = DenseColumn::new();
+        self.dual_ray_row_combination = DenseRow::new();
         self.problem_status = ProblemStatus::Init;
         Ok(())
+    }
+
+    /// The quick dual warm start in `Initialize()`: when only bounds changed,
+    /// GLOP retains the ordered basis and its factorization instead of
+    /// reconstructing and refactorizing the saved basis state.
+    fn try_reuse_unchanged_matrix_dual(
+        &mut self,
+        equation_lp: &LinearProgram,
+    ) -> Result<bool, FactorizationError> {
+        if !self.parameters.use_dual_simplex
+            || self.basis_factorization.is_none()
+            || self.num_rows != equation_lp.num_constraints()
+            || self.num_cols != equation_lp.num_variables()
+            || self.is_maximization_problem != equation_lp.is_maximization_problem()
+            || self.state_for_next_solve.as_ref() != Some(&self.solution_state)
+            || self.solution_state.is_empty()
+        {
+            return Ok(false);
+        }
+        let new_offset = if equation_lp.is_maximization_problem() {
+            -equation_lp.objective_offset()
+        } else {
+            equation_lp.objective_offset()
+        };
+        let new_scale = if equation_lp.is_maximization_problem() {
+            -equation_lp.objective_scaling_factor()
+        } else {
+            equation_lp.objective_scaling_factor()
+        };
+        if self.objective_offset != new_offset || self.objective_scaling_factor != new_scale {
+            return Ok(false);
+        }
+        for column in 0..self.num_cols.to_usize() {
+            let index = ColIndex::from_usize(column);
+            if self.objective[index] != equation_lp.objective_coefficient_for_minimization(index) {
+                return Ok(false);
+            }
+            let old = self.matrix.column(index);
+            let new = equation_lp.matrix().column(index);
+            if old.num_entries() != new.num_entries()
+                || !old.iter().zip(new.iter()).all(|(left, right)| {
+                    left.row() == right.row() && left.coefficient() == right.coefficient()
+                })
+            {
+                return Ok(false);
+            }
+        }
+        let info = self.variables_info.as_mut().unwrap();
+        if info.load_bounds_and_return_true_if_unchanged(
+            equation_lp.variable_lower_bounds().as_slice(),
+            equation_lp.variable_upper_bounds().as_slice(),
+        ) {
+            return Ok(false);
+        }
+        self.phase4_event("warm_reuse_factorization");
+        let state = self.state_for_next_solve.take().unwrap();
+        self.variables_info
+            .as_mut()
+            .unwrap()
+            .initialize_from_basis_state(self.first_slack_col.to_usize(), 0, &state);
+        self.variable_values = self.compute_initial_values(
+            self.variables_info.as_ref().unwrap(),
+            self.basis_factorization.as_ref().unwrap(),
+        )?;
+        self.primal_edge_norms.as_mut().unwrap().clear();
+        self.update_row.as_mut().unwrap().invalidate();
+        self.cost_perturbations.as_mut_slice().fill(0.0);
+        self.has_cost_shift = false;
+        self.primal_ray = DenseRow::new();
+        self.dual_ray = DenseColumn::new();
+        self.dual_ray_row_combination = DenseRow::new();
+        self.problem_status = ProblemStatus::Init;
+        self.objective_limit_reached = false;
+        Ok(true)
     }
 
     fn use_all_slack_basis(&mut self) {
@@ -1038,6 +1550,31 @@ impl RevisedSimplex {
         objective
     }
 
+    /// Update only the basic Phase-I costs in `rows`, as in
+    /// `VariableValues::UpdatePrimalPhaseICosts()`. In particular, a cost on
+    /// a variable that left the basis is not cleared here.
+    fn update_primal_phase_one_costs(&self, rows: &[RowIndex], objective: &mut DenseRow) -> bool {
+        let info = self.variables_info.as_ref().unwrap();
+        let tolerance = self.parameters.primal_feasibility_tolerance;
+        let mut changed = false;
+        for &row in rows {
+            let column = self.basis[row];
+            let value = self.variable_values[column];
+            let cost = if value - info.upper_bounds()[column.to_usize()] > tolerance {
+                1.0
+            } else if info.lower_bounds()[column.to_usize()] - value > tolerance {
+                -1.0
+            } else {
+                0.0
+            };
+            if cost != objective[column] {
+                objective[column] = cost;
+                changed = true;
+            }
+        }
+        changed
+    }
+
     fn compute_reduced_costs(&mut self, objective: &DenseRow) -> Result<(), FactorizationError> {
         let basic_objective: Vec<_> = (0..self.num_rows.to_usize())
             .map(|row| {
@@ -1088,6 +1625,7 @@ impl RevisedSimplex {
         self.cost_perturbations[column] -= value + delta;
         self.reduced_costs[column] = -delta;
         self.has_cost_shift = true;
+        self.phase4_event("dual_cost_shift");
     }
 
     fn perturb_costs(&mut self) {
@@ -1102,6 +1640,17 @@ impl RevisedSimplex {
     }
 
     fn remove_cost_shifts(&mut self) {
+        if self.has_cost_shift {
+            self.phase4_event("dual_cost_shift_removed");
+        } else if self.phase4_events_enabled
+            && self
+                .cost_perturbations
+                .as_slice()
+                .iter()
+                .any(|value| *value != 0.0)
+        {
+            self.phase4_event("dual_cost_perturbation_removed");
+        }
         self.cost_perturbations.as_mut_slice().fill(0.0);
         self.has_cost_shift = false;
     }
@@ -1178,6 +1727,9 @@ impl RevisedSimplex {
         phase: SimplexPhase,
         time_limit: &mut TimeLimit,
     ) -> Result<(), FactorizationError> {
+        if phase == SimplexPhase::Feasibility {
+            self.phase4_event("primal_phase_one");
+        }
         let pricing_rule = match if phase == SimplexPhase::Feasibility {
             self.parameters.feasibility_rule
         } else {
@@ -1193,15 +1745,21 @@ impl RevisedSimplex {
             .set_pricing_rule(pricing_rule);
         self.primal_prices.force_recomputation();
         let mut final_check_performed = false;
-        let incremental_reduced_costs = phase == SimplexPhase::Optimization;
         let mut recompute_reduced_costs = true;
         let mut refactorize_for_precision = false;
         let mut direction = ScatteredColumn::new(self.num_rows);
+        let mut phase_objective = self.phase_objective(phase);
+        let all_rows: Vec<_> = (0..self.num_rows.to_usize())
+            .map(RowIndex::from_usize)
+            .collect();
         loop {
-            if time_limit.limit_reached()
-                || self.num_iterations
-                    >= u64::try_from(self.parameters.max_number_of_iterations).unwrap_or(u64::MAX)
-            {
+            if time_limit.limit_reached() {
+                self.phase4_event("primal_phase_time_limit");
+                if phase == SimplexPhase::Feasibility {
+                    self.phase4_event("primal_phase_one_limit");
+                } else {
+                    self.phase4_event("primal_phase_two_limit");
+                }
                 self.problem_status = if phase == SimplexPhase::Feasibility {
                     ProblemStatus::Init
                 } else {
@@ -1210,6 +1768,7 @@ impl RevisedSimplex {
                 return Ok(());
             }
             if refactorize_for_precision {
+                self.phase4_event("primal_precision_refactorization");
                 self.basis_factorization
                     .as_mut()
                     .unwrap()
@@ -1230,11 +1789,26 @@ impl RevisedSimplex {
                 refactorize_for_precision = true;
                 continue;
             }
-            if self.basis_factorization.as_ref().unwrap().is_refactorized() {
+            let refactorized = self.basis_factorization.as_ref().unwrap().is_refactorized();
+            if refactorized {
                 self.correct_errors_on_variable_values()?;
             }
-            let phase_objective = self.phase_objective(phase);
-            if !incremental_reduced_costs || recompute_reduced_costs {
+            if phase == SimplexPhase::Feasibility {
+                let rows = if refactorized {
+                    &all_rows
+                } else {
+                    direction.non_zeros()
+                };
+                if !refactorized && !rows.is_empty() {
+                    self.phase4_event("primal_phase_one_sparse_cost_update");
+                }
+                if self.update_primal_phase_one_costs(rows, &mut phase_objective) {
+                    recompute_reduced_costs = true;
+                } else if !refactorized && !rows.is_empty() && !recompute_reduced_costs {
+                    self.phase4_event("primal_phase_one_incremental_reduced_costs");
+                }
+            }
+            if recompute_reduced_costs {
                 self.compute_reduced_costs(&phase_objective)?;
                 self.primal_prices.force_recomputation();
                 recompute_reduced_costs = false;
@@ -1243,6 +1817,7 @@ impl RevisedSimplex {
                 && self.basis_factorization.as_ref().unwrap().is_refactorized()
                 && self.internal_objective() < self.primal_objective_limit
             {
+                self.phase4_event("primal_objective_limit");
                 self.problem_status = ProblemStatus::PrimalFeasible;
                 self.objective_limit_reached = true;
                 return Ok(());
@@ -1250,8 +1825,9 @@ impl RevisedSimplex {
             let Some(entering) = self.choose_entering()? else {
                 // GLOP accepts an empty pricing set only after its FINAL_CHECK
                 // has both precise reduced costs and a refactorized basis.
-                // This provisional driver does not yet retain that precision
-                // state, so perform the check once explicitly and price again.
+                // Perform the check once explicitly and retain it across
+                // rejected precise candidates. Only an actual pivot makes
+                // the checked state obsolete.
                 if !final_check_performed {
                     self.basis_factorization.as_mut().unwrap().refactorize()?;
                     self.incorporate_basis_permutation();
@@ -1269,13 +1845,15 @@ impl RevisedSimplex {
                         } else {
                             ProblemStatus::PrimalInfeasible
                         };
+                    if self.problem_status == ProblemStatus::PrimalInfeasible {
+                        self.phase4_event("primal_infeasible_termination");
+                    }
                 } else {
                     self.problem_status = ProblemStatus::Optimal;
                 }
                 return Ok(());
             };
             self.direction(entering, &mut direction)?;
-            final_check_performed = false;
             let entering_edge_norm_is_precise = self
                 .primal_edge_norms
                 .as_mut()
@@ -1309,23 +1887,24 @@ impl RevisedSimplex {
                 continue;
             }
             let precise_reduced = phase_objective[entering]
-                - (0..self.num_rows.to_usize())
-                    .map(|row| {
-                        phase_objective[self.basis[RowIndex::from_usize(row)]]
-                            * direction.value(RowIndex::from_usize(row))
-                    })
-                    .sum::<f64>();
+                - basic_objective_direction_scalar_product(
+                    &phase_objective,
+                    &self.basis,
+                    &direction,
+                );
             let old_reduced = self.reduced_costs[entering];
             self.reduced_costs[entering] = precise_reduced;
-            if incremental_reduced_costs {
-                let scale = if precise_reduced.abs() <= 1.0 {
-                    1.0
-                } else {
-                    precise_reduced
-                };
-                refactorize_for_precision |= ((old_reduced - precise_reduced) / scale).abs()
-                    > self.parameters.recompute_reduced_costs_threshold;
+            let scale = if precise_reduced.abs() <= 1.0 {
+                1.0
+            } else {
+                precise_reduced
+            };
+            let reduced_cost_imprecise = (old_reduced - precise_reduced).abs() / scale
+                > self.parameters.recompute_reduced_costs_threshold;
+            if reduced_cost_imprecise {
+                self.phase4_event("primal_reduced_cost_precision_retry");
             }
+            refactorize_for_precision |= reduced_cost_imprecise;
             {
                 let norms = self.primal_edge_norms.as_mut().unwrap().squared_norms(
                     self.basis_factorization.as_ref().unwrap(),
@@ -1354,6 +1933,24 @@ impl RevisedSimplex {
                     }
                     continue;
                 }
+            }
+            // GLOP checks the iteration limit only after pricing and the
+            // precise entering-cost check. At limit zero an already feasible
+            // or optimal basis must still be recognized above.
+            if self.num_iterations
+                == u64::try_from(self.parameters.max_number_of_iterations).unwrap_or(u64::MAX)
+            {
+                if phase == SimplexPhase::Feasibility {
+                    self.phase4_event("primal_phase_one_limit");
+                } else {
+                    self.phase4_event("primal_phase_two_limit");
+                }
+                self.problem_status = if phase == SimplexPhase::Feasibility {
+                    ProblemStatus::Init
+                } else {
+                    ProblemStatus::PrimalFeasible
+                };
+                return Ok(());
             }
             let direction_norm = direction
                 .values()
@@ -1391,12 +1988,21 @@ impl RevisedSimplex {
                 continue;
             }
             let (leaving_row, step_length, target_bound) = match choice {
-                LeavingChoice::BoundFlip { step } => (None, step, 0.0),
+                LeavingChoice::BoundFlip { step } => {
+                    self.phase4_event("primal_bound_flip");
+                    (None, step, 0.0)
+                }
                 LeavingChoice::Pivot {
                     row,
                     step,
                     target_bound,
-                } => (Some(row), step, target_bound),
+                    exact_tie,
+                } => {
+                    if exact_tie {
+                        self.phase4_event("primal_harris_exact_tie");
+                    }
+                    (Some(row), step, target_bound)
+                }
                 LeavingChoice::Refactorize => unreachable!(),
             };
             if step_length.is_infinite() {
@@ -1419,6 +2025,7 @@ impl RevisedSimplex {
                     ProblemStatus::PrimalUnbounded
                 };
                 if phase == SimplexPhase::Optimization {
+                    self.phase4_event("primal_unbounded_termination");
                     self.primal_ray = DenseRow::filled(self.num_cols, 0.0);
                     let sign = if reduced > 0.0 { -1.0 } else { 1.0 };
                     self.primal_ray[entering] = sign;
@@ -1440,6 +2047,16 @@ impl RevisedSimplex {
             {
                 let leaving = self.basis[row];
                 step = (self.variable_values[leaving] - target_bound) / direction.value(row);
+            }
+            let degenerate_pivot = leaving_row.is_some_and(|row| {
+                let leaving = self.basis[row];
+                let movement = -direction.value(row) * step;
+                movement == 0.0
+                    || (movement > 0.0 && self.variable_values[leaving] >= target_bound)
+                    || (movement < 0.0 && self.variable_values[leaving] <= target_bound)
+            });
+            if degenerate_pivot {
+                self.phase4_event("primal_degenerate_pivot");
             }
             for entry in &direction {
                 let column = self.basis[entry.row()];
@@ -1476,28 +2093,46 @@ impl RevisedSimplex {
                         direction.values().as_slice(),
                         self.update_row.as_mut().unwrap(),
                     )?;
-                if incremental_reduced_costs {
-                    update_reduced_cost_values_before_basis_pivot(
-                        self.reduced_costs.as_mut_slice(),
-                        entering,
-                        leaving,
-                        direction.value(row),
-                        self.update_row.as_ref().unwrap(),
-                    );
-                    let norms = self.primal_edge_norms.as_mut().unwrap().squared_norms(
-                        self.basis_factorization.as_ref().unwrap(),
-                        self.variables_info.as_ref().unwrap().relevance(),
-                    )?;
-                    self.primal_prices.update_before_basis_pivot_from_values(
-                        entering,
-                        self.update_row.as_ref().unwrap(),
-                        self.variables_info.as_ref().unwrap(),
-                        self.reduced_costs.as_slice(),
-                        norms,
-                        self.parameters.dual_feasibility_tolerance,
-                    );
+                // Dantzig pricing does not need the update row for its edge
+                // norms. ReducedCosts::UpdateBeforeBasisPivot() computes it
+                // independently before the reduced-cost scatter.
+                self.update_row.as_mut().unwrap().compute_update_row(
+                    self.basis_factorization.as_ref().unwrap(),
+                    &self.matrix,
+                    self.variables_info.as_ref().unwrap().relevance(),
+                    self.variables_info
+                        .as_ref()
+                        .unwrap()
+                        .num_entries_in_relevant_columns()
+                        .value()
+                        .try_into()
+                        .expect("negative relevant entry count"),
+                    row.to_usize(),
+                )?;
+                update_reduced_cost_values_before_basis_pivot(
+                    self.reduced_costs.as_mut_slice(),
+                    entering,
+                    leaving,
+                    direction.value(row),
+                    self.update_row.as_ref().unwrap(),
+                );
+                let norms = self.primal_edge_norms.as_mut().unwrap().squared_norms(
+                    self.basis_factorization.as_ref().unwrap(),
+                    self.variables_info.as_ref().unwrap().relevance(),
+                )?;
+                self.primal_prices.update_before_basis_pivot_from_values(
+                    entering,
+                    self.update_row.as_ref().unwrap(),
+                    self.variables_info.as_ref().unwrap(),
+                    self.reduced_costs.as_slice(),
+                    norms,
+                    self.parameters.dual_feasibility_tolerance,
+                );
+                if !degenerate_pivot {
+                    self.variable_values[leaving] = target_bound;
+                } else if self.variable_values[leaving] != target_bound {
+                    self.phase4_event("primal_bound_shift");
                 }
-                self.variable_values[leaving] = target_bound;
                 let leaving_status = self.status_at_bound(leaving, target_bound);
                 {
                     let info = self.variables_info.as_mut().unwrap();
@@ -1535,8 +2170,32 @@ impl RevisedSimplex {
                 self.incorporate_basis_permutation();
                 self.update_row.as_mut().unwrap().invalidate();
                 if self.basis_factorization.as_ref().unwrap().is_refactorized() {
-                    recompute_reduced_costs = true;
+                    // GLOP retains the incremental reduced costs after an
+                    // ordinary UpdateAndPivot() refactorization. Recomputing
+                    // them here erases the error estimate that can request a
+                    // separate reduced-cost precision refactorization later.
                     self.primal_prices.force_recomputation();
+                }
+                if phase == SimplexPhase::Feasibility {
+                    self.phase4_event("primal_phase_one_leaving_cost_cleared");
+                    // PrimalMinimize() puts the leaving nonbasic variable at
+                    // its exact bound and removes its temporary Phase-I cost
+                    // after UpdateAndPivot(). The reduced cost changes by
+                    // precisely the removed cost, without a full solve.
+                    self.variable_values[leaving] = target_bound;
+                    self.reduced_costs[leaving] -= phase_objective[leaving];
+                    phase_objective[leaving] = 0.0;
+                    let norms = self.primal_edge_norms.as_mut().unwrap().squared_norms(
+                        self.basis_factorization.as_ref().unwrap(),
+                        self.variables_info.as_ref().unwrap().relevance(),
+                    )?;
+                    self.primal_prices.recompute_price_at_from_values(
+                        leaving,
+                        self.variables_info.as_ref().unwrap(),
+                        self.reduced_costs.as_slice(),
+                        norms,
+                        self.parameters.dual_feasibility_tolerance,
+                    );
                 }
             } else {
                 let info = self.variables_info.as_mut().unwrap();
@@ -1556,6 +2215,7 @@ impl RevisedSimplex {
                     );
             }
             self.num_iterations += 1;
+            final_check_performed = false;
             if self.trace_enabled {
                 self.trace.push(IterationEvent {
                     iteration: self.num_iterations,
@@ -1581,6 +2241,7 @@ impl RevisedSimplex {
         let mut direction = ScatteredColumn::new(self.num_rows);
         loop {
             if time_limit.limit_reached() {
+                self.phase4_event("dual_phase_one_time_limit");
                 self.problem_status = ProblemStatus::Init;
                 return Ok(());
             }
@@ -1639,6 +2300,7 @@ impl RevisedSimplex {
                 return Ok(());
             }
             let Some(leaving_position) = self.dual_prices.get_maximum() else {
+                self.phase4_event("dual_infeasible_termination");
                 self.problem_status = ProblemStatus::DualInfeasible;
                 return Ok(());
             };
@@ -1769,6 +2431,7 @@ impl RevisedSimplex {
             if self.num_iterations
                 >= u64::try_from(self.parameters.max_number_of_iterations).unwrap_or(u64::MAX)
             {
+                self.phase4_event("dual_phase_one_limit");
                 self.problem_status = ProblemStatus::Init;
                 return Ok(());
             }
@@ -1916,12 +2579,14 @@ impl RevisedSimplex {
                 if self.dual_objective_limit != f64::INFINITY
                     && self.internal_objective() > self.dual_objective_limit
                 {
+                    self.phase4_event("dual_objective_limit");
                     self.problem_status = ProblemStatus::DualFeasible;
                     self.objective_limit_reached = true;
                     return Ok(());
                 }
             } else if !basis_is_refactorized {
                 if !self.bound_flip_candidates.is_empty() {
+                    self.phase4_event("dual_boxed_bound_flip");
                     let candidates = std::mem::take(&mut self.bound_flip_candidates);
                     self.make_boxed_variables_dual_feasible(&candidates, true)?;
                 }
@@ -1947,6 +2612,7 @@ impl RevisedSimplex {
                     continue;
                 }
                 self.problem_status = ProblemStatus::Optimal;
+                self.phase4_event("dual_phase_two_optimal");
                 return Ok(());
             };
             let leaving_row = RowIndex::from_usize(leaving_position);
@@ -2013,6 +2679,7 @@ impl RevisedSimplex {
                     continue;
                 }
                 self.problem_status = ProblemStatus::DualUnbounded;
+                self.phase4_event("dual_unbounded_termination");
                 self.dual_ray = DenseColumn::from_vec(
                     self.update_row
                         .as_ref()
@@ -2020,8 +2687,24 @@ impl RevisedSimplex {
                         .unit_row_left_inverse()
                         .to_vec(),
                 );
+                self.dual_ray_row_combination = DenseRow::from_vec(
+                    self.update_row.as_ref().unwrap().compute_full_update_row(
+                        &self.matrix,
+                        &self
+                            .basis
+                            .as_slice()
+                            .iter()
+                            .map(|column| column.to_usize())
+                            .collect::<Vec<_>>(),
+                        self.variables_info.as_ref().unwrap().not_basic(),
+                        leaving_position,
+                    )?,
+                );
                 if cost_variation < 0.0 {
                     for value in self.dual_ray.as_mut_slice() {
+                        *value = -*value;
+                    }
+                    for value in self.dual_ray_row_combination.as_mut_slice() {
                         *value = -*value;
                     }
                 }
@@ -2074,6 +2757,7 @@ impl RevisedSimplex {
             if self.num_iterations
                 == u64::try_from(self.parameters.max_number_of_iterations).unwrap_or(u64::MAX)
             {
+                self.phase4_event("dual_iteration_limit");
                 self.problem_status = ProblemStatus::DualFeasible;
                 return Ok(());
             }
@@ -2252,6 +2936,7 @@ impl RevisedSimplex {
                     row: point.row,
                     step: current_ratio,
                     target_bound: point.target,
+                    exact_tie: false,
                 }
             }
         } else {
@@ -2309,6 +2994,31 @@ impl RevisedSimplex {
             .as_mut()
             .unwrap()
             .set_column_permutation_to_identity();
+    }
+
+    fn maximum_primal_residual(&self) -> f64 {
+        let mut residual = DenseColumn::filled(self.num_rows, 0.0);
+        for column in 0..self.num_cols.to_usize() {
+            self.compact_matrix.column_add_multiple_to_dense_column(
+                ColIndex::from_usize(column),
+                self.variable_values[ColIndex::from_usize(column)],
+                &mut residual,
+            );
+        }
+        residual
+            .as_slice()
+            .iter()
+            .fold(0.0_f64, |maximum, value| maximum.max(value.abs()))
+    }
+
+    fn maximum_dual_residual(&self, objective: &DenseRow) -> f64 {
+        let dual_row = DenseRow::from_vec(self.dual_values.as_slice().to_vec());
+        (0..self.num_rows.to_usize()).fold(0.0_f64, |maximum, row| {
+            let basic = self.basis[RowIndex::from_usize(row)];
+            let residual = objective[basic] + self.cost_perturbations[basic]
+                - self.compact_matrix.column_scalar_product(basic, &dual_row);
+            maximum.max(residual.abs())
+        })
     }
 
     fn maximum_primal_infeasibility(&self) -> f64 {
@@ -2378,7 +3088,32 @@ impl RevisedSimplex {
     }
 
     fn finish_solution(&mut self) -> Result<(), FactorizationError> {
-        let objective = self.objective.clone();
+        // GLOP leaves its temporary Phase-I objective installed when primal
+        // feasibility fails. Expose reduced costs/dual values for that same
+        // objective rather than recomputing them for the unsolved user cost.
+        let objective = if self.problem_status == ProblemStatus::PrimalInfeasible {
+            self.phase_objective(SimplexPhase::Feasibility)
+        } else {
+            self.objective.clone()
+        };
+        self.solution_objective_value = self.objective_scaling_factor
+            * (precise_scalar_product(objective.as_slice(), self.variable_values.as_slice())
+                + self.objective_offset);
+        if matches!(
+            self.problem_status,
+            ProblemStatus::PrimalUnbounded | ProblemStatus::DualUnbounded
+        ) {
+            let sign = if self.problem_status == ProblemStatus::DualUnbounded {
+                1.0
+            } else {
+                -1.0
+            };
+            self.solution_objective_value = if self.is_maximization_problem {
+                -sign * f64::INFINITY
+            } else {
+                sign * f64::INFINITY
+            };
+        }
         self.compute_reduced_costs(&objective)?;
         self.solution_reduced_costs = self.reduced_costs.clone();
         self.solution_dual_values = self.dual_values.clone();
@@ -2417,7 +3152,7 @@ impl RevisedSimplex {
     }
     #[must_use]
     pub fn objective_value(&self) -> f64 {
-        self.objective_scaling_factor * (self.internal_objective() + self.objective_offset)
+        self.solution_objective_value
     }
     #[must_use]
     pub const fn objective_limit_reached(&self) -> bool {

@@ -1,0 +1,26 @@
+{
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "mps_sha256": "94d577e8733cbf3b72cbfa35de2486d7dd5c99c7ee3db93c52663026b8ed9314",
+  "parameters": {
+    "use_dual_simplex": false,
+    "use_scaling": false
+  },
+  "snapshots": [
+    {
+      "limit": 21502,
+      "status": "PRIMAL_FEASIBLE",
+      "iterations": 21502,
+      "pivot_sha256": "59141378c67b245a6b4bfcb9b92f7af8a92195bf959d9075faa2c10bd1501768",
+      "basis_sha256": "10ad1ad4e835f8009978755124e67fec253562957706445e3bd00d995a01404e",
+      "reduced_bits_sha256": "5c5f6d844a6a5fb171d4c7e63c5ba7f9f8379acbdddd46380c24fb8ce06776bd"
+    },
+    {
+      "limit": 1000000,
+      "status": "OPTIMAL",
+      "iterations": 23367,
+      "pivot_sha256": "5b4358f1c3b8a7be2fb95ca023be95a2a40b5fd8b0e900f4800ded3e10bf5e4f",
+      "basis_sha256": "4a35245da2b0488455ef544cc71aed371f01e1ea6a02ee065fd4a1d484fb34cd",
+      "reduced_bits_sha256": "7891a38e9b7f77eb1ac7e231024bdf69c52ff40e68a381d08d1b47055ae25520"
+    }
+  ]
+}

@@ -41,6 +41,25 @@ fn solves_a_bounded_problem_through_phase_one_and_two() {
 }
 
 #[test]
+fn primal_phase_one_infeasibility_keeps_its_temporary_objective_for_final_checks() {
+    // x >= 1 and x <= 0 has no feasible point. GLOP's final dual-residual
+    // check uses the Phase-I objective, not the original zero objective.
+    let mut lp = LinearProgram::default();
+    let x = lp.create_new_variable();
+    let row = lp.create_new_constraint();
+    lp.set_variable_bounds(x, 1.0, f64::INFINITY);
+    lp.set_constraint_bounds(row, f64::NEG_INFINITY, 0.0);
+    lp.set_coefficient(row, x, 1.0);
+    lp.clean_up();
+
+    let mut simplex = RevisedSimplex::new();
+    simplex
+        .solve(&lp, &mut TimeLimit::new(f64::INFINITY, f64::INFINITY))
+        .unwrap();
+    assert_eq!(simplex.problem_status(), ProblemStatus::PrimalInfeasible);
+}
+
+#[test]
 fn all_primal_pricing_rules_drive_the_revised_simplex_loop() {
     let mut lp = LinearProgram::default();
     let x = lp.create_new_variable();

@@ -20,12 +20,14 @@ pub enum LeavingChoice {
         row: RowIndex,
         step: f64,
         target_bound: f64,
+        exact_tie: bool,
     },
     Refactorize,
 }
 
 #[must_use]
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
 pub fn choose_leaving_variable_row(
     entering_column: ColIndex,
     reduced_cost: f64,
@@ -114,7 +116,8 @@ pub fn choose_leaving_variable_row(
         leaving_row = Some(row);
     }
     let mut row = leaving_row.expect("a Harris candidate exists when bound flip is rejected");
-    if !equivalent_leaving_choices.is_empty() {
+    let exact_tie = !equivalent_leaving_choices.is_empty();
+    if exact_tie {
         equivalent_leaving_choices.push(row);
         row = equivalent_leaving_choices[random.uniform_index(equivalent_leaving_choices.len())];
     }
@@ -138,6 +141,7 @@ pub fn choose_leaving_variable_row(
         row,
         step,
         target_bound: target,
+        exact_tie,
     }
 }
 

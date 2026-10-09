@@ -25,6 +25,7 @@ def main() -> None:
         type=Path,
         default=PROJECT_ROOT / "tools" / "glop_reference_adapter.cc",
     )
+    parser.add_argument("--extra-source", type=Path, action="append", default=[])
     args = parser.parse_args()
 
     source = args.source
@@ -55,6 +56,7 @@ def main() -> None:
         f"-I{args.build / '_deps' / 'protobuf-src' / 'third_party' / 'utf8_range'}",
         f"-I{args.build / '_deps' / 'absl-src'}",
         str(source),
+        *(str(path) for path in args.extra_source),
         f"-L{library_dir}",
         "-lortools",
     ]

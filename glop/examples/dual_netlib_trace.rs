@@ -18,11 +18,14 @@ fn main() {
         .expect("invalid iteration limit");
     let mut perturb = false;
     let mut transformed = false;
+    let mut primal = false;
     for flag in arguments {
         if flag == "perturb" {
             perturb = true;
         } else if flag == "transformed" {
             transformed = true;
+        } else if flag == "primal" {
+            primal = true;
         } else {
             panic!("unknown option");
         }
@@ -31,7 +34,7 @@ fn main() {
     let model = parse_mps_file(path).expect("failed to parse MPS");
     let parameters = GlopParameters {
         use_scaling: false,
-        use_dual_simplex: true,
+        use_dual_simplex: !primal,
         perturb_costs_in_dual_simplex: perturb,
         use_dedicated_dual_feasibility_algorithm: !transformed,
         max_number_of_iterations: iterations,
@@ -73,26 +76,28 @@ fn main() {
         print!(" {column}");
     }
     println!();
-    print!("phasevec");
-    for &value in simplex.dual_phase_one_pricing_vector().as_slice() {
-        print!(" {value:.17}");
+    if !primal {
+        print!("phasevec");
+        for &value in simplex.dual_phase_one_pricing_vector().as_slice() {
+            print!(" {value:.17}");
+        }
+        println!();
+        print!("norms");
+        for &value in simplex
+            .dual_edge_squared_norms()
+            .expect("failed to obtain dual norms")
+        {
+            print!(" {value:.17}");
+        }
+        print!("\nnorm_bits");
+        for &value in simplex
+            .dual_edge_squared_norms()
+            .expect("failed to obtain dual norms")
+        {
+            print!(" {}", value.to_bits());
+        }
+        println!();
     }
-    println!();
-    print!("norms");
-    for &value in simplex
-        .dual_edge_squared_norms()
-        .expect("failed to obtain dual norms")
-    {
-        print!(" {value:.17}");
-    }
-    print!("\nnorm_bits");
-    for &value in simplex
-        .dual_edge_squared_norms()
-        .expect("failed to obtain dual norms")
-    {
-        print!(" {}", value.to_bits());
-    }
-    println!();
     print!("basis");
     for row in 0..model.num_constraints().to_usize() {
         print!(" {}", simplex.basis(RowIndex::from_usize(row)).to_usize());

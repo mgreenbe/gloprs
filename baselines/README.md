@@ -30,6 +30,18 @@ edge norms, and the complete sequence of entering columns, leaving basic
 columns, leaving rows, and iteration numbers. The fixture uses the same pinned
 OR-Tools revision and identifies every input by its expanded MPS checksum.
 
+`qap12-primal.json` separately pins the large, unscaled direct-primal qap12
+solve omitted from the fast-96 fixture. It records native status, iterations,
+and SHA-256 fingerprints of the complete pivot sequence, ordered basis, and
+reduced-cost bit patterns at the former pivot-21,502 divergence and at
+termination. `tools/generate_qap12_primal_fixture.py` regenerates it from a
+temporary pinned-native build that emits `NATIVE_PIVOT_DIAG` events without
+editing the upstream checkout. Run its opt-in release regression with:
+
+```text
+cargo test --release -p gloprs-glop --test qap12_primal -- --ignored
+```
+
 The fixture generator requires a temporary diagnostic native build as described
 in `tools/generate_netlib_trajectory_fixture.py`. Validate gloprs against it
 with a fresh 20-second wall-clock limit for every model:
@@ -51,4 +63,22 @@ sequences. Regenerate it from the pinned native adapter and run its opt-in
 python3 tools/build_glop_reference_adapter.py --source tools/dual_netlib_trace_reference_adapter.cc --output target/native/dual_netlib_trace_reference_adapter
 python3 tools/generate_perturbed_dual_fixture.py
 cargo test --release -p gloprs-glop --test netlib_perturbed_dual -- --ignored
+```
+
+`phase4-cases.json` and `phase4-native.json` are small, no-presolve branch
+fixtures for the revised-simplex driver. The cases specify the LP, parameter
+mode, and branch tags; the native fixture records pinned GLOP's status,
+iterations, objective, ordered basis, primal values, reduced costs, and
+unbounded rays. The integration test asserts that Rust actually visits each
+declared branch tag and matches the native result. It also fails if a new
+instrumented branch has no case. The [coverage ledger](phase4-coverage.md)
+distinguishes these exercised branches from the Phase-4 gaps that still need
+fixtures or implementation.
+
+Regenerate and test with:
+
+```text
+python3 tools/build_glop_reference_adapter.py --source tools/phase4_reference_adapter.cc --output target/native/phase4_reference_adapter
+python3 tools/generate_phase4_fixture.py
+cargo test -p gloprs-glop --test phase4_native_cases
 ```

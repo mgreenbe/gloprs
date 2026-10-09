@@ -433,8 +433,9 @@ GLOP's order (edge norms, reduced costs, prices), use the same update-row sparse
 support, and retry after the precise entering reduced cost invalidates the
 selected candidate. Imprecise edge norms and bound flips now use GLOP's local
 heap maintenance rather than unconditional price rebuilds. Full recomputation
-is retained after refactorization and in the current phase-I driver, whose
-feasibility objective changes during the iteration.
+is retained after refactorization or a changed Phase-I objective. Phase I now
+refreshes only the preceding direction's basic costs between refactorizations
+and retains its incremental reduced costs when those costs do not change.
 As in GLOP, a refactorized basis also triggers a residual check and recomputes
 basic variable values when the Harris-scaled feasibility tolerance is exceeded.
 Exact steepest-edge initialization calls the LU-specific sparse squared-norm
@@ -749,8 +750,8 @@ norms makes all 141 `vtp.base` pivots agree. Exact initialization still uses
 GLOP's specialized transpose-factor norm solve rather than the general left
 solve.
 
-This is not yet a validated Phase-4 port. The primal phase-I objective update is
-not yet connected to GLOP's incremental `ReducedCosts` orchestration; dual
+This is not yet a validated Phase-4 port. The primal Phase-I objective update
+now follows GLOP's incremental `ReducedCosts` orchestration; dual
 reoptimization after cleanup,
 full termination/reoptimization checks, and complete incremental warm-start cases
 remain to be translated. The reproducible `tools/validate_netlib_solve.py`
@@ -800,6 +801,109 @@ iterations, basis updates, ordered basis,
 primal values (modulo signed zero), reduced costs, and dual norms against it.
 The native adapter does not expose pivot events in this mode, so this artifact
 does not claim complete perturbed pivot-sequence coverage.
+
+A new small-LP native branch fixture (`baselines/phase4-cases.json` and
+`phase4-native.json`) now covers 60 targeted primal, dual, limit, ray, and
+warm-start cases. The Rust test requires each case's diagnostic branch tags
+to be visited and compares native status, iterations, objective, ordered basis,
+values, reduced costs, and rays; it also rejects newly instrumented tags with
+no case. The first fixture exposed two final-snapshot gaps: on primal
+infeasibility, GLOP returns Phase-I reduced costs and objective rather than
+the unsolved user objective; for unbounded outcomes it returns the appropriate
+signed infinity. These are now aligned. `baselines/phase4-coverage.md` lists
+the remaining uninstrumented and uncovered branches explicitly. Broad Netlib
+agreement is not being treated as proof of complete Phase-4 branch coverage.
+The latest pair exercises an actual residual-driven `IMPRECISE` exit and its
+`change_status_to_imprecise = false` counterpart on the same small LP.
+Additional cases now cover primal limits before and after Phase I, an already
+optimal zero-limit dual basis, dual shifts and boxed flips, objective-changing
+warm starts, and imported starting values with push-to-vertex disabled. The
+primal-limit cases repaired two control-flow divergences: the iteration check
+now follows precise entering-column pricing, and a positive limit exhausted
+by Phase I prevents entering Phase II, as in pinned GLOP. An `INIT` result
+after primal Phase I now restores the user objective before final checks.
+Immediate deterministic-limit cases now exercise primal and dedicated-dual
+Phase I. The dual case exposed an orchestration discrepancy: native GLOP
+always enters dedicated dual Phase I, even with an initially dual-feasible
+basis. Rust now enters it too, preserving native `INIT` status when the time
+limit has already expired. Positive one-pivot primal and dual Phase-II
+iteration limits now match native terminal state. Nonzero time limits and
+other later-phase exits still need targeted fixtures. A two-row warm start also validates simultaneous bound
+changes after loading the prior basis.
+An externally supplied structural basis agrees with native GLOP. Two
+added-column warm starts exercise both a structural and a slack basis from
+the previous solve. The slack-basis case exposed incorrect alignment of saved
+slack statuses after the new column shifted their indices; the status import
+now applies GLOP's `num_new_cols` remapping when the prior structural matrix
+is unchanged. This fixes the result/iteration discrepancy but does not yet
+port GLOP's quick incremental warm-start reuse: Rust still rebuilds its
+matrix and factorization on the second solve.
+Two added-row warm starts now also match native GLOP, starting from both
+structural and slack bases. They validate saved-state alignment when the row
+count grows, but do not yet exercise upstream's quick incremental reuse path.
+Postsolve validation now follows GLOP's two unbounded-ray checks: the primal
+ray is tested for a nearby blocking bound and weak objective gain, while the
+dual ray's full row combination must prove infeasibility within the solution
+tolerance. Six additional pinned-native cases now bracket both rejection
+decisions: the weak primal ray becomes `OPTIMAL`, the weak dual certificate
+becomes `IMPRECISE`, stronger rays retain unbounded statuses, and disabling
+imprecise conversion preserves GLOP's corresponding status behavior.
+Two more native cases bracket the optimal-cleanup residual check at nonzero
+solution tolerances (`1e-18` rejects, `1e-16` accepts on the same LP). The
+distinct residual-adjusted primal/dual infeasibility branches remain uncovered.
+An exact two-row primal Harris tie now has an end-to-end native fixture in
+addition to the existing isolated shared-RNG ratio-test unit test.
+A one-row degenerate primal pivot also exercises GLOP's off-bound leaving
+value: Rust now retains the resulting bound shift until cleanup instead of
+unconditionally snapping the value to its target bound. The fixture matches
+native final status, iterations, basis, values, and reduced costs. Its shift
+does not force a shift-induced primal-to-dual cleanup switch, which remains uncovered.
+A two-pivot native fixture with zero reduced-cost recomputation threshold
+also reaches the precision retry and forced basis refactorization; its final
+state matches native GLOP. A separate zero pivot-refactorization threshold
+did not reach the early imprecise-pivot branch in this LP, so adaptive LU
+threshold escalation remains untested.
+
+The cleanup loop now also follows GLOP's residual-aware terminal classification:
+it checks primal equation residual and basic-column dual residual after removing
+shifts, raises each requested feasibility tolerance to at least its residual
+error, and marks an `OPTIMAL` result `IMPRECISE` when both primal and dual
+infeasibility exceed those effective tolerances. The final status check applies
+GLOP's `change_status_to_imprecise` guard after a time/iteration-limited solve.
+Both 96-model release fixtures (ordinary pivot trajectories and perturbed
+terminal states) still pass. This does not complete Phase 4: primal bound-shift
+cleanup switching, full warm-start behavior, and the remaining
+unbounded/infeasible termination checks still need direct porting and validation.
+The Phase-I driver now retains its temporary objective, refreshes all basic
+costs after refactorization or only the preceding direction's rows otherwise,
+and zeroes the leaving variable's Phase-I cost after each pivot as GLOP does.
+The coupled-row two-pivot native fixture exposed a separate Dantzig-pricing
+gap: edge norms can skip update-row construction, but incremental reduced
+costs require it. Rust now requests GLOP's update row before the reduced-cost
+scatter. The full coupled-row solve and its one-pivot limit, an independent
+two-pivot solve, and a positive Phase-I limit with infeasibility remaining
+match pinned native status, iterations, ordered basis, values, reduced costs,
+and objective.
+The post-optimal starting-value push now has a Rust counterpart to GLOP's
+`PrimalPush()`. Pinned native cases cover a free nonbasic variable moved to
+zero and a constrained push that pivots the basis; both agree in status,
+iteration count, ordered basis, values, and reduced costs. The solver also
+retains its existing basis factorization on a dual warm start when only bounds
+change and the saved state is its own. One- and two-row native cases exercise
+that quick path, including the zero-pivot second solve. Added-row/column quick
+paths and the remaining push arms are still open in the coverage ledger.
+Two strict-tolerance native cases exercise cleanup's dual-to-primal switch:
+one stops at the iteration limit after changing status, and the other enters
+primal reoptimization and confirms optimality without a new pivot. The latter
+exposed a retry loop in Rust's provisional primal final check. Rejecting a
+tiny entering reduced cost invalidated the final check even though no pivot
+changed the basis; the checked state now persists until an actual pivot.
+A three-row strict-tolerance native case now exercises the converse
+primal-to-dual cleanup switch and enters dual reoptimization, agreeing on the
+three-pivot final state. Relaxing the internal tolerances to `1e-15` on the
+same primal case and a corresponding dual case avoids their respective
+switches; the fixture explicitly forbids those branch tags. Shift-induced
+switches and the both-infeasible cleanup branch remain open.
 
 The nondefault transformed dual Phase I now follows GLOP's auxiliary-bound
 sequence: transform bounds and statuses using the current reduced costs,
@@ -1017,6 +1121,37 @@ trajectory fixture still passes. This does not establish that the remaining
 kernel gap is entirely bounds checks: Rust still retains right-hand-side
 checks and uses 64-bit row indices versus native GLOP's 32-bit indices.
 The reproducible microbenchmark is `tools/benchmark_lower_transpose.py`.
+
+The excluded `qap12` is now separately validated under matched settings.
+Unscaled direct dual simplex terminates `OPTIMAL` in 115,513 iterations in
+both pinned GLOP and Rust; sampled limits at 0, 1, 10, 100, 500, 1,000,
+5,000, 10,000, 20,000, 40,000, and 80,000 have identical ordered bases,
+reduced-cost bits, and dual-norm bits (apart from signed zeros in values).
+One untraced release run took 44.49 seconds native versus 59.14 seconds Rust,
+so this model has a large performance gap without an observed dual path gap.
+The public LP-solver default is a different experiment: native GLOP uses its
+preprocessing/scaling pipeline and took 22,308 iterations in the checked-in
+baseline, whereas Rust's `LPSolver` intentionally omits that Phase-5 pipeline.
+The former direct unscaled *primal* mismatch (23,367 native versus 23,276
+Rust iterations) came from Rust's unconditional full reduced-cost
+recomputation after an ordinary basis-update refactorization. GLOP retains
+its incrementally updated reduced costs. On qap12, the extra Rust recomputation
+erased an approximately `1.56e-8` accumulated error in entering column 3344;
+native GLOP detected that error against its `1e-8` precision threshold and
+refactorized after pivot 21,501. Rust skipped that branch, giving a different
+basis permutation at pivot 21,502 and a different leaving column at pivot
+21,530. Rust now preserves incremental reduced costs across ordinary
+refactorization, as upstream does, and uses GLOP's sparse/dense scalar-product
+order in the entering-cost check. Both direct primal solves now terminate
+`OPTIMAL` after 23,367 iterations and match the native ordered-basis and
+reduced-cost bit fingerprints at pivot 21,502 and termination. A full native
+pivot hook also confirms that all 23,367 entering-column, leaving-column,
+leaving-row, and iteration tuples agree. The opt-in `qap12_primal` regression
+pins both complete pivot-sequence fingerprints and the terminal snapshots to
+the native fixture.
+`tools/compare_netlib_prefix.py` reproduces the localization without
+modifying the pinned upstream checkout. Do not use the 22,308-versus-115,513
+iteration counts as a direct native/Rust comparison.
 
 Benchmark entry point: `tools/benchmark_netlib_solve.py` with release-built
 `glop/examples/netlib_timing.rs` and the native

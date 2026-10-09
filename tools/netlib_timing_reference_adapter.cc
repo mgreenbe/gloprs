@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <string_view>
 
 #include "ortools/glop/revised_simplex.h"
 #include "ortools/lp_data/lp_data.h"
@@ -16,8 +17,10 @@
 
 int main(int argc, char** argv) {
   namespace glop = operations_research::glop;
-  if (argc != 2 && argc != 3) return EXIT_FAILURE;
-  const int repetitions = argc == 3 ? std::atoi(argv[2]) : 1;
+  if (argc < 2 || argc > 4) return EXIT_FAILURE;
+  const bool primal = argc == 4 && std::string_view(argv[3]) == "primal";
+  if (argc == 4 && !primal) return EXIT_FAILURE;
+  const int repetitions = argc >= 3 ? std::atoi(argv[2]) : 1;
   if (repetitions <= 0) return EXIT_FAILURE;
 
   const auto model = glop::MpsFileToMPModelProto(argv[1]);
@@ -27,7 +30,7 @@ int main(int argc, char** argv) {
 
   glop::GlopParameters parameters;
   parameters.set_use_scaling(false);
-  parameters.set_use_dual_simplex(true);
+  parameters.set_use_dual_simplex(!primal);
   parameters.set_max_number_of_iterations(1000000);
   const auto start = std::chrono::steady_clock::now();
   std::unique_ptr<glop::RevisedSimplex> simplex;

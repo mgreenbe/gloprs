@@ -32,6 +32,8 @@ int main(int argc, char** argv) {
     const std::string_view flag(argv[option]);
     if (flag == "perturb") {
       parameters.set_perturb_costs_in_dual_simplex(true);
+    } else if (flag == "primal") {
+      parameters.set_use_dual_simplex(false);
     } else if (flag == "transformed") {
       parameters.set_use_dedicated_dual_feasibility_algorithm(false);
     } else {

@@ -15,13 +15,16 @@ fn main() {
             .parse()
             .expect("invalid repetitions")
     });
+    let mode = arguments.next();
+    assert!(mode.as_ref().is_none_or(|value| value == "primal"));
+    let primal = mode.is_some();
     assert!(arguments.next().is_none());
     assert!(repetitions > 0);
 
     let model = parse_mps_file(path).expect("failed to parse MPS");
     let parameters = GlopParameters {
         use_scaling: false,
-        use_dual_simplex: true,
+        use_dual_simplex: !primal,
         max_number_of_iterations: 1_000_000,
         ..GlopParameters::default()
     };
