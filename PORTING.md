@@ -277,14 +277,54 @@ native trajectory fixture still passes. Aggregate Rust/native in-solver time
 fell from 1.358 to 1.226; see `PLAN.md` for the benchmark conditions and
 remaining outliers.
 
-An important remaining lifecycle discrepancy is that
-`basis_representation::force_refactorization()` constructs a fresh
-`LuFactorization` and `markowitz::compute()` constructs fresh workspaces on
-every rebuild. Upstream's `BasisFactorization::ForceRefactorization()` reuses
-the existing `LuFactorization` and its `Markowitz` object. This discrepancy is
-prominent in profiles of `dfl001` and `stocfor3` and remains an active
-performance-fidelity task; it should not be treated as a validated performance
-match merely because numerical trajectories agree.
+Profiles of `dfl001` and `stocfor3` identified a lifecycle discrepancy:
+`basis_representation::force_refactorization()` constructed a fresh
+`LuFactorization` and `markowitz::compute()` constructed fresh workspaces on
+every rebuild, whereas upstream retains both objects. `ForceRefactorization`
+retains its LU object; Markowitz resets residual-pattern, queue, candidate,
+physical-column, and in-progress lower-factor storage in place; and the final
+triangular factors and their transposes reuse their contiguous buffers.
+Repeated A/B/A factorization and the strict 96-model trajectory fixture pass.
+Those lifecycle changes alone had small timing gains. The separate
+factor-representation divergence is now eliminated: Markowitz fills the
+retained `L` and `U` triangular matrices directly, normalizes `L` in place,
+and applies the final row permutation to their off-diagonal indices in place,
+exactly as upstream `Markowitz::ComputeLU()` does. It no longer copies `L`
+through sparse-column and tuple-column intermediates or reconstructs either
+factor from those tuples. First-time candidate columns fill their recycled
+physical-column storage directly. One thousand native LU differential traces
+and all 96 strict native Netlib trajectories pass; full serial aggregate
+Rust/native in-solver time fell from 1.226 to 1.103. Remaining performance
+gaps require separate profiling and are not attributed to factor conversion.
+
+The next profiling pass aligned the Markowitz DFS workspace with GLOP's
+compact row bitset, including touched-bucket clearing, and specialized the
+dense lower-transpose solve by unit-diagonal state with GLOP's fixed short
+tail. Both preserve the native 96-model trajectories and 1,000 LU traces.
+The serial aggregate ratio is now 1.097; `dfl001`, `stocfor3`, and `truss`
+remain the largest absolute Rust excesses. Dense transpose substitution is
+still the main sampled Rust self-time on `dfl001` and `fit2p`, but the precise
+remaining machine-code cause has not yet been established. No unsafe code was
+introduced; `lp_data` continues to forbid it.
+
+The dense upper-transpose solve now follows upstream's one-time diagonal
+dispatch and continuous forward entry cursor, preserving its four-term
+contraction and fixed-tail operation order. A targeted unit test, 1,000 native
+triangular traces, and the strict 96-model release trajectory fixture pass.
+A three-model serial timing sample is essentially unchanged (aggregate ratio
+1.279, versus 1.275 on the same models previously), so this is a structural
+fidelity correction, not a measured performance improvement. The dense
+lower-transpose kernel has since been isolated in a dedicated microbenchmark.
+
+ARM64 disassembly of that benchmark identified repeated factor-storage bounds
+checks in the original Rust lower-transpose loop. Per-column checked slices
+with four-entry reverse chunks preserve GLOP's floating-point grouping and
+traversal direction but avoid much of that cost without `unsafe`. At dimension
+1024 and 3% density, its median microbenchmark ratio improved from 1.73 to
+1.49; the full 96-model three-trial aggregate solve-time ratio moved from
+1.097 to 1.093. The strict trajectory fixture passes. Rust's per-entry
+right-hand-side checks and 64-bit row indices remain representation differences
+from native GLOP; the current evidence does not apportion their separate costs.
 
 ## Test inventory caveat
 

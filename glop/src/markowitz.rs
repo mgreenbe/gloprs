@@ -23,9 +23,6 @@ pub struct Pivot {
 
 #[derive(Clone, Debug)]
 pub(crate) struct SparseLu {
-    pub lower_columns: Vec<Vec<(usize, f64)>>,
-    pub upper_columns: Vec<Vec<(usize, f64)>>,
-    pub upper_diagonal: Vec<f64>,
     /// Pivot position -> input row.
     pub row_permutation: Vec<usize>,
     /// Pivot position -> input column.
@@ -43,9 +40,6 @@ pub(crate) struct MarkowitzStats {
 }
 
 struct MarkowitzResult {
-    lower: Vec<SparseColumn>,
-    upper: Vec<Vec<(usize, f64)>>,
-    upper_diagonal: Vec<f64>,
     pivot_rows: Vec<usize>,
     pivot_columns: Vec<usize>,
     row_permutation: Vec<usize>,
@@ -91,7 +85,7 @@ impl<'a> MatrixView<'a> {
 
 /// Symbolic residual matrix. Deleted columns remain lazily in row adjacency
 /// lists; the separate degrees always describe the active submatrix.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 struct MatrixNonZeroPattern {
     row_nonzeros: Vec<Vec<usize>>,
     row_degree: Vec<usize>,
@@ -102,25 +96,35 @@ struct MatrixNonZeroPattern {
 }
 
 impl MatrixNonZeroPattern {
-    fn from_matrix_subset(
+    fn reset_from_matrix_subset(
+        &mut self,
         matrix: MatrixView<'_>,
         row_permutation: &[usize],
         column_permutation: &[usize],
-    ) -> (Self, Vec<usize>, Vec<usize>) {
+        singleton_columns: &mut Vec<usize>,
+        singleton_rows: &mut Vec<usize>,
+    ) {
         let rows = matrix.num_rows();
         let columns = matrix.num_columns();
-        let mut result = Self {
-            row_nonzeros: vec![Vec::new(); rows],
-            row_degree: vec![0; rows],
-            column_degree: vec![0; columns],
-            deleted_columns: vec![false; columns],
-            scratchpad: vec![false; columns],
-            non_deleted_columns: columns,
-        };
+        self.row_nonzeros.resize_with(rows, Vec::new);
+        for row in &mut self.row_nonzeros {
+            row.clear();
+        }
+        self.row_degree.resize(rows, 0);
+        self.row_degree.fill(0);
+        self.column_degree.resize(columns, 0);
+        self.column_degree.fill(0);
+        self.deleted_columns.resize(columns, false);
+        self.deleted_columns.fill(false);
+        self.scratchpad.resize(columns, false);
+        self.scratchpad.fill(false);
+        self.non_deleted_columns = columns;
+        singleton_columns.clear();
+        singleton_rows.clear();
         for (column, &permuted) in column_permutation.iter().enumerate().take(columns) {
             if permuted != INVALID {
-                result.deleted_columns[column] = true;
-                result.non_deleted_columns -= 1;
+                self.deleted_columns[column] = true;
+                self.non_deleted_columns -= 1;
                 continue;
             }
             for entry in matrix.column(column) {
@@ -128,18 +132,13 @@ impl MatrixNonZeroPattern {
                 if row_permutation[row] != INVALID {
                     continue;
                 }
-                result.row_nonzeros[row].push(column);
-                result.row_degree[row] += 1;
-                result.column_degree[column] += 1;
+                self.row_nonzeros[row].push(column);
+                self.row_degree[row] += 1;
+                self.column_degree[column] += 1;
             }
         }
-        let singleton_columns = (0..columns)
-            .filter(|&column| result.column_degree[column] == 1)
-            .collect();
-        let singleton_rows = (0..rows)
-            .filter(|&row| result.row_degree[row] == 1)
-            .collect();
-        (result, singleton_columns, singleton_rows)
+        singleton_columns.extend((0..columns).filter(|&column| self.column_degree[column] == 1));
+        singleton_rows.extend((0..rows).filter(|&row| self.row_degree[row] == 1));
     }
 
     fn delete_row_and_column(&mut self, row: usize, column: usize) {
@@ -241,22 +240,20 @@ fn store_pivot_column(
     pivot_rows: &mut Vec<usize>,
     pivot_columns: &mut Vec<usize>,
     lower_factor: &mut TriangularMatrix,
-    upper: &mut Vec<Vec<(usize, f64)>>,
-    upper_diagonal: &mut Vec<f64>,
+    upper_factor: &mut TriangularMatrix,
 ) {
     let step = pivot_rows.len();
     let source = matrix.column(column);
     let pivot = source.look_up_coefficient(RowIndex::from_usize(row));
     lower_factor.add_diagonal_only_column(1.0);
-    let mut upper_column = Vec::with_capacity(source.num_entries().saturating_sub(1));
-    for entry in source {
-        let entry_row = entry.index().to_usize();
-        if entry_row != row && row_permutation[entry_row] != INVALID {
-            upper_column.push((entry_row, entry.coefficient()));
-        }
-    }
-    upper_diagonal.push(pivot);
-    upper.push(upper_column);
+    upper_factor.add_column_with_diagonal(
+        source.iter().filter_map(|entry| {
+            let entry_row = entry.index().to_usize();
+            (entry_row != row && row_permutation[entry_row] != INVALID)
+                .then_some((entry_row, entry.coefficient()))
+        }),
+        pivot,
+    );
     pivot_rows.push(row);
     pivot_columns.push(column);
     row_permutation[row] = step;
@@ -276,10 +273,14 @@ struct ColumnPriorityQueue {
 impl ColumnPriorityQueue {
     fn reset(&mut self, maximum_degree: usize, columns: usize) {
         self.minimum_degree = maximum_degree + 1;
-        self.degree = vec![0; columns];
-        self.previous = vec![INVALID; columns];
-        self.next = vec![INVALID; columns];
-        self.first_by_degree = vec![INVALID; maximum_degree + 1];
+        self.degree.resize(columns, 0);
+        self.degree.fill(0);
+        self.previous.resize(columns, INVALID);
+        self.previous.fill(INVALID);
+        self.next.resize(columns, INVALID);
+        self.next.fill(INVALID);
+        self.first_by_degree.resize(maximum_degree + 1, INVALID);
+        self.first_by_degree.fill(INVALID);
     }
 
     fn remove(&mut self, column: usize, old_degree: usize) {
@@ -362,6 +363,16 @@ impl ReusableColumnMemory {
         }
     }
 
+    fn reset(&mut self, num_columns: usize) {
+        self.mapping.resize(num_columns, INVALID);
+        self.mapping.fill(INVALID);
+        self.free_columns.clear();
+        for (slot, column) in self.columns.iter_mut().enumerate() {
+            column.clear();
+            self.free_columns.push(slot);
+        }
+    }
+
     fn column(&self, column: usize) -> &SparseColumn {
         let slot = self.mapping[column];
         if slot == INVALID {
@@ -399,14 +410,42 @@ impl ReusableColumnMemory {
     }
 }
 
-fn input_column(matrix: MatrixView<'_>, column: usize) -> SparseColumn {
+/// Allocated Markowitz state retained across basis refactorizations, as in
+/// upstream's persistent `Markowitz` member.
+#[derive(Clone, Debug)]
+pub(crate) struct MarkowitzWorkspace {
+    pattern: MatrixNonZeroPattern,
+    candidates: Vec<CandidateColumn>,
+    permuted_lower: ReusableColumnMemory,
+    permuted_upper: ReusableColumnMemory,
+    singleton_columns: Vec<usize>,
+    singleton_rows: Vec<usize>,
+    queue: ColumnPriorityQueue,
+    examined: Vec<usize>,
+}
+
+impl Default for MarkowitzWorkspace {
+    fn default() -> Self {
+        Self {
+            pattern: MatrixNonZeroPattern::default(),
+            candidates: Vec::new(),
+            permuted_lower: ReusableColumnMemory::new(0),
+            permuted_upper: ReusableColumnMemory::new(0),
+            singleton_columns: Vec::new(),
+            singleton_rows: Vec::new(),
+            queue: ColumnPriorityQueue::default(),
+            examined: Vec::new(),
+        }
+    }
+}
+
+fn copy_input_column(matrix: MatrixView<'_>, column: usize, result: &mut SparseColumn) {
     let source = matrix.column(column);
-    let mut result = SparseColumn::new();
+    result.clear();
     result.reserve(source.num_entries());
     for entry in source {
         result.add_entry(entry.index(), entry.coefficient());
     }
-    result
 }
 
 fn structural_singleton_row(
@@ -437,7 +476,7 @@ fn compute_column<'a>(
     let mut residual = permuted_lower.take_column(column);
     if candidates[column].needs_solve {
         if first_time {
-            residual = input_column(matrix, column);
+            copy_input_column(matrix, column, &mut residual);
         }
         lower_factor.permuted_lower_sparse_solve(
             &mut residual,
@@ -454,7 +493,7 @@ fn compute_column<'a>(
             return permuted_lower.column(column);
         }
         if first_time {
-            residual = input_column(matrix, column);
+            copy_input_column(matrix, column, &mut residual);
             *num_fp_operations += i64::try_from(residual.num_entries()).unwrap_or(i64::MAX);
         }
         *num_fp_operations += i64::try_from(residual.num_entries()).unwrap_or(i64::MAX);
@@ -675,7 +714,13 @@ fn update_degree(
 }
 
 #[allow(clippy::too_many_lines)]
-fn compute(matrix: MatrixView<'_>, parameters: &GlopParameters) -> MarkowitzResult {
+fn compute(
+    matrix: MatrixView<'_>,
+    parameters: &GlopParameters,
+    workspace: &mut MarkowitzWorkspace,
+    lower_factor: &mut TriangularMatrix,
+    upper_factor: &mut TriangularMatrix,
+) -> MarkowitzResult {
     let num_rows = matrix.num_rows();
     let num_columns = matrix.num_columns();
     let maximum_pivots = num_rows.min(num_columns);
@@ -683,13 +728,20 @@ fn compute(matrix: MatrixView<'_>, parameters: &GlopParameters) -> MarkowitzResu
     let mut col_perm = vec![INVALID; num_columns];
     let mut pivot_rows = Vec::with_capacity(maximum_pivots);
     let mut pivot_columns = Vec::with_capacity(maximum_pivots);
-    let mut lower_factor = TriangularMatrix::empty(Triangle::Lower, true);
     lower_factor.reset(num_rows, maximum_pivots);
-    let mut upper: Vec<Vec<(usize, f64)>> = Vec::with_capacity(maximum_pivots);
-    let mut upper_diagonal = Vec::with_capacity(maximum_pivots);
-    let mut candidates = vec![CandidateColumn::default(); num_columns];
-    let mut permuted_lower = ReusableColumnMemory::new(num_columns);
-    let mut permuted_upper = ReusableColumnMemory::new(num_columns);
+    upper_factor.reset(num_rows, maximum_pivots);
+    let pattern = &mut workspace.pattern;
+    let candidates = &mut workspace.candidates;
+    let permuted_lower = &mut workspace.permuted_lower;
+    let permuted_upper = &mut workspace.permuted_upper;
+    let singleton_columns = &mut workspace.singleton_columns;
+    let singleton_rows = &mut workspace.singleton_rows;
+    let queue = &mut workspace.queue;
+    let examined = &mut workspace.examined;
+    candidates.resize(num_columns, CandidateColumn::default());
+    candidates.fill(CandidateColumn::default());
+    permuted_lower.reset(num_columns);
+    permuted_upper.reset(num_columns);
     let mut num_fp_operations = 0_i64;
     let matrix_is_empty = (0..num_columns).all(|column| matrix.column(column).is_empty());
 
@@ -722,9 +774,8 @@ fn compute(matrix: MatrixView<'_>, parameters: &GlopParameters) -> MarkowitzResu
             &mut col_perm,
             &mut pivot_rows,
             &mut pivot_columns,
-            &mut lower_factor,
-            &mut upper,
-            &mut upper_diagonal,
+            lower_factor,
+            upper_factor,
         );
     }
     let basis_singletons = pivot_rows.len();
@@ -757,41 +808,45 @@ fn compute(matrix: MatrixView<'_>, parameters: &GlopParameters) -> MarkowitzResu
                 &mut col_perm,
                 &mut pivot_rows,
                 &mut pivot_columns,
-                &mut lower_factor,
-                &mut upper,
-                &mut upper_diagonal,
+                lower_factor,
+                upper_factor,
             );
         }
     }
     let residual_singletons = pivot_rows.len();
     let mut pivots_without_fill_in = residual_singletons;
 
-    let (mut pattern, mut singleton_columns, mut singleton_rows) =
-        MatrixNonZeroPattern::from_matrix_subset(matrix, &row_perm, &col_perm);
-    let mut queue = ColumnPriorityQueue::default();
+    pattern.reset_from_matrix_subset(
+        matrix,
+        &row_perm,
+        &col_perm,
+        singleton_columns,
+        singleton_rows,
+    );
     let mut queue_initialized = false;
     let mut contains_only_singleton_columns = true;
     let zlatev_parameter =
         usize::try_from(parameters.markowitz_zlatev_parameter).unwrap_or(usize::MAX);
-    let mut examined = Vec::with_capacity(zlatev_parameter.saturating_add(1));
+    examined.clear();
+    examined.reserve(zlatev_parameter.saturating_add(1));
 
     for step in pivot_rows.len()..maximum_pivots {
         let Some(pivot) = find_pivot(
             matrix,
             parameters,
-            &pattern,
+            pattern,
             &row_perm,
             &col_perm,
-            &mut lower_factor,
-            &mut candidates,
-            &mut permuted_lower,
-            &mut permuted_upper,
-            &mut singleton_columns,
-            &mut singleton_rows,
+            lower_factor,
+            candidates,
+            permuted_lower,
+            permuted_upper,
+            singleton_columns,
+            singleton_rows,
             &mut contains_only_singleton_columns,
-            &mut queue,
+            queue,
             &mut queue_initialized,
-            &mut examined,
+            examined,
             &mut num_fp_operations,
         ) else {
             break;
@@ -834,14 +889,14 @@ fn compute(matrix: MatrixView<'_>, parameters: &GlopParameters) -> MarkowitzResu
                     column,
                     pattern.column_degree[column],
                     queue_initialized,
-                    &mut queue,
-                    &mut singleton_columns,
+                    queue,
+                    singleton_columns,
                 );
             }
         } else if pivot.markowitz == 0 {
             pivots_without_fill_in += 1;
             debug_assert_eq!(row_degree, 1);
-            pattern.remove_column(pivot.column, residual, &mut singleton_rows);
+            pattern.remove_column(pivot.column, residual, singleton_rows);
         } else {
             pattern.update(pivot.row, pivot.column, residual);
             for &column in &pattern.row_nonzeros[pivot.row] {
@@ -851,12 +906,12 @@ fn compute(matrix: MatrixView<'_>, parameters: &GlopParameters) -> MarkowitzResu
                         column,
                         pattern.column_degree[column],
                         queue_initialized,
-                        &mut queue,
-                        &mut singleton_columns,
+                        queue,
+                        singleton_columns,
                     );
                 }
             }
-            pattern.remove_column(pivot.column, residual, &mut singleton_rows);
+            pattern.remove_column(pivot.column, residual, singleton_rows);
         }
 
         if contains_only_singleton_columns {
@@ -868,36 +923,24 @@ fn compute(matrix: MatrixView<'_>, parameters: &GlopParameters) -> MarkowitzResu
                 &mut col_perm,
                 &mut pivot_rows,
                 &mut pivot_columns,
-                &mut lower_factor,
-                &mut upper,
-                &mut upper_diagonal,
+                lower_factor,
+                upper_factor,
             );
             continue;
         }
 
-        let mut lower_column = SparseColumn::new();
-        lower_column.reserve(residual.num_entries().saturating_sub(1));
-        for entry in residual {
-            // TriangularMatrix::AddAndNormalizeTriangularColumn() upstream
-            // drops numerical cancellations instead of retaining structural
-            // zeroes in L. Besides wasting work, retaining one changes the
-            // sparse transpose-solve reachability and its accumulation order.
-            if entry.index().to_usize() != pivot.row && entry.coefficient() != 0.0 {
-                lower_column.add_entry(entry.index(), entry.coefficient() / pivot_value);
-            }
-        }
-        lower_factor.add_triangular_column_with_given_diagonal(
-            &lower_column,
+        // This is GLOP's AddAndNormalizeTriangularColumn(): it filters exact
+        // cancellations while writing L directly into its final storage.
+        lower_factor.add_and_normalize_triangular_column(
+            residual,
             RowIndex::from_usize(pivot.row),
-            1.0,
+            pivot_value,
         );
-        upper_diagonal.push(pivot_value);
-        let mut upper_column =
-            Vec::with_capacity(permuted_upper.column(pivot.column).num_entries());
-        for entry in permuted_upper.column(pivot.column) {
-            upper_column.push((entry.index().to_usize(), entry.coefficient()));
-        }
-        upper.push(upper_column);
+        upper_factor.add_triangular_column_with_given_diagonal(
+            permuted_upper.column(pivot.column),
+            RowIndex::from_usize(pivot.row),
+            pivot_value,
+        );
         permuted_lower.clear_and_release_column(pivot.column);
         permuted_upper.clear_and_release_column(pivot.column);
         pivot_rows.push(pivot.row);
@@ -907,7 +950,7 @@ fn compute(matrix: MatrixView<'_>, parameters: &GlopParameters) -> MarkowitzResu
     }
 
     let lower_entries = lower_factor.num_entries();
-    let upper_entries = pivot_rows.len() + upper.iter().map(Vec::len).sum::<usize>();
+    let upper_entries = upper_factor.num_entries();
     num_fp_operations +=
         10 * i64::try_from(lower_entries.saturating_add(upper_entries)).unwrap_or(i64::MAX);
     #[allow(clippy::cast_precision_loss)]
@@ -919,18 +962,7 @@ fn compute(matrix: MatrixView<'_>, parameters: &GlopParameters) -> MarkowitzResu
         // the pinned release reference does not define OR_STATS.
         degree_two_pivot_columns: 0.0,
     });
-    let mut lower = Vec::with_capacity(lower_factor.num_cols());
-    for column in 0..lower_factor.num_cols() {
-        let mut sparse_column = SparseColumn::new();
-        for (row, coefficient) in lower_factor.column(column) {
-            sparse_column.add_entry(RowIndex::from_usize(row), coefficient);
-        }
-        lower.push(sparse_column);
-    }
     MarkowitzResult {
-        lower,
-        upper,
-        upper_diagonal,
         pivot_rows,
         pivot_columns,
         row_permutation: row_perm,
@@ -942,52 +974,56 @@ fn compute(matrix: MatrixView<'_>, parameters: &GlopParameters) -> MarkowitzResu
 pub(crate) fn factorize(
     matrix: &SparseMatrix,
     parameters: &GlopParameters,
+    workspace: &mut MarkowitzWorkspace,
+    lower: &mut TriangularMatrix,
+    upper: &mut TriangularMatrix,
 ) -> Result<SparseLu, usize> {
     let n = matrix.num_rows().to_usize();
-    let result = compute(MatrixView::full(matrix), parameters);
-    factors_from_result(result, n)
+    let result = compute(
+        MatrixView::full(matrix),
+        parameters,
+        workspace,
+        lower,
+        upper,
+    );
+    factors_from_result(result, n, lower, upper)
 }
 
 pub(crate) fn factorize_selected(
     matrix: &SparseMatrix,
     columns: &[usize],
     parameters: &GlopParameters,
+    workspace: &mut MarkowitzWorkspace,
+    lower: &mut TriangularMatrix,
+    upper: &mut TriangularMatrix,
 ) -> Result<SparseLu, usize> {
     let n = matrix.num_rows().to_usize();
-    let result = compute(MatrixView::selected(matrix, columns), parameters);
-    factors_from_result(result, n)
+    let result = compute(
+        MatrixView::selected(matrix, columns),
+        parameters,
+        workspace,
+        lower,
+        upper,
+    );
+    factors_from_result(result, n, lower, upper)
 }
 
-fn factors_from_result(result: MarkowitzResult, n: usize) -> Result<SparseLu, usize> {
+fn factors_from_result(
+    result: MarkowitzResult,
+    n: usize,
+    lower: &mut TriangularMatrix,
+    upper: &mut TriangularMatrix,
+) -> Result<SparseLu, usize> {
     if result.pivot_rows.len() != n {
         return Err(result.pivot_rows.len());
     }
-    let mut lower_columns = vec![Vec::new(); n];
-    let mut upper_columns = vec![Vec::new(); n];
-    for step in 0..n {
-        for entry in &result.lower[step] {
-            lower_columns[step].push((
-                result.row_permutation[entry.index().to_usize()],
-                entry.coefficient(),
-            ));
-        }
-        for &(row, value) in &result.upper[step] {
-            upper_columns[step].push((result.row_permutation[row], value));
-        }
-        // GLOP applies the final row permutation in place and deliberately
-        // retains each factor column's construction order. Transpose solves
-        // observe that order through floating-point rounding, so do not sort
-        // either L or U here.
-        debug_assert!(
-            upper_columns[step].iter().all(|entry| entry.0 < step),
-            "non-triangular upper column {step}: {:?}",
-            upper_columns[step]
-        );
-    }
+    // Match Markowitz::ComputeLU(): permute stored off-diagonal row indices
+    // in place, without changing their order or rebuilding either factor.
+    lower.apply_row_permutation_to_non_diagonal_entries(&result.row_permutation);
+    upper.apply_row_permutation_to_non_diagonal_entries(&result.row_permutation);
+    debug_assert!((0..n).all(|column| lower.column(column).all(|(row, _)| row > column)));
+    debug_assert!((0..n).all(|column| upper.column(column).all(|(row, _)| row < column)));
     Ok(SparseLu {
-        lower_columns,
-        upper_columns,
-        upper_diagonal: result.upper_diagonal,
         row_permutation: result.pivot_rows,
         column_permutation: result.pivot_columns,
         num_fp_operations: result.num_fp_operations,
@@ -1000,7 +1036,15 @@ pub(crate) fn compute_pivot_sequence(
     columns: &[usize],
     parameters: &GlopParameters,
 ) -> (Vec<usize>, Vec<usize>) {
-    let result = compute(MatrixView::selected(matrix, columns), parameters);
+    let mut lower = TriangularMatrix::empty(Triangle::Lower, true);
+    let mut upper = TriangularMatrix::empty(Triangle::Upper, false);
+    let result = compute(
+        MatrixView::selected(matrix, columns),
+        parameters,
+        &mut MarkowitzWorkspace::default(),
+        &mut lower,
+        &mut upper,
+    );
     (result.pivot_rows, result.pivot_columns)
 }
 
@@ -1144,14 +1188,85 @@ mod tests {
             }
         }
 
-        let result = factorize(&matrix, &GlopParameters::default()).unwrap();
+        let mut lower = TriangularMatrix::empty(Triangle::Lower, true);
+        let mut upper = TriangularMatrix::empty(Triangle::Upper, false);
+        factorize(
+            &matrix,
+            &GlopParameters::default(),
+            &mut MarkowitzWorkspace::default(),
+            &mut lower,
+            &mut upper,
+        )
+        .unwrap();
 
         assert!(
-            result
-                .lower_columns
-                .iter()
-                .flatten()
-                .all(|entry| entry.1 != 0.0)
+            (0..lower.num_cols())
+                .flat_map(|column| lower.column(column))
+                .all(|(_, coefficient)| coefficient != 0.0)
         );
+    }
+
+    #[test]
+    fn workspace_reuse_preserves_factors_after_a_different_basis() {
+        let build = |columns: [&[(usize, f64)]; 3]| {
+            let mut matrix = SparseMatrix::new();
+            matrix.populate_from_zero(RowIndex::new(3), ColIndex::new(3));
+            for (column, entries) in columns.into_iter().enumerate() {
+                for &(row, coefficient) in entries {
+                    matrix
+                        .mutable_column(ColIndex::from_usize(column))
+                        .add_entry(RowIndex::from_usize(row), coefficient);
+                }
+            }
+            matrix
+        };
+        let first = build([
+            &[(0, 4.0), (1, 1.0)],
+            &[(0, 1.0), (1, 5.0), (2, 1.0)],
+            &[(1, 1.0), (2, 6.0)],
+        ]);
+        let second = build([
+            &[(0, 2.0), (1, 1.0), (2, 1.0)],
+            &[(0, 1.0), (1, 3.0), (2, 1.0)],
+            &[(0, 1.0), (1, 1.0), (2, 4.0)],
+        ]);
+        let parameters = GlopParameters::default();
+        let mut workspace = MarkowitzWorkspace::default();
+        let mut lower = TriangularMatrix::empty(Triangle::Lower, true);
+        let mut upper = TriangularMatrix::empty(Triangle::Upper, false);
+        let expected =
+            factorize(&first, &parameters, &mut workspace, &mut lower, &mut upper).unwrap();
+        let expected_lower: Vec<_> = (0..3)
+            .map(|column| lower.column(column).collect::<Vec<_>>())
+            .collect();
+        let expected_upper: Vec<_> = (0..3)
+            .map(|column| {
+                (
+                    upper.diagonal(column),
+                    upper.column(column).collect::<Vec<_>>(),
+                )
+            })
+            .collect();
+        factorize(&second, &parameters, &mut workspace, &mut lower, &mut upper).unwrap();
+        let actual =
+            factorize(&first, &parameters, &mut workspace, &mut lower, &mut upper).unwrap();
+        assert_eq!(
+            (0..3)
+                .map(|column| lower.column(column).collect::<Vec<_>>())
+                .collect::<Vec<_>>(),
+            expected_lower
+        );
+        assert_eq!(
+            (0..3)
+                .map(|column| (
+                    upper.diagonal(column),
+                    upper.column(column).collect::<Vec<_>>()
+                ))
+                .collect::<Vec<_>>(),
+            expected_upper
+        );
+        assert_eq!(actual.row_permutation, expected.row_permutation);
+        assert_eq!(actual.column_permutation, expected.column_permutation);
+        assert_eq!(actual.num_fp_operations, expected.num_fp_operations);
     }
 }

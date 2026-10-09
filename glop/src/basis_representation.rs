@@ -218,6 +218,20 @@ impl BasisMatrix {
         }
     }
 
+    fn compute_factorization(
+        &self,
+        factorization: &mut LuFactorization,
+        parameters: &GlopParameters,
+    ) -> Result<(), FactorizationError> {
+        match self {
+            Self::Owned(matrix) => {
+                factorization.compute_factorization_with_parameters(matrix, parameters)
+            }
+            Self::View { matrix, columns } => factorization
+                .compute_factorization_selected_with_parameters(matrix, columns, parameters),
+        }
+    }
+
     fn one_norm(&self) -> f64 {
         match self {
             Self::Owned(matrix) => matrix.one_norm(),
@@ -1177,9 +1191,8 @@ impl BasisRepresentation {
             DistributionKind::Integer,
             self.num_updates() as f64,
         );
-        let mut factorization = self.basis.factorize(&self.parameters)?;
-        factorization.merge_stats_from(&self.factorization);
-        self.factorization = factorization;
+        self.basis
+            .compute_factorization(&mut self.factorization, &self.parameters)?;
         self.last_factorization_deterministic_time = self
             .factorization
             .deterministic_time_of_last_factorization();

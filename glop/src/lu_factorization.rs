@@ -65,6 +65,7 @@ pub struct LuFactorization {
     dense_zero_scratchpad: RefCell<Vec<f64>>,
     non_zero_rows: RefCell<Vec<RowIndex>>,
     markowitz_stats: StatsGroup,
+    markowitz_workspace: markowitz::MarkowitzWorkspace,
 }
 
 impl Default for LuFactorization {
@@ -93,16 +94,17 @@ impl LuFactorization {
             dense_zero_scratchpad: RefCell::new(Vec::new()),
             non_zero_rows: RefCell::new(Vec::new()),
             markowitz_stats: StatsGroup::new("Markowitz"),
+            markowitz_workspace: markowitz::MarkowitzWorkspace::default(),
         }
     }
 
     /// Resets to the dimension-independent identity factorization.
     pub fn clear(&mut self) {
         self.is_identity_factorization = true;
-        self.lower = TriangularMatrix::empty(Triangle::Lower, true);
-        self.upper = TriangularMatrix::empty(Triangle::Upper, false);
-        self.transpose_lower = TriangularMatrix::empty(Triangle::Upper, true);
-        self.transpose_upper = TriangularMatrix::empty(Triangle::Lower, false);
+        self.lower.reset(0, 0);
+        self.upper.reset(0, 0);
+        self.transpose_lower.reset(0, 0);
+        self.transpose_upper.reset(0, 0);
         self.row_permutation.clear();
         self.column_permutation.clear();
         self.inverse_row_permutation.clear();
@@ -144,6 +146,16 @@ impl LuFactorization {
         matrix: &SparseMatrix,
         parameters: &GlopParameters,
     ) -> Result<Self, FactorizationError> {
+        let mut result = Self::new();
+        result.compute_factorization_with_parameters(matrix, parameters)?;
+        Ok(result)
+    }
+
+    pub(crate) fn compute_factorization_with_parameters(
+        &mut self,
+        matrix: &SparseMatrix,
+        parameters: &GlopParameters,
+    ) -> Result<(), FactorizationError> {
         parameters
             .validate()
             .map_err(FactorizationError::InvalidParameters)?;
@@ -159,9 +171,16 @@ impl LuFactorization {
                 }
             }
         }
-        let factors = markowitz::factorize(matrix, parameters)
-            .map_err(|step| FactorizationError::Singular { step })?;
-        Self::from_sparse_lu(factors, rows, columns, parameters)
+        let factors = markowitz::factorize(
+            matrix,
+            parameters,
+            &mut self.markowitz_workspace,
+            &mut self.lower,
+            &mut self.upper,
+        )
+        .map_err(|step| FactorizationError::Singular { step })?;
+        self.install_sparse_lu(factors, rows, columns, parameters);
+        Ok(())
     }
 
     pub(crate) fn factorize_selected_with_parameters(
@@ -169,6 +188,21 @@ impl LuFactorization {
         selected_columns: &[usize],
         parameters: &GlopParameters,
     ) -> Result<Self, FactorizationError> {
+        let mut result = Self::new();
+        result.compute_factorization_selected_with_parameters(
+            matrix,
+            selected_columns,
+            parameters,
+        )?;
+        Ok(result)
+    }
+
+    pub(crate) fn compute_factorization_selected_with_parameters(
+        &mut self,
+        matrix: &SparseMatrix,
+        selected_columns: &[usize],
+        parameters: &GlopParameters,
+    ) -> Result<(), FactorizationError> {
         parameters
             .validate()
             .map_err(FactorizationError::InvalidParameters)?;
@@ -187,35 +221,30 @@ impl LuFactorization {
                 }
             }
         }
-        let factors = markowitz::factorize_selected(matrix, selected_columns, parameters)
-            .map_err(|step| FactorizationError::Singular { step })?;
-        Self::from_sparse_lu(factors, rows, columns, parameters)
+        let factors = markowitz::factorize_selected(
+            matrix,
+            selected_columns,
+            parameters,
+            &mut self.markowitz_workspace,
+            &mut self.lower,
+            &mut self.upper,
+        )
+        .map_err(|step| FactorizationError::Singular { step })?;
+        self.install_sparse_lu(factors, rows, columns, parameters);
+        Ok(())
     }
 
-    fn from_sparse_lu(
+    fn install_sparse_lu(
+        &mut self,
         factors: markowitz::SparseLu,
         rows: usize,
         columns: usize,
         parameters: &GlopParameters,
-    ) -> Result<Self, FactorizationError> {
+    ) {
         let deterministic_time_of_last_factorization =
             deterministic_time_for_fp_operations(factors.num_fp_operations);
-        let lower = TriangularMatrix::from_columns(
-            &factors.lower_columns,
-            vec![1.0; rows],
-            Triangle::Lower,
-            true,
-        )
-        .map_err(|_| FactorizationError::Singular { step: 0 })?;
-        let upper = TriangularMatrix::from_columns(
-            &factors.upper_columns,
-            factors.upper_diagonal,
-            Triangle::Upper,
-            false,
-        )
-        .map_err(|_| FactorizationError::Singular { step: 0 })?;
-        let transpose_lower = lower.transpose();
-        let transpose_upper = upper.transpose();
+        self.lower.transpose_into(&mut self.transpose_lower);
+        self.upper.transpose_into(&mut self.transpose_upper);
         let inverse_row_permutation = factors.row_permutation;
         let inverse_column_permutation = factors.column_permutation;
         let mut row_permutation = vec![0; rows];
@@ -226,45 +255,39 @@ impl LuFactorization {
         for (position, &column) in inverse_column_permutation.iter().enumerate() {
             column_permutation[column] = position;
         }
-        let mut markowitz_stats = StatsGroup::new("Markowitz");
         if let Some(stats) = factors.stats {
-            markowitz_stats.add(
+            self.markowitz_stats.add(
                 "basis_singleton_column_ratio",
                 DistributionKind::Ratio,
                 stats.basis_singleton_column_ratio,
             );
-            markowitz_stats.add(
+            self.markowitz_stats.add(
                 "basis_residual_singleton_column_ratio",
                 DistributionKind::Ratio,
                 stats.basis_residual_singleton_column_ratio,
             );
-            markowitz_stats.add(
+            self.markowitz_stats.add(
                 "pivots_without_fill_in_ratio",
                 DistributionKind::Ratio,
                 stats.pivots_without_fill_in_ratio,
             );
-            markowitz_stats.add(
+            self.markowitz_stats.add(
                 "degree_two_pivot_columns",
                 DistributionKind::Ratio,
                 stats.degree_two_pivot_columns,
             );
         }
-        Ok(Self {
-            is_identity_factorization: false,
-            lower,
-            upper,
-            transpose_lower,
-            transpose_upper,
-            row_permutation,
-            column_permutation,
-            inverse_row_permutation,
-            inverse_column_permutation,
-            parameters: parameters.clone(),
-            deterministic_time_of_last_factorization,
-            dense_zero_scratchpad: RefCell::new(vec![0.0; rows]),
-            non_zero_rows: RefCell::new(Vec::new()),
-            markowitz_stats,
-        })
+        self.is_identity_factorization = false;
+        self.row_permutation = row_permutation;
+        self.column_permutation = column_permutation;
+        self.inverse_row_permutation = inverse_row_permutation;
+        self.inverse_column_permutation = inverse_column_permutation;
+        self.parameters = parameters.clone();
+        self.deterministic_time_of_last_factorization = deterministic_time_of_last_factorization;
+        let scratchpad = self.dense_zero_scratchpad.get_mut();
+        scratchpad.resize(rows, 0.0);
+        scratchpad.fill(0.0);
+        self.non_zero_rows.get_mut().clear();
     }
 
     /// Finds a stable independent subset of `candidates` and completes it
@@ -388,11 +411,6 @@ impl LuFactorization {
         // LuFactorization's own two distributions are guarded by OR_STATS in
         // the pinned release build; Markowitz's structural ratios are not.
         self.markowitz_stats.stat_string()
-    }
-
-    pub(crate) fn merge_stats_from(&mut self, previous: &Self) {
-        self.markowitz_stats
-            .prepend_history(&previous.markowitz_stats);
     }
 
     /// Solves `A x = rhs`.
@@ -1368,7 +1386,7 @@ mod tests {
         let mut factorization = LuFactorization::new();
         factorization.is_identity_factorization = false;
         factorization.lower =
-            TriangularMatrix::from_columns(&columns, vec![1.0; n], Triangle::Lower, true).unwrap();
+            TriangularMatrix::from_columns(&columns, &vec![1.0; n], Triangle::Lower, true).unwrap();
         factorization.row_permutation = (0..n).collect();
 
         let mut column = SparseColumn::new();
@@ -1392,7 +1410,7 @@ mod tests {
         let mut factorization = LuFactorization::new();
         factorization.is_identity_factorization = false;
         factorization.upper =
-            TriangularMatrix::from_columns(&columns, vec![1.0; 4], Triangle::Upper, false).unwrap();
+            TriangularMatrix::from_columns(&columns, &[1.0; 4], Triangle::Upper, false).unwrap();
 
         assert_eq!(
             factorization.upper.column(3).collect::<Vec<_>>(),

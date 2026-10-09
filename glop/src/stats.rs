@@ -154,22 +154,6 @@ impl StatsGroup {
         }
     }
 
-    /// Prepends an accumulated history to this group's single observations.
-    ///
-    /// # Panics
-    ///
-    /// In debug builds, panics if this group contains more than the one new
-    /// observation per distribution produced by one Markowitz factorization.
-    pub(crate) fn prepend_history(&mut self, history: &Self) {
-        let current = std::mem::replace(self, history.clone());
-        for distribution in current.distributions {
-            debug_assert!(distribution.count <= 1);
-            if distribution.count == 1 {
-                self.add(&distribution.name, distribution.kind, distribution.average);
-            }
-        }
-    }
-
     #[must_use]
     pub fn stat_string(&self) -> String {
         let mut distributions: Vec<_> = self

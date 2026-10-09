@@ -6,8 +6,7 @@
 use std::cell::RefCell;
 use std::fmt;
 
-use crate::lp_types::{ColIndex, RowIndex, VectorIndex};
-use crate::permutation::RowPermutation;
+use crate::lp_types::{ColIndex, RowBitVec, RowIndex, VectorIndex};
 use crate::sparse::SparseMatrix;
 use crate::sparse_vector::SparseColumn;
 
@@ -69,9 +68,8 @@ enum SymbolicNode {
 /// The pruned column ends persist between solves; all other vectors are reused.
 #[derive(Clone, Debug, Default)]
 struct PermutedLowerWorkspace {
-    stored: Vec<bool>,
-    marked: Vec<bool>,
-    touched: Vec<usize>,
+    stored: RowBitVec,
+    marked: RowBitVec,
     lower_rows: Vec<usize>,
     upper_rows: Vec<usize>,
     nodes_to_explore: Vec<usize>,
@@ -171,17 +169,34 @@ impl TriangularMatrix {
     /// Returns an error for an out-of-triangle entry or invalid diagonal.
     pub fn from_columns(
         columns: &[Vec<(usize, f64)>],
-        diagonal: Vec<f64>,
+        diagonal: &[f64],
         triangle: Triangle,
         unit_diagonal: bool,
     ) -> Result<Self, TriangularError> {
+        let mut result = Self::empty(triangle, unit_diagonal);
+        result.load_from_columns(columns, diagonal, triangle, unit_diagonal)?;
+        Ok(result)
+    }
+
+    /// Rebuilds from triangular columns while retaining the factor's buffers.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an out-of-triangle entry or invalid diagonal.
+    pub fn load_from_columns(
+        &mut self,
+        columns: &[Vec<(usize, f64)>],
+        diagonal: &[f64],
+        triangle: Triangle,
+        unit_diagonal: bool,
+    ) -> Result<(), TriangularError> {
         if diagonal.len() != columns.len() {
             return Err(TriangularError::NonSquare);
         }
-        let mut starts = Vec::with_capacity(columns.len() + 1);
-        let mut rows = Vec::new();
-        let mut coefficients = Vec::new();
-        starts.push(0);
+        self.reset(columns.len(), columns.len());
+        self.triangle = triangle;
+        self.unit_diagonal = unit_diagonal;
+        self.diagonal.extend_from_slice(diagonal);
         for (column, entries) in columns.iter().enumerate() {
             if diagonal[column] == 0.0 || !diagonal[column].is_finite() {
                 return Err(TriangularError::Singular { column });
@@ -194,28 +209,16 @@ impl TriangularMatrix {
                 if !valid {
                     return Err(TriangularError::WrongTriangle);
                 }
-                rows.push(row);
-                coefficients.push(coefficient);
+                self.rows.push(row);
+                self.coefficients.push(coefficient);
             }
-            starts.push(rows.len());
+            self.starts.push(self.rows.len());
         }
-        let first_non_identity_column = Self::first_non_identity(&diagonal, &starts);
-        let pruned_ends = starts.iter().copied().skip(1).collect();
-        Ok(Self {
-            num_rows: columns.len(),
-            starts,
-            rows,
-            coefficients,
-            diagonal,
-            triangle,
-            unit_diagonal,
-            first_non_identity_column,
-            symbolic_workspace: RefCell::new(SymbolicWorkspace::default()),
-            permuted_workspace: PermutedLowerWorkspace {
-                pruned_ends,
-                ..PermutedLowerWorkspace::default()
-            },
-        })
+        self.first_non_identity_column = Self::first_non_identity(&self.diagonal, &self.starts);
+        self.permuted_workspace
+            .pruned_ends
+            .extend(self.starts.iter().copied().skip(1));
+        Ok(())
     }
 
     #[must_use]
@@ -257,10 +260,20 @@ impl TriangularMatrix {
         self.coefficients.clear();
         self.diagonal.clear();
         self.diagonal.reserve(column_capacity);
-        self.unit_diagonal = true;
         self.first_non_identity_column = 0;
-        *self.symbolic_workspace.get_mut() = SymbolicWorkspace::default();
-        self.permuted_workspace = PermutedLowerWorkspace::default();
+        let symbolic = self.symbolic_workspace.get_mut();
+        symbolic.stored.clear();
+        symbolic.touched.clear();
+        symbolic.nodes_to_explore.clear();
+        let permuted = &mut self.permuted_workspace;
+        permuted.stored.clear();
+        permuted.marked.clear();
+        permuted.lower_rows.clear();
+        permuted.upper_rows.clear();
+        permuted.nodes_to_explore.clear();
+        permuted.scratchpad.clear();
+        permuted.pruned_ends.clear();
+        permuted.num_fp_operations = 0;
     }
 
     pub fn add_diagonal_only_column(&mut self, diagonal_value: f64) {
@@ -295,6 +308,21 @@ impl TriangularMatrix {
         self.close_current_column(diagonal_value);
     }
 
+    /// Appends off-diagonal entries in their supplied order and a separate
+    /// diagonal value. Markowitz uses this for singleton columns whose source
+    /// also contains rows already removed from the residual matrix.
+    pub fn add_column_with_diagonal(
+        &mut self,
+        entries: impl IntoIterator<Item = (usize, f64)>,
+        diagonal_value: f64,
+    ) {
+        for (row, coefficient) in entries {
+            self.rows.push(row);
+            self.coefficients.push(coefficient);
+        }
+        self.close_current_column(diagonal_value);
+    }
+
     pub fn add_and_normalize_triangular_column(
         &mut self,
         column: &SparseColumn,
@@ -313,9 +341,9 @@ impl TriangularMatrix {
         self.close_current_column(1.0);
     }
 
-    pub fn apply_row_permutation_to_non_diagonal_entries(&mut self, permutation: &RowPermutation) {
+    pub fn apply_row_permutation_to_non_diagonal_entries(&mut self, permutation: &[usize]) {
         for row in &mut self.rows {
-            *row = permutation[RowIndex::from_usize(*row)].to_usize();
+            *row = permutation[*row];
         }
     }
 
@@ -410,13 +438,12 @@ impl TriangularMatrix {
             permuted_workspace: workspace,
             ..
         } = self;
-        workspace.stored.resize(*num_rows, false);
-        workspace.marked.resize(*num_rows, false);
+        workspace.stored.resize(RowIndex::from_usize(*num_rows));
+        workspace.marked.resize(RowIndex::from_usize(*num_rows));
         workspace.scratchpad.resize(*num_rows, 0.0);
         workspace.lower_rows.clear();
         workspace.upper_rows.clear();
         workspace.nodes_to_explore.clear();
-        workspace.touched.clear();
 
         // Scatter the right-hand side before clearing `lower`, allowing the
         // input and lower output to share the same SparseColumn allocation.
@@ -425,9 +452,8 @@ impl TriangularMatrix {
             workspace.scratchpad[row] = entry.coefficient();
             let pivot_column = row_permutation[row];
             if pivot_column == invalid {
-                if !workspace.stored[row] {
-                    workspace.stored[row] = true;
-                    workspace.touched.push(row);
+                if !workspace.stored.contains(entry.index()) {
+                    workspace.stored.set(entry.index());
                     workspace.lower_rows.push(row);
                 }
             } else {
@@ -445,9 +471,12 @@ impl TriangularMatrix {
                     .nodes_to_explore
                     .pop()
                     .expect("DFS sentinel follows its node");
-                debug_assert!(!workspace.stored[explored_row]);
-                workspace.stored[explored_row] = true;
-                workspace.touched.push(explored_row);
+                debug_assert!(
+                    !workspace
+                        .stored
+                        .contains(RowIndex::from_usize(explored_row))
+                );
+                workspace.stored.set(RowIndex::from_usize(explored_row));
                 workspace.upper_rows.push(explored_row);
 
                 let column = row_permutation[explored_row];
@@ -455,8 +484,8 @@ impl TriangularMatrix {
                 let mut end = workspace.pruned_ends[column];
                 while position < end {
                     let successor = rows[position];
-                    if workspace.marked[successor] {
-                        workspace.marked[successor] = false;
+                    if workspace.marked.contains(RowIndex::from_usize(successor)) {
+                        workspace.marked.clear_bit(RowIndex::from_usize(successor));
                         position += 1;
                     } else {
                         end -= 1;
@@ -467,14 +496,13 @@ impl TriangularMatrix {
                 workspace.pruned_ends[column] = end;
                 continue;
             }
-            if workspace.stored[row] {
+            if workspace.stored.contains(RowIndex::from_usize(row)) {
                 workspace.nodes_to_explore.pop();
                 continue;
             }
             let column = row_permutation[row];
             if column == invalid {
-                workspace.stored[row] = true;
-                workspace.touched.push(row);
+                workspace.stored.set(RowIndex::from_usize(row));
                 workspace.lower_rows.push(row);
                 workspace.nodes_to_explore.pop();
                 continue;
@@ -482,10 +510,10 @@ impl TriangularMatrix {
             workspace.nodes_to_explore.push(invalid);
             for position in starts[column]..workspace.pruned_ends[column] {
                 let successor = rows[position];
-                if !workspace.stored[successor] {
+                if !workspace.stored.contains(RowIndex::from_usize(successor)) {
                     workspace.nodes_to_explore.push(successor);
                 }
-                workspace.marked[successor] = true;
+                workspace.marked.set(RowIndex::from_usize(successor));
             }
             debug_assert!(workspace.nodes_to_explore.len() <= 2 * *num_rows + rows.len());
         }
@@ -518,8 +546,13 @@ impl TriangularMatrix {
             lower.add_entry(RowIndex::from_usize(row), workspace.scratchpad[row]);
             workspace.scratchpad[row] = 0.0;
         }
-        for &row in &workspace.touched {
-            workspace.stored[row] = false;
+        // Clear only buckets touched by this solve, as GLOP's stored_ bitset
+        // does after its DFS. A bucket may contain several visited rows.
+        for &row in &workspace.lower_rows {
+            workspace.stored.clear_bucket(RowIndex::from_usize(row));
+        }
+        for &row in &workspace.upper_rows {
+            workspace.stored.clear_bucket(RowIndex::from_usize(row));
         }
     }
 
@@ -742,57 +775,117 @@ impl TriangularMatrix {
         }
         match self.triangle {
             Triangle::Lower => {
-                // GLOP skips the trailing exact-zero positions before starting
-                // the backward substitution. Besides avoiding work, this is
-                // observable for signed zero and non-unit diagonals.
-                let Some(last_nonzero) = (self.first_non_identity_column..self.dimension())
-                    .rev()
-                    .find(|&column| rhs[column] != 0.0)
-                else {
-                    return Ok(());
-                };
-                // GLOP carries this entry cursor across columns. The factor's
-                // off-diagonal entries are contiguous, so each solve step
-                // begins exactly where the preceding one stopped.
-                let mut end = self.starts[last_nonzero + 1];
-                for column in (self.first_non_identity_column..=last_nonzero).rev() {
-                    let start = self.starts[column];
-                    let mut sum = rhs[column];
-                    while end >= start + 4 {
-                        let mut four_term_sum =
-                            self.coefficients[end - 2] * rhs[self.rows[end - 2]];
-                        four_term_sum = self.coefficients[end - 1]
-                            .mul_add(rhs[self.rows[end - 1]], four_term_sum);
-                        four_term_sum = self.coefficients[end - 3]
-                            .mul_add(rhs[self.rows[end - 3]], four_term_sum);
-                        four_term_sum = self.coefficients[end - 4]
-                            .mul_add(rhs[self.rows[end - 4]], four_term_sum);
-                        sum -= four_term_sum;
-                        end -= 4;
-                    }
-                    while end > start {
-                        end -= 1;
-                        sum = (-self.coefficients[end]).mul_add(rhs[self.rows[end]], sum);
-                    }
-                    rhs[column] = if self.unit_diagonal {
-                        sum
-                    } else {
-                        sum / self.diagonal[column]
-                    };
+                if self.unit_diagonal {
+                    self.transpose_lower_solve::<true>(rhs);
+                } else {
+                    self.transpose_lower_solve::<false>(rhs);
                 }
             }
             Triangle::Upper => {
-                for column in self.first_non_identity_column..self.dimension() {
-                    let sum = self.transpose_column_sum_forward(column, rhs);
-                    rhs[column] = if self.unit_diagonal {
-                        sum
-                    } else {
-                        sum / self.diagonal[column]
-                    };
+                if self.unit_diagonal {
+                    self.transpose_upper_solve::<true>(rhs);
+                } else {
+                    self.transpose_upper_solve::<false>(rhs);
                 }
             }
         }
         Ok(())
+    }
+
+    fn transpose_lower_solve<const UNIT_DIAGONAL: bool>(&self, rhs: &mut [f64]) {
+        // Match GLOP's two template instantiations: dispatch on the diagonal
+        // once, outside the contiguous backward-substitution loop.
+        let Some(last_nonzero) = (self.first_non_identity_column..self.dimension())
+            .rev()
+            .find(|&column| rhs[column] != 0.0)
+        else {
+            return;
+        };
+        for column in (self.first_non_identity_column..=last_nonzero).rev() {
+            let start = self.starts[column];
+            let end = self.starts[column + 1];
+            let mut sum = rhs[column];
+            // Fixed-size reverse chunks retain GLOP's four-entry arithmetic
+            // order while giving Rust a single checked slice per column.
+            // This avoids most repeated factor-storage bounds checks without
+            // changing the contiguous storage or symbolic traversal.
+            let coefficients = &self.coefficients[start..end];
+            let rows = &self.rows[start..end];
+            let coefficient_chunks = coefficients.rchunks_exact(4);
+            let remainder = coefficient_chunks.remainder();
+            for (c, r) in coefficient_chunks.zip(rows.rchunks_exact(4)) {
+                let &[c0, c1, c2, c3] = c else {
+                    unreachable!();
+                };
+                let &[r0, r1, r2, r3] = r else {
+                    unreachable!();
+                };
+                let mut four_term_sum = c2 * rhs[r2];
+                four_term_sum = c3.mul_add(rhs[r3], four_term_sum);
+                four_term_sum = c1.mul_add(rhs[r1], four_term_sum);
+                four_term_sum = c0.mul_add(rhs[r0], four_term_sum);
+                sum -= four_term_sum;
+            }
+            let mut tail = remainder
+                .iter()
+                .rev()
+                .zip(rows[..remainder.len()].iter().rev());
+            if let Some((&coefficient, &row)) = tail.next() {
+                sum = (-coefficient).mul_add(rhs[row], sum);
+                if let Some((&coefficient, &row)) = tail.next() {
+                    sum = (-coefficient).mul_add(rhs[row], sum);
+                    if let Some((&coefficient, &row)) = tail.next() {
+                        sum = (-coefficient).mul_add(rhs[row], sum);
+                    }
+                }
+            }
+            rhs[column] = if UNIT_DIAGONAL {
+                sum
+            } else {
+                sum / self.diagonal[column]
+            };
+        }
+    }
+
+    fn transpose_upper_solve<const UNIT_DIAGONAL: bool>(&self, rhs: &mut [f64]) {
+        // Match GLOP's forward, contiguous entry cursor: the end of one
+        // column is the start of the next, without re-entering a column helper.
+        let mut position = self.starts[self.first_non_identity_column];
+        for column in self.first_non_identity_column..self.dimension() {
+            let end = self.starts[column + 1];
+            let mut sum = rhs[column];
+            while position + 3 < end {
+                // Preserve the contraction order of the pinned native build.
+                let mut four_term_sum =
+                    self.coefficients[position + 1] * rhs[self.rows[position + 1]];
+                four_term_sum =
+                    self.coefficients[position].mul_add(rhs[self.rows[position]], four_term_sum);
+                four_term_sum = self.coefficients[position + 2]
+                    .mul_add(rhs[self.rows[position + 2]], four_term_sum);
+                four_term_sum = self.coefficients[position + 3]
+                    .mul_add(rhs[self.rows[position + 3]], four_term_sum);
+                sum -= four_term_sum;
+                position += 4;
+            }
+            // GLOP handles the 1–3 remaining entries with fixed branches.
+            if position < end {
+                sum = (-self.coefficients[position]).mul_add(rhs[self.rows[position]], sum);
+                if position + 1 < end {
+                    sum = (-self.coefficients[position + 1])
+                        .mul_add(rhs[self.rows[position + 1]], sum);
+                    if position + 2 < end {
+                        sum = (-self.coefficients[position + 2])
+                            .mul_add(rhs[self.rows[position + 2]], sum);
+                    }
+                }
+                position = end;
+            }
+            rhs[column] = if UNIT_DIAGONAL {
+                sum
+            } else {
+                sum / self.diagonal[column]
+            };
+        }
     }
 
     /// Computes the structural solve closure and solves only those positions.
@@ -999,20 +1092,41 @@ impl TriangularMatrix {
     /// Panics only if this already-validated matrix violates its invariants.
     #[must_use]
     pub fn transpose(&self) -> Self {
+        let triangle = match self.triangle {
+            Triangle::Lower => Triangle::Upper,
+            Triangle::Upper => Triangle::Lower,
+        };
+        let mut result = Self::empty(triangle, self.unit_diagonal);
+        self.transpose_into(&mut result);
+        result
+    }
+
+    /// Writes the transpose into a reusable triangular-matrix allocation.
+    pub fn transpose_into(&self, output: &mut Self) {
         let n = self.dimension();
+        output.reset(self.num_rows, n);
+        output.triangle = match self.triangle {
+            Triangle::Lower => Triangle::Upper,
+            Triangle::Upper => Triangle::Lower,
+        };
+        output.unit_diagonal = self.unit_diagonal;
         // GLOP's PopulateFromTranspose uses the shifted starts array first as
         // row counts, then as insertion cursors. This preserves each source
         // column's traversal order without allocating a vector per output
         // column.
-        let mut starts = vec![0; n + 2];
+        let starts = &mut output.starts;
+        starts.resize(n + 2, 0);
+        starts.fill(0);
         for &row in &self.rows {
             starts[row + 2] += 1;
         }
         for column in 2..n + 2 {
             starts[column] += starts[column - 1];
         }
-        let mut rows = vec![0; self.rows.len()];
-        let mut coefficients = vec![0.0; self.coefficients.len()];
+        let rows = &mut output.rows;
+        rows.resize(self.rows.len(), 0);
+        let coefficients = &mut output.coefficients;
+        coefficients.resize(self.coefficients.len(), 0.0);
         starts.pop();
         for column in 0..n {
             for index in self.starts[column]..self.starts[column + 1] {
@@ -1023,27 +1137,12 @@ impl TriangularMatrix {
                 coefficients[destination] = self.coefficients[index];
             }
         }
-        let diagonal = self.diagonal.clone();
-        let first_non_identity_column = Self::first_non_identity(&diagonal, &starts);
-        let pruned_ends = starts.iter().copied().skip(1).collect();
-        Self {
-            num_rows: self.num_rows,
-            starts,
-            rows,
-            coefficients,
-            diagonal,
-            triangle: match self.triangle {
-                Triangle::Lower => Triangle::Upper,
-                Triangle::Upper => Triangle::Lower,
-            },
-            unit_diagonal: self.unit_diagonal,
-            first_non_identity_column,
-            symbolic_workspace: RefCell::new(SymbolicWorkspace::default()),
-            permuted_workspace: PermutedLowerWorkspace {
-                pruned_ends,
-                ..PermutedLowerWorkspace::default()
-            },
-        }
+        output.diagonal.extend_from_slice(&self.diagonal);
+        output.first_non_identity_column = Self::first_non_identity(&output.diagonal, starts);
+        output
+            .permuted_workspace
+            .pruned_ends
+            .extend(starts.iter().copied().skip(1));
     }
 
     pub fn compute_rows_to_consider_with_dfs<I: VectorIndex>(&self, non_zeros: &mut Vec<I>) {
@@ -1202,12 +1301,47 @@ mod tests {
     }
 
     #[test]
+    fn upper_transpose_solve_matches_column_recurrence_for_both_diagonals() {
+        // Consecutive columns exercise 0, 1, 2, 3, and 4 off-diagonal
+        // entries, including both the fixed tail and four-entry kernel.
+        let columns = vec![
+            vec![],
+            vec![(0, 0.5)],
+            vec![(0, -0.25), (1, 0.75)],
+            vec![(0, 0.125), (1, -0.5), (2, 0.25)],
+            vec![(0, 0.25), (1, 0.5), (2, -0.75), (3, 0.125)],
+        ];
+        for unit_diagonal in [false, true] {
+            let diagonal = if unit_diagonal {
+                vec![1.0; 5]
+            } else {
+                vec![2.0, 4.0, 0.5, 8.0, 0.25]
+            };
+            let upper =
+                TriangularMatrix::from_columns(&columns, &diagonal, Triangle::Upper, unit_diagonal)
+                    .unwrap();
+            let mut expected = vec![1.0, -2.0, 3.0, -4.0, 5.0];
+            let mut actual = expected.clone();
+            for column in upper.first_non_identity_column..upper.dimension() {
+                let sum = upper.transpose_column_sum_forward(column, &expected);
+                expected[column] = if unit_diagonal {
+                    sum
+                } else {
+                    sum / diagonal[column]
+                };
+            }
+            upper.transpose_solve(&mut actual).unwrap();
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
     fn hypersparse_solve_tracks_the_exact_structural_closure() {
         let n = 100;
         let mut columns = vec![Vec::new(); n];
         columns[2].push((90, 3.0));
         let lower =
-            TriangularMatrix::from_columns(&columns, vec![1.0; n], Triangle::Lower, true).unwrap();
+            TriangularMatrix::from_columns(&columns, &vec![1.0; n], Triangle::Lower, true).unwrap();
         let mut dense_rhs = vec![0.0; n];
         dense_rhs[2] = 4.0;
         let mut sparse_rhs = dense_rhs.clone();

@@ -902,11 +902,76 @@ seconds for Rust (1.226 aggregate ratio; median per-model ratio 1.408). The
 largest absolute excesses are `dfl001` 1.748 seconds, `stocfor3` 0.580,
 `truss` 0.498, and `pilot87` 0.405. The remaining gap is not yet explained or
 accepted as parity: profiles of both `dfl001` and `stocfor3` point strongly to
-repeated LU/Markowitz refactorization. Rust currently constructs a new
+repeated LU/Markowitz refactorization. At that baseline Rust constructed a new
 `LuFactorization` and fresh Markowitz workspaces at each rebuild, whereas
-upstream reuses its factorization object and its allocated workspaces. The next
-performance-fidelity task is to make that lifecycle match upstream, then
-reprofile and rerun the serial benchmark and strict trajectory fixture.
+upstream reused its factorization object and its allocated workspaces.
+
+The factorization lifecycle now retains the `LuFactorization` object, the
+Markowitz residual-pattern rows, candidate and degree-queue arrays, reusable
+physical column pools, in-progress lower factor, and the four final triangular
+factor/transpose buffers across refactorizations. A repeated A/B/A
+factorization test and the 96-model strict native trajectory fixture pass.
+Focused serial medians show only small gains: `stocfor3` remains about 1.61×
+native and `truss` about 1.29×; `dfl001` is about 1.315× after the full
+factor-buffer reuse (versus 1.335× after the first stage). Thus allocation
+reuse was a fidelity fix, not the main explanation for the timing gap.
+
+The factor-representation divergence is now resolved. Markowitz writes into
+the retained `L` and `U` triangular matrices directly and applies the final
+row permutation to their stored off-diagonal indices in place, matching
+upstream `Markowitz::ComputeLU()`. The former sparse-column, tuple-column, and
+factor-rebuild copies are gone; first-time candidate columns also fill their
+reusable physical slot without allocating a replacement column. One thousand
+native LU differential traces and the strict 96-model Netlib pivot-trajectory
+fixture pass. The full three-trial serial Netlib timing rerun totals 23.777
+seconds native and 26.225 seconds Rust, a 1.103 aggregate ratio (median model
+ratio 1.318). `dfl001` is 1.246×, `stocfor3` 1.480×, and `truss` 1.293×;
+remaining gaps require separate profiling rather than more factor conversion
+or allocation changes.
+
+A subsequent profile-guided pass matched two more upstream details without
+changing arithmetic order: Markowitz's DFS uses a compact row bitset and
+bucket clearing, and `TriangularMatrix::TransposeLowerSolveInternal` dispatches
+unit versus non-unit diagonals once and handles the 1–3-entry tail with fixed
+branches. The 96-model strict trajectory fixture and 1,000 native LU traces
+still pass. A fresh full serial three-trial comparison totals 23.799 seconds
+native and 26.100 seconds Rust, a 1.097 aggregate ratio; the median per-model
+ratio is 1.325. The largest remaining absolute excesses are `dfl001` (1.21
+seconds), `stocfor3` (0.41), and `truss` (0.34). Profiles of `dfl001` and five
+repeated `fit2p` solves still put dense lower-transpose substitution at the top
+of Rust's self-time. Both implementations now have the same traversal and
+floating-point grouping, but a remaining code-generation/bounds-check cost is
+only a hypothesis. An unsafe indexing experiment was rejected because
+`lp_data` forbids unsafe code; a separate sparse-entry fetch rewrite showed no
+timing benefit and was reverted. Further work should compare generated code
+and isolate this kernel in a controlled microbenchmark before changing its
+representation or safety policy.
+
+The dense upper-transpose solve now also mirrors GLOP's one-time unit-diagonal
+dispatch and forward cursor across contiguous columns, retaining the pinned
+native four-product and tail arithmetic order. A targeted 0–4-entry column
+test, 1,000 native triangular traces, and the strict 96-model release
+trajectory fixture pass. A serial three-trial timing sample on `dfl001`,
+`fit2p`, and `stocfor3` gives an aggregate Rust/native ratio of 1.279, versus
+1.275 for those same models in the preceding full run; this control-flow
+alignment has no discernible end-to-end timing effect.
+
+An isolated lower-transpose benchmark now feeds identical generated factor
+entries and right-hand sides to the pinned native kernel and release Rust
+kernel, excluding construction and parsing from the timer. On this machine
+(`Apple clang 17`, `rustc 1.95.0`, upstream `100f66e62`), the original safe
+indexing loop took 1.48× native time at dimension 256 and 1.73× at dimension
+1024 (3% lower-triangle density, 5,000 repeated solves, seven timed trials).
+Native ARM64 disassembly has no per-entry bounds checks; Rust's original loop
+had several for every four-entry block. Switching to checked per-column slices
+and fixed-size reverse chunks preserves the floating-point order while
+reducing the dimension-1024 ratio to 1.49×. The full 96-model serial
+three-trial Netlib timing is 23.774 seconds native versus 25.980 Rust, an
+aggregate ratio of 1.093 (previously 1.097), and the strict 96-model
+trajectory fixture still passes. This does not establish that the remaining
+kernel gap is entirely bounds checks: Rust still retains right-hand-side
+checks and uses 64-bit row indices versus native GLOP's 32-bit indices.
+The reproducible microbenchmark is `tools/benchmark_lower_transpose.py`.
 
 Benchmark entry point: `tools/benchmark_netlib_solve.py` with release-built
 `glop/examples/netlib_timing.rs` and the native
