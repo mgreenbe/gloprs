@@ -729,6 +729,13 @@ interleaved stores change optimized floating-point reduction rounding. The
 faithful clearing kernel makes all 96 non-QAP models agree bit-for-bit in
 status, iteration count, ordered basis, reduced costs, and dual norms in the
 20-second trajectory audit; only signed-zero value differences remain.
+These native results are now a durable regression oracle in
+`baselines/netlib-dual-trajectories.json.gz`. The opt-in release test
+`glop/tests/netlib_trajectories.rs` solves all 96 models with an independent
+20-second wall-clock limit and checks status, iteration and basis-update counts,
+ordered basis, primal values modulo signed zero, reduced-cost and dual-norm
+bits, and every pivot tuple. A complete run passes in 38.56 seconds on the
+October 2026 development machine.
 
 The former `vtp.base` pivot-16 discrepancy exposed the symbolic/numerical split
 in GLOP's hypersparse left solve. Matching that split and explicitly

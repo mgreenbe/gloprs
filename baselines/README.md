@@ -21,3 +21,19 @@ and are expected to change on another machine. Published Netlib objectives are
 retained for comparison; differences are not silently treated as failures
 because the Netlib documentation records solver- and tolerance-dependent
 alternatives for several instances.
+
+`netlib-dual-trajectories.json.gz` is the stricter native-GLOP fixture for the
+96 instances that finish quickly; `qap12` and `qap15` are deliberately omitted.
+For every model it records the terminal status, iteration and basis-update
+counts, ordered basis, bit patterns of primal values, reduced costs, and dual
+edge norms, and the complete sequence of entering columns, leaving basic
+columns, leaving rows, and iteration numbers. The fixture uses the same pinned
+OR-Tools revision and identifies every input by its expanded MPS checksum.
+
+The fixture generator requires a temporary diagnostic native build as described
+in `tools/generate_netlib_trajectory_fixture.py`. Validate gloprs against it
+with a fresh 20-second wall-clock limit for every model:
+
+```text
+cargo test --release -p gloprs-glop --test netlib_trajectories -- --ignored --nocapture
+```

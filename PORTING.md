@@ -78,6 +78,12 @@ Using the clearing kernel makes all 96 non-QAP Netlib models bit-identical in
 status, iteration count, ordered basis, reduced costs, and dual norms under a
 20-second differential audit. Their only remaining value-bit differences are
 signed zeros.
+The native results and every pivot event are now preserved in the checked-in
+compressed fixture `baselines/netlib-dual-trajectories.json.gz`. The ignored
+release-mode integration test `glop/tests/netlib_trajectories.rs` gives each
+instance an independent 20-second wall-clock limit and compares all 96 statuses,
+iteration and update counts, ordered bases, primal values modulo signed zero,
+reduced costs, dual norms, and complete pivot trajectories exactly.
 
 The October 2026 solve-path audit also reconciled
 `LuFactorization::RightSolveUWithNonZeros()`: upstream computes reachability
