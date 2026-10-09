@@ -10,7 +10,7 @@ use std::fmt;
 use lp_data::lp_types::{
     ColIndex, RowIndex, RowToColMapping, VectorIndex, deterministic_time_for_fp_operations,
 };
-use lp_data::lp_utils::squared_norm;
+use lp_data::lp_utils::squared_norm_and_reset_to_zero;
 use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow, ScatteredVector};
 use lp_data::sparse::SparseMatrix;
 use lp_data::sparse_vector::SparseColumn;
@@ -1015,7 +1015,7 @@ impl LuFactorization {
             rhs.set(RowIndex::from_usize(row), value);
         }
         self.solve_with_nonzeros(&mut rhs)?;
-        Ok(scattered_squared_norm(&rhs))
+        Ok(scattered_squared_norm_and_reset(&mut rhs))
     }
 
     /// Computes `||(A^T)^-1 e_row||_2^2`.
@@ -1059,7 +1059,7 @@ impl LuFactorization {
                     .hyper_sparse_solve_with_reversed_nonzeros(values, non_zeros);
             }
         }
-        Ok(scattered_squared_norm(&rhs))
+        Ok(scattered_squared_norm_and_reset(&mut rhs))
     }
 
     #[must_use]
@@ -1175,14 +1175,19 @@ impl LuFactorization {
     }
 }
 
-fn scattered_squared_norm<I: VectorIndex + Ord>(vector: &ScatteredVector<I>) -> f64 {
+fn scattered_squared_norm_and_reset<I: VectorIndex + Ord>(vector: &mut ScatteredVector<I>) -> f64 {
     if vector.non_zeros().is_empty() {
-        squared_norm(vector.values().as_slice())
+        squared_norm_and_reset_to_zero(vector.values_mut().as_mut_slice())
     } else {
-        vector.non_zeros().iter().fold(0.0, |sum, &index| {
-            let value = vector.value(index);
-            sum + value * value
-        })
+        let (values, non_zeros) = vector.mutable_parts();
+        let mut sum = 0.0;
+        for &index in non_zeros.iter() {
+            let position = index.to_usize();
+            let value = values[position];
+            sum += value * value;
+            values[position] = 0.0;
+        }
+        sum
     }
 }
 

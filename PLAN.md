@@ -722,6 +722,14 @@ refactorization state machine makes all three models exact in status,
 iteration count, ordered basis, reduced costs, and dual norms; remaining value
 differences are signed zeros.
 
+The last five exact dual-norm discrepancies were caused by using the
+non-clearing squared-norm reduction after inverse-row solves. GLOP calls
+`SquaredNormAndResetToZero()` even though the workspace is temporary, and its
+interleaved stores change optimized floating-point reduction rounding. The
+faithful clearing kernel makes all 96 non-QAP models agree bit-for-bit in
+status, iteration count, ordered basis, reduced costs, and dual norms in the
+20-second trajectory audit; only signed-zero value differences remain.
+
 The former `vtp.base` pivot-16 discrepancy exposed the symbolic/numerical split
 in GLOP's hypersparse left solve. Matching that split and explicitly
 contracting scalar tail updates makes the localized unit-row and tau stages

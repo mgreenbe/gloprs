@@ -68,6 +68,17 @@ costs in those paths. All three pilot models match status, iteration count,
 ordered basis, reduced-cost bits, and dual-norm bits; remaining value-bit
 differences are signed zeros.
 
+The remaining five final dual-norm mismatches (`bandm`, `d2q06c`, `sc50a`,
+`scfxm2`, and `stocfor1`) were already present in exact norm initialization.
+Upstream finishes each inverse-row solve with
+`SquaredNormAndResetToZero()`. Rust discarded the temporary afterward and had
+used its non-clearing squared-norm kernel instead; the interleaved clearing
+stores give the optimized native reduction a distinct rounding sequence.
+Using the clearing kernel makes all 96 non-QAP Netlib models bit-identical in
+status, iteration count, ordered basis, reduced costs, and dual norms under a
+20-second differential audit. Their only remaining value-bit differences are
+signed zeros.
+
 The October 2026 solve-path audit also reconciled
 `LuFactorization::RightSolveUWithNonZeros()`: upstream computes reachability
 from `U`, then performs numerical substitution as a transpose solve on the
