@@ -4,9 +4,13 @@
 //! caches `B^-T e_p`, filters it with the configured drop tolerance, and
 //! chooses among column-wise, row-wise, and hypersparse row-wise products.
 
-use lp_data::lp_types::{ColBitVec, ColIndex, VectorIndex, deterministic_time_for_fp_operations};
+use std::rc::Rc;
+
+use lp_data::lp_types::{
+    ColBitVec, ColIndex, RowIndex, VectorIndex, deterministic_time_for_fp_operations,
+};
 use lp_data::scattered_vector::ScatteredRow;
-use lp_data::sparse::SparseMatrix;
+use lp_data::sparse::{CompactSparseMatrix, SparseMatrix};
 use lp_data::sparse_vector::SparseColumn;
 
 use crate::basis_representation::BasisRepresentation;
@@ -49,10 +53,39 @@ fn column_scalar_product(column: &SparseColumn, values: &[f64]) -> f64 {
     result
 }
 
+#[derive(Clone, Copy)]
+enum MatrixSource<'a> {
+    Sparse(&'a SparseMatrix),
+    Compact(&'a CompactSparseMatrix),
+}
+
+impl MatrixSource<'_> {
+    fn num_rows(self) -> RowIndex {
+        match self {
+            Self::Sparse(matrix) => matrix.num_rows(),
+            Self::Compact(matrix) => matrix.num_rows(),
+        }
+    }
+
+    fn num_cols(self) -> ColIndex {
+        match self {
+            Self::Sparse(matrix) => matrix.num_cols(),
+            Self::Compact(matrix) => matrix.num_cols(),
+        }
+    }
+
+    fn column_scalar_product(self, column: ColIndex, values: &[f64]) -> f64 {
+        match self {
+            Self::Sparse(matrix) => column_scalar_product(matrix.column(column), values),
+            Self::Compact(matrix) => matrix.column_scalar_product_slice(column, values),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 #[allow(clippy::struct_field_names)]
 pub struct UpdateRow {
-    transposed_matrix: SparseMatrix,
+    transposed_matrix: Rc<CompactSparseMatrix>,
     unit_row_left_inverse: ScatteredRow,
     filtered_non_zeros: Vec<usize>,
     non_zero_positions: Vec<usize>,
@@ -68,13 +101,29 @@ pub struct UpdateRow {
 impl UpdateRow {
     #[must_use]
     pub fn new(matrix: &SparseMatrix) -> Self {
+        Self::new_from_compact(&CompactSparseMatrix::from_sparse(matrix))
+    }
+
+    #[must_use]
+    pub(crate) fn new_from_compact(matrix: &CompactSparseMatrix) -> Self {
+        let mut transposed = CompactSparseMatrix::default();
+        transposed.populate_from_transpose(matrix);
+        Self::new_from_transposed_compact(Rc::new(transposed), matrix.num_rows(), matrix.num_cols())
+    }
+
+    #[must_use]
+    pub fn new_from_transposed_compact(
+        transposed_matrix: Rc<CompactSparseMatrix>,
+        num_rows: RowIndex,
+        num_cols: ColIndex,
+    ) -> Self {
         Self {
-            transposed_matrix: matrix.transpose(),
-            unit_row_left_inverse: ScatteredRow::new(ColIndex::new(matrix.num_rows().value())),
+            transposed_matrix,
+            unit_row_left_inverse: ScatteredRow::new(ColIndex::new(num_rows.value())),
             filtered_non_zeros: Vec::new(),
             non_zero_positions: Vec::new(),
-            non_zero_position_set: ColBitVec::new(matrix.num_cols()),
-            coefficients: vec![0.0; matrix.num_cols().to_usize()],
+            non_zero_position_set: ColBitVec::new(num_cols),
+            coefficients: vec![0.0; num_cols.to_usize()],
             left_inverse_computed_for: None,
             update_row_computed_for: None,
             use_transposed_matrix: true,
@@ -88,8 +137,10 @@ impl UpdateRow {
         self.update_row_computed_for = None;
     }
 
-    pub(crate) fn rebind_matrix(&mut self, matrix: &SparseMatrix) {
-        self.transposed_matrix = matrix.transpose();
+    pub(crate) fn rebind_compact(&mut self, matrix: &CompactSparseMatrix) {
+        let mut transposed = CompactSparseMatrix::default();
+        transposed.populate_from_transpose(matrix);
+        self.transposed_matrix = Rc::new(transposed);
         self.unit_row_left_inverse = ScatteredRow::new(ColIndex::new(matrix.num_rows().value()));
         self.non_zero_positions.clear();
         self.non_zero_position_set = ColBitVec::new(matrix.num_cols());
@@ -160,6 +211,46 @@ impl UpdateRow {
         num_entries_in_relevant_columns: usize,
         leaving_row: usize,
     ) -> Result<(), FactorizationError> {
+        self.compute_update_row_from_source(
+            basis,
+            MatrixSource::Sparse(matrix),
+            relevant,
+            num_entries_in_relevant_columns,
+            leaving_row,
+        )
+    }
+
+    /// Compact-matrix counterpart used by the solver's numerical source.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension error or propagates a basis solve failure.
+    pub fn compute_update_row_compact(
+        &mut self,
+        basis: &BasisRepresentation,
+        matrix: &CompactSparseMatrix,
+        relevant: &ColBitVec,
+        num_entries_in_relevant_columns: usize,
+        leaving_row: usize,
+    ) -> Result<(), FactorizationError> {
+        self.compute_update_row_from_source(
+            basis,
+            MatrixSource::Compact(matrix),
+            relevant,
+            num_entries_in_relevant_columns,
+            leaving_row,
+        )
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    fn compute_update_row_from_source(
+        &mut self,
+        basis: &BasisRepresentation,
+        matrix: MatrixSource<'_>,
+        relevant: &ColBitVec,
+        num_entries_in_relevant_columns: usize,
+        leaving_row: usize,
+    ) -> Result<(), FactorizationError> {
         if self.update_row_computed_for == Some(leaving_row) {
             return Ok(());
         }
@@ -195,7 +286,7 @@ impl UpdateRow {
                 row_wise_entries += self
                     .transposed_matrix
                     .column(ColIndex::from_usize(row))
-                    .num_entries();
+                    .len();
             }
         } else {
             for entry in &self.unit_row_left_inverse {
@@ -203,7 +294,7 @@ impl UpdateRow {
                     continue;
                 }
                 self.filtered_non_zeros.push(entry.index().to_usize());
-                row_wise_entries += self.transposed_matrix.column(entry.index()).num_entries();
+                row_wise_entries += self.transposed_matrix.column(entry.index()).len();
             }
         }
 
@@ -291,7 +382,7 @@ impl UpdateRow {
     /// Returns a dimension error if the cached row or input masks disagree.
     pub fn compute_full_update_row(
         &self,
-        matrix: &SparseMatrix,
+        matrix: &CompactSparseMatrix,
         basis_columns: &[usize],
         not_basic: &ColBitVec,
         leaving_row: usize,
@@ -307,8 +398,8 @@ impl UpdateRow {
         output[basis_columns[leaving_row]] = 1.0;
         for typed_column in not_basic.iter_ones() {
             let column = typed_column.to_usize();
-            let coefficient = column_scalar_product(
-                matrix.column(ColIndex::from_usize(column)),
+            let coefficient = matrix.column_scalar_product_slice(
+                ColIndex::from_usize(column),
                 self.unit_row_left_inverse.values().as_slice(),
             );
             if coefficient.abs() > self.drop_tolerance {
@@ -350,7 +441,9 @@ impl UpdateRow {
                 .filter_map(|(index, value)| (*value != 0.0).then_some(index)),
         );
         match algorithm {
-            UpdateRowAlgorithm::Column => self.compute_column_wise(matrix, relevant),
+            UpdateRowAlgorithm::Column => {
+                self.compute_column_wise(MatrixSource::Sparse(matrix), relevant);
+            }
             UpdateRowAlgorithm::Row => self.compute_row_wise(relevant),
             UpdateRowAlgorithm::RowHypersparse => {
                 self.compute_row_wise_hypersparse(relevant);
@@ -363,10 +456,13 @@ impl UpdateRow {
         self.coefficients.fill(0.0);
         for &row in &self.filtered_non_zeros {
             let multiplier = self.left_inverse_value(row);
-            for entry in self.transposed_matrix.column(ColIndex::from_usize(row)) {
-                let column = entry.index().to_usize();
-                self.coefficients[column] =
-                    multiplier.mul_add(entry.coefficient(), self.coefficients[column]);
+            for (column, value) in self
+                .transposed_matrix
+                .column(ColIndex::from_usize(row))
+                .iter()
+            {
+                let column = column.to_usize();
+                self.coefficients[column] = multiplier.mul_add(value, self.coefficients[column]);
             }
         }
         self.rebuild_non_zeros(relevant);
@@ -377,9 +473,13 @@ impl UpdateRow {
             .clear_and_resize(ColIndex::from_usize(self.coefficients.len()));
         for &row in &self.filtered_non_zeros {
             let multiplier = self.left_inverse_value(row);
-            for entry in self.transposed_matrix.column(ColIndex::from_usize(row)) {
-                let column = entry.index().to_usize();
-                let value = multiplier * entry.coefficient();
+            for (column, entry_value) in self
+                .transposed_matrix
+                .column(ColIndex::from_usize(row))
+                .iter()
+            {
+                let column = column.to_usize();
+                let value = multiplier * entry_value;
                 let position = ColIndex::from_usize(column);
                 if self.non_zero_position_set.contains(position) {
                     self.coefficients[column] += value;
@@ -404,12 +504,16 @@ impl UpdateRow {
         self.non_zero_positions.clear();
         let row = self.filtered_non_zeros[0];
         let multiplier = self.left_inverse_value(row);
-        for entry in self.transposed_matrix.column(ColIndex::from_usize(row)) {
-            let column = entry.index().to_usize();
+        for (column, entry_value) in self
+            .transposed_matrix
+            .column(ColIndex::from_usize(row))
+            .iter()
+        {
+            let column = column.to_usize();
             if !relevant.contains(ColIndex::from_usize(column)) {
                 continue;
             }
-            let value = multiplier * entry.coefficient();
+            let value = multiplier * entry_value;
             if value.abs() > self.drop_tolerance {
                 self.coefficients[column] = value;
                 self.non_zero_positions.push(column);
@@ -417,13 +521,13 @@ impl UpdateRow {
         }
     }
 
-    fn compute_column_wise(&mut self, matrix: &SparseMatrix, relevant: &ColBitVec) {
+    fn compute_column_wise(&mut self, matrix: MatrixSource<'_>, relevant: &ColBitVec) {
         self.coefficients.fill(0.0);
         self.non_zero_positions.clear();
         for typed_column in relevant.iter_ones() {
             let column = typed_column.to_usize();
-            let coefficient = column_scalar_product(
-                matrix.column(ColIndex::from_usize(column)),
+            let coefficient = matrix.column_scalar_product(
+                ColIndex::from_usize(column),
                 self.unit_row_left_inverse.values().as_slice(),
             );
             if coefficient.abs() > self.drop_tolerance {
@@ -469,4 +573,24 @@ pub fn compute_update_row(
         *value = column_scalar_product(matrix.column(ColIndex::from_usize(column)), &left_inverse);
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn advanced_update_row_shares_the_transposed_compact_matrix() {
+        let mut transpose = CompactSparseMatrix::default();
+        transpose.reset(RowIndex::new(2));
+        transpose.add_entry_to_current_column(RowIndex::new(0), 3.0);
+        transpose.close_current_column();
+        let transpose = Rc::new(transpose);
+        let update_row = UpdateRow::new_from_transposed_compact(
+            Rc::clone(&transpose),
+            RowIndex::new(1),
+            ColIndex::new(2),
+        );
+        assert!(Rc::ptr_eq(&update_row.transposed_matrix, &transpose));
+    }
 }

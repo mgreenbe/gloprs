@@ -50,6 +50,24 @@
       "basis_sha256": "30dcf62365b02b3dee0fd3a35217c0ce99375f88f2bae8aaa6bece0205ef0d67",
       "reduced_bits_sha256": "3f03c5f3a1b853da9bdce5b553f65b8302fa9d712feb3519e64099f54ca14730",
       "norm_bits_sha256": "d1355ba0a95a4e916e81a609442411e5307e8ea7155f0538028bc80cd800488a"
+    },
+    {
+      "limit": 50000,
+      "status": "DUAL_FEASIBLE",
+      "iterations": 50000,
+      "deterministic_time_bits": 4647886824145658181,
+      "basis_sha256": "3b88f48a1400191de7c900194dbf4e1e5b37f7e612af17231638677bce625685",
+      "reduced_bits_sha256": "be0ca1999ea0e9faaabca2a16743152337424b4d75f9e3ced8d6b275e8b4c79b",
+      "norm_bits_sha256": "640377812f9ad5dbdf8314c9319158a17feb61e08d11fffa7396e06ebaae5c0f"
+    },
+    {
+      "limit": 100000,
+      "status": "DUAL_FEASIBLE",
+      "iterations": 100000,
+      "deterministic_time_bits": 4651161515263231634,
+      "basis_sha256": "21e0564904c8d8e350fc55ddff2a98f111f619c1463462de2b6dd695a9875468",
+      "reduced_bits_sha256": "1323f81fa30503bd335977c5159eaa3ff2fa58c3cd6487f29f6e644b4923ffd9",
+      "norm_bits_sha256": "114921e6b627fc35e191b58f6c33bf5efb59edfe0fe3d739752b019b67fad89c"
     }
   ]
 }

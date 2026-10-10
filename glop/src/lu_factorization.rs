@@ -12,7 +12,7 @@ use lp_data::lp_types::{
 };
 use lp_data::lp_utils::squared_norm_and_reset_to_zero;
 use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow, ScatteredVector};
-use lp_data::sparse::SparseMatrix;
+use lp_data::sparse::{CompactSparseMatrix, SparseMatrix};
 use lp_data::sparse_vector::SparseColumn;
 use lp_data::triangular_matrix::{Triangle, TriangularMatrix};
 
@@ -239,6 +239,57 @@ impl LuFactorization {
         Ok(())
     }
 
+    pub(crate) fn factorize_selected_compact_with_parameters(
+        matrix: &CompactSparseMatrix,
+        selected_columns: &[usize],
+        parameters: &GlopParameters,
+    ) -> Result<Self, FactorizationError> {
+        let mut result = Self::new();
+        result.compute_factorization_selected_compact_with_parameters(
+            matrix,
+            selected_columns,
+            parameters,
+        )?;
+        Ok(result)
+    }
+
+    pub(crate) fn compute_factorization_selected_compact_with_parameters(
+        &mut self,
+        matrix: &CompactSparseMatrix,
+        selected_columns: &[usize],
+        parameters: &GlopParameters,
+    ) -> Result<(), FactorizationError> {
+        parameters
+            .validate()
+            .map_err(FactorizationError::InvalidParameters)?;
+        let rows = matrix.num_rows().to_usize();
+        let columns = selected_columns.len();
+        if rows != columns {
+            return Err(FactorizationError::NonSquare { rows, columns });
+        }
+        for &column in selected_columns {
+            if column >= matrix.num_cols().to_usize() {
+                return Err(FactorizationError::DimensionMismatch);
+            }
+            for (_, value) in matrix.column(ColIndex::from_usize(column)).iter() {
+                if !value.is_finite() {
+                    return Err(FactorizationError::NonFinite);
+                }
+            }
+        }
+        let factors = markowitz::factorize_selected_compact(
+            matrix,
+            selected_columns,
+            parameters,
+            &mut self.markowitz_workspace,
+            &mut self.lower,
+            &mut self.upper,
+        )
+        .map_err(|step| FactorizationError::Singular { step })?;
+        self.install_sparse_lu(factors, rows, columns, parameters);
+        Ok(())
+    }
+
     fn install_sparse_lu(
         &mut self,
         factors: markowitz::SparseLu,
@@ -360,6 +411,53 @@ impl LuFactorization {
             }
         }
         Ok((basis, num_fp_operations))
+    }
+
+    pub(crate) fn compute_initial_basis_compact_with_operations(
+        matrix: &CompactSparseMatrix,
+        candidates: &[ColIndex],
+        parameters: &GlopParameters,
+    ) -> Result<(RowToColMapping, i64), FactorizationError> {
+        parameters
+            .validate()
+            .map_err(FactorizationError::InvalidParameters)?;
+        let num_rows = matrix.num_rows().to_usize();
+        let num_columns = matrix.num_cols().to_usize();
+        if num_columns < num_rows
+            || candidates
+                .iter()
+                .any(|column| column.to_usize() >= num_columns)
+        {
+            return Err(FactorizationError::DimensionMismatch);
+        }
+        let candidate_indices: Vec<_> = candidates.iter().map(|column| column.to_usize()).collect();
+        let (pivot_rows, pivot_columns, operations) =
+            markowitz::compute_pivot_sequence_compact_with_operations(
+                matrix,
+                &candidate_indices,
+                parameters,
+            );
+        let mut pivoted_rows = vec![false; num_rows];
+        for row in pivot_rows {
+            pivoted_rows[row] = true;
+        }
+        let mut selected_candidates = vec![false; candidates.len()];
+        for column in pivot_columns {
+            selected_candidates[column] = true;
+        }
+        let first_slack = num_columns - num_rows;
+        let mut basis = RowToColMapping::new();
+        for (row, &pivoted) in pivoted_rows.iter().enumerate() {
+            if !pivoted {
+                basis.push(ColIndex::from_usize(first_slack + row));
+            }
+        }
+        for (position, &selected) in selected_candidates.iter().enumerate() {
+            if selected {
+                basis.push(candidates[position]);
+            }
+        }
+        Ok((basis, operations))
     }
 
     #[doc(hidden)]
@@ -568,16 +666,30 @@ impl LuFactorization {
         column: &SparseColumn,
         result: &mut ScatteredColumn,
     ) -> Result<(), FactorizationError> {
+        self.right_solve_lower_for_entries(
+            column
+                .into_iter()
+                .map(|entry| (entry.index(), entry.coefficient())),
+            result,
+        )
+    }
+
+    pub(crate) fn right_solve_lower_for_entries(
+        &self,
+        entries: impl IntoIterator<Item = (RowIndex, f64)>,
+        result: &mut ScatteredColumn,
+    ) -> Result<(), FactorizationError> {
+        let entries = entries.into_iter();
         result.clear();
         result.clear_sparse_mask();
         if self.is_identity_factorization {
             let (values, non_zeros) = result.mutable_parts();
-            for entry in column {
-                if entry.index().to_usize() >= values.len() {
+            for (row, value) in entries {
+                if row.to_usize() >= values.len() {
                     return Err(FactorizationError::DimensionMismatch);
                 }
-                values[entry.index().to_usize()] = entry.coefficient();
-                non_zeros.push(entry.index());
+                values[row.to_usize()] = value;
+                non_zeros.push(row);
             }
             return Ok(());
         }
@@ -588,12 +700,12 @@ impl LuFactorization {
         let limit = self.lower.first_non_identity_column();
         {
             let (values, non_zeros) = result.mutable_parts();
-            for entry in column {
-                if entry.index().to_usize() >= self.dimension() {
+            for (row, value) in entries {
+                if row.to_usize() >= self.dimension() {
                     return Err(FactorizationError::DimensionMismatch);
                 }
-                let permuted_row = self.row_permutation[entry.index().to_usize()];
-                values[permuted_row] = entry.coefficient();
+                let permuted_row = self.row_permutation[row.to_usize()];
+                values[permuted_row] = value;
                 non_zeros.push(RowIndex::from_usize(permuted_row));
                 if permuted_row >= limit && !self.lower.column_is_diagonal_only(permuted_row) {
                     first_column_to_consider = first_column_to_consider.min(permuted_row);

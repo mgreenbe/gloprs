@@ -50,6 +50,78 @@ pub enum SimplexPhase {
     Optimization,
 }
 
+/// The equation-form data actually consumed by simplex initialization. The
+/// ordinary entry borrows these fields from `LinearProgram`; the advanced
+/// transposed entry supplies them without constructing a second LP model.
+struct EquationFormView<'a> {
+    matrix: &'a SparseMatrix,
+    shared_matrix: Option<&'a Rc<SparseMatrix>>,
+    lower_bounds: &'a [f64],
+    upper_bounds: &'a [f64],
+    objective: &'a DenseRow,
+    first_slack: ColIndex,
+    maximization: bool,
+    scaling: f64,
+    offset: f64,
+}
+
+impl<'a> EquationFormView<'a> {
+    fn from_lp(lp: &'a LinearProgram) -> Self {
+        Self {
+            matrix: lp.matrix(),
+            shared_matrix: None,
+            lower_bounds: lp.variable_lower_bounds().as_slice(),
+            upper_bounds: lp.variable_upper_bounds().as_slice(),
+            objective: lp.objective_coefficients(),
+            first_slack: lp.first_slack_variable().unwrap_or(lp.num_variables()),
+            maximization: lp.is_maximization_problem(),
+            scaling: lp.objective_scaling_factor(),
+            offset: lp.objective_offset(),
+        }
+    }
+
+    fn matrix(&self) -> &SparseMatrix {
+        self.matrix
+    }
+
+    fn num_constraints(&self) -> RowIndex {
+        self.matrix.num_rows()
+    }
+
+    fn num_variables(&self) -> ColIndex {
+        self.matrix.num_cols()
+    }
+
+    fn first_slack_variable(&self) -> ColIndex {
+        self.first_slack
+    }
+
+    fn variable_lower_bounds(&self) -> &[f64] {
+        self.lower_bounds
+    }
+
+    fn variable_upper_bounds(&self) -> &[f64] {
+        self.upper_bounds
+    }
+
+    fn objective_coefficient_for_minimization(&self, column: ColIndex) -> f64 {
+        let value = self.objective[column];
+        if self.maximization { -value } else { value }
+    }
+
+    fn is_maximization_problem(&self) -> bool {
+        self.maximization
+    }
+
+    fn objective_scaling_factor(&self) -> f64 {
+        self.scaling
+    }
+
+    fn objective_offset(&self) -> f64 {
+        self.offset
+    }
+}
+
 /// GLOP's `ScalarProduct(basic_objective_, direction_)` dispatches on the
 /// scattered direction: sparse positions use their stored order, while dense
 /// directions accumulate four products per block. The distinction matters
@@ -102,12 +174,12 @@ pub struct RevisedSimplex {
     num_cols: ColIndex,
     first_slack_col: ColIndex,
     matrix: Rc<SparseMatrix>,
-    compact_matrix: CompactSparseMatrix,
-    transposed_matrix_with_slack: CompactSparseMatrix,
+    compact_matrix: Rc<CompactSparseMatrix>,
+    transposed_matrix_with_slack: Rc<CompactSparseMatrix>,
     transpose_was_changed: bool,
     advanced_lower_bounds: Vec<f64>,
     advanced_upper_bounds: Vec<f64>,
-    advanced_lp: Option<LinearProgram>,
+    advanced_matrix: Option<Rc<SparseMatrix>>,
     last_solve_was_advanced: bool,
     objective: DenseRow,
     objective_offset: f64,
@@ -223,12 +295,12 @@ impl RevisedSimplex {
             num_cols: ColIndex::new(0),
             first_slack_col: ColIndex::new(0),
             matrix: Rc::new(SparseMatrix::new()),
-            compact_matrix: CompactSparseMatrix::default(),
-            transposed_matrix_with_slack: CompactSparseMatrix::default(),
+            compact_matrix: Rc::new(CompactSparseMatrix::default()),
+            transposed_matrix_with_slack: Rc::new(CompactSparseMatrix::default()),
             transpose_was_changed: false,
             advanced_lower_bounds: Vec::new(),
             advanced_upper_bounds: Vec::new(),
-            advanced_lp: None,
+            advanced_matrix: None,
             last_solve_was_advanced: false,
             objective: DenseRow::new(),
             objective_offset: 0.0,
@@ -348,7 +420,7 @@ impl RevisedSimplex {
     }
 
     #[must_use]
-    pub const fn matrix_with_slack(&self) -> &CompactSparseMatrix {
+    pub fn matrix_with_slack(&self) -> &CompactSparseMatrix {
         &self.compact_matrix
     }
 
@@ -414,7 +486,7 @@ impl RevisedSimplex {
     /// columns. As in GLOP, requesting mutable access marks it changed.
     pub fn mutable_transposed_matrix_with_slack(&mut self) -> &mut CompactSparseMatrix {
         self.transpose_was_changed = true;
-        &mut self.transposed_matrix_with_slack
+        Rc::make_mut(&mut self.transposed_matrix_with_slack)
     }
 
     pub fn mutable_lower_bounds(&mut self) -> &mut Vec<f64> {
@@ -426,7 +498,7 @@ impl RevisedSimplex {
     }
 
     /// Advanced equation-form solve corresponding to GLOP's transposed-matrix
-    /// entry point. The cached model is rebuilt only after matrix mutation.
+    /// entry point. The sparse compatibility copy is rebuilt only after matrix mutation.
     pub fn minimize_from_transposed_matrix_with_slack(
         &mut self,
         objective: &DenseRow,
@@ -453,10 +525,11 @@ impl RevisedSimplex {
     ) -> Result<(), FactorizationError> {
         let known_same_matrix = self.last_solve_was_advanced
             && !self.transpose_was_changed
-            && self.advanced_lp.is_some();
-        if self.transpose_was_changed || self.advanced_lp.is_none() {
-            self.compact_matrix
-                .populate_from_transpose(&self.transposed_matrix_with_slack);
+            && self.advanced_matrix.is_some();
+        if self.transpose_was_changed || self.advanced_matrix.is_none() {
+            let mut compact = CompactSparseMatrix::default();
+            compact.populate_from_transpose(&self.transposed_matrix_with_slack);
+            self.compact_matrix = Rc::new(compact);
             let rows = self.compact_matrix.num_rows().to_usize();
             let columns = self.compact_matrix.num_cols().to_usize();
             if columns < rows {
@@ -474,49 +547,47 @@ impl RevisedSimplex {
                     return Err(FactorizationError::DimensionMismatch);
                 }
             }
-            let mut model = LinearProgram::default();
-            for _ in 0..first_slack {
-                model.create_new_variable();
-            }
-            for _ in 0..rows {
-                model.create_new_constraint();
-            }
-            for column in 0..first_slack {
-                for (row, value) in self
-                    .compact_matrix
-                    .column(ColIndex::from_usize(column))
-                    .iter()
-                {
-                    model.set_coefficient(row, ColIndex::from_usize(column), value);
+            // Other solver collaborators still need sparse columns. Retain
+            // the caller's compact matrix as the numerical and basis source;
+            // no equation-form LP is materialized.
+            let mut matrix = SparseMatrix::new();
+            matrix.set_num_rows(RowIndex::from_usize(rows));
+            for column in 0..columns {
+                let index = ColIndex::from_usize(column);
+                matrix.append_empty_column();
+                for (row, value) in self.compact_matrix.column(index).iter() {
+                    matrix.mutable_column(index).set_coefficient(row, value);
                 }
             }
-            model.add_slack_variables_where_necessary(false);
-            self.advanced_lp = Some(model);
+            self.advanced_matrix = Some(Rc::new(matrix));
             self.transpose_was_changed = false;
         }
-        let mut model = self.advanced_lp.take().expect("advanced model initialized");
-        if objective.len().to_usize() != model.num_variables().to_usize()
-            || self.advanced_lower_bounds.len() != model.num_variables().to_usize()
-            || self.advanced_upper_bounds.len() != model.num_variables().to_usize()
+        let matrix = Rc::clone(self.advanced_matrix.as_ref().unwrap());
+        let columns = matrix.num_cols().to_usize();
+        if objective.len().to_usize() != columns
+            || self.advanced_lower_bounds.len() != columns
+            || self.advanced_upper_bounds.len() != columns
         {
-            self.advanced_lp = Some(model);
             return Err(FactorizationError::DimensionMismatch);
         }
-        for column in 0..model.num_variables().to_usize() {
-            let index = ColIndex::from_usize(column);
-            model.set_variable_bounds(
-                index,
-                self.advanced_lower_bounds[column],
-                self.advanced_upper_bounds[column],
-            );
-            model.set_objective_coefficient(index, objective[index]);
-        }
-        model.set_objective_scaling_factor(objective_scaling_factor);
-        model.set_objective_offset(objective_offset);
-        let result = self.solve_internal(&model, time_limit, known_same_matrix);
+        let lower = std::mem::take(&mut self.advanced_lower_bounds);
+        let upper = std::mem::take(&mut self.advanced_upper_bounds);
+        let input = EquationFormView {
+            matrix: &matrix,
+            shared_matrix: Some(&matrix),
+            lower_bounds: &lower,
+            upper_bounds: &upper,
+            objective,
+            first_slack: ColIndex::from_usize(columns - matrix.num_rows().to_usize()),
+            maximization: false,
+            scaling: objective_scaling_factor,
+            offset: objective_offset,
+        };
+        let result = self.solve_internal(None, Some(&input), time_limit, known_same_matrix, true);
+        self.advanced_lower_bounds = lower;
+        self.advanced_upper_bounds = upper;
         self.phase4_event("transposed_matrix_entry");
         self.last_solve_was_advanced = result.is_ok();
-        self.advanced_lp = Some(model);
         result
     }
 
@@ -526,16 +597,18 @@ impl RevisedSimplex {
         time_limit: &mut TimeLimit,
     ) -> Result<(), FactorizationError> {
         self.last_solve_was_advanced = false;
-        let result = self.solve_internal(linear_program, time_limit, false);
+        let result = self.solve_internal(Some(linear_program), None, time_limit, false, false);
         self.advance_deterministic_time(time_limit);
         result
     }
 
     fn solve_internal(
         &mut self,
-        linear_program: &LinearProgram,
+        linear_program: Option<&LinearProgram>,
+        advanced_input: Option<&EquationFormView<'_>>,
         time_limit: &mut TimeLimit,
         matrix_known_unchanged: bool,
+        compact_matrix_prepopulated: bool,
     ) -> Result<(), FactorizationError> {
         self.phase4_events.clear();
         // GLOP retains SaveState() for the next Solve() by default. An
@@ -547,7 +620,19 @@ impl RevisedSimplex {
         if !self.starting_values.is_empty() {
             self.phase4_event("starting_variable_values");
         }
-        self.initialize(linear_program, matrix_known_unchanged)?;
+        if let Some(input) = advanced_input {
+            self.initialize_equation_form(
+                input,
+                matrix_known_unchanged,
+                compact_matrix_prepopulated,
+            )?;
+        } else {
+            self.initialize(
+                linear_program.expect("ordinary solve requires an LP"),
+                matrix_known_unchanged,
+                compact_matrix_prepopulated,
+            )?;
+        }
         self.trace.clear();
         self.num_iterations = 0;
 
@@ -936,13 +1021,16 @@ impl RevisedSimplex {
                     .unwrap()
                     .unit_row_left_inverse_scattered(),
             )?;
-            self.update_row.as_mut().unwrap().compute_update_row(
-                self.basis_factorization.as_ref().unwrap(),
-                &self.matrix,
-                relevant,
-                relevant_entries,
-                row.to_usize(),
-            )?;
+            self.update_row
+                .as_mut()
+                .unwrap()
+                .compute_update_row_compact(
+                    self.basis_factorization.as_ref().unwrap(),
+                    &self.compact_matrix,
+                    relevant,
+                    relevant_entries,
+                    row.to_usize(),
+                )?;
             update_reduced_cost_values_before_basis_pivot(
                 self.reduced_costs.as_mut_slice(),
                 entering,
@@ -969,13 +1057,12 @@ impl RevisedSimplex {
                 .update_to_basic_status(entering);
             self.basis[row] = entering;
             let pivot_from_update_row = self
-                .matrix
+                .compact_matrix
                 .column(entering)
                 .iter()
-                .map(|entry| {
-                    self.update_row.as_ref().unwrap().unit_row_left_inverse()
-                        [entry.index().to_usize()]
-                        * entry.coefficient()
+                .map(|(row, value)| {
+                    self.update_row.as_ref().unwrap().unit_row_left_inverse()[row.to_usize()]
+                        * value
                 })
                 .sum::<f64>();
             let pivot_from_direction = direction.value(row);
@@ -1783,10 +1870,34 @@ impl RevisedSimplex {
         Ok(())
     }
 
+    fn new_basis_representation(
+        &self,
+        basis: &RowToColMapping,
+    ) -> Result<BasisRepresentation, FactorizationError> {
+        BasisRepresentation::new_for_compact_basis(
+            Rc::clone(&self.compact_matrix),
+            basis,
+            &self.parameters,
+        )
+    }
+
+    fn reinitialize_basis_representation(
+        &self,
+        factorization: &mut BasisRepresentation,
+        basis: &RowToColMapping,
+    ) -> Result<(), FactorizationError> {
+        factorization.reinitialize_for_compact_basis(
+            Rc::clone(&self.compact_matrix),
+            basis,
+            &self.parameters,
+        )
+    }
+
     fn initialize(
         &mut self,
         lp: &LinearProgram,
         matrix_known_unchanged: bool,
+        compact_matrix_prepopulated: bool,
     ) -> Result<(), FactorizationError> {
         self.recovered_warm_basis = None;
         // An already equation-form model can be viewed directly, as GLOP
@@ -1799,13 +1910,27 @@ impl RevisedSimplex {
             converted.add_slack_variables_where_necessary(false);
             Cow::Owned(converted)
         };
-        if self.try_reuse_unchanged_matrix(&equation_lp, matrix_known_unchanged)? {
+        self.initialize_equation_form(
+            &EquationFormView::from_lp(&equation_lp),
+            matrix_known_unchanged,
+            compact_matrix_prepopulated,
+        )
+    }
+
+    fn initialize_equation_form(
+        &mut self,
+        equation_lp: &EquationFormView<'_>,
+        matrix_known_unchanged: bool,
+        compact_matrix_prepopulated: bool,
+    ) -> Result<(), FactorizationError> {
+        self.recovered_warm_basis = None;
+        if self.try_reuse_unchanged_matrix(equation_lp, matrix_known_unchanged)? {
             return Ok(());
         }
-        if self.try_reuse_with_added_columns(&equation_lp) {
+        if self.try_reuse_with_added_columns(equation_lp) {
             return Ok(());
         }
-        if self.try_reuse_with_added_rows(&equation_lp)? {
+        if self.try_reuse_with_added_rows(equation_lp)? {
             return Ok(());
         }
         // The full initialization replaces these four owned components.
@@ -1814,9 +1939,7 @@ impl RevisedSimplex {
         // A saved basis places its slack statuses immediately after the old
         // structural columns. When columns are appended, those statuses must
         // move past the new columns, as in GLOP's incremental initialization.
-        let new_first_slack = equation_lp
-            .first_slack_variable()
-            .unwrap_or(equation_lp.num_variables());
+        let new_first_slack = equation_lp.first_slack_variable();
         let added_columns = if self.num_rows == equation_lp.num_constraints()
             && self.first_slack_col < new_first_slack
             && self.state_for_next_solve.as_ref() == Some(&self.solution_state)
@@ -1837,12 +1960,18 @@ impl RevisedSimplex {
         };
         self.num_rows = equation_lp.num_constraints();
         self.num_cols = equation_lp.num_variables();
-        self.first_slack_col = equation_lp
-            .first_slack_variable()
-            .unwrap_or(equation_lp.num_variables());
+        self.first_slack_col = equation_lp.first_slack_variable();
         self.is_maximization_problem = equation_lp.is_maximization_problem();
-        self.matrix = Rc::new(equation_lp.matrix().clone());
-        self.compact_matrix = CompactSparseMatrix::from_sparse(&self.matrix);
+        self.matrix = equation_lp
+            .shared_matrix
+            .map_or_else(|| Rc::new(equation_lp.matrix().clone()), Rc::clone);
+        // The advanced entry has already transposed the caller's compact
+        // matrix. Keep that representation (and its entry order) as the
+        // numerical source instead of reconstructing it from the temporary
+        // equation-form model.
+        if !compact_matrix_prepopulated {
+            self.compact_matrix = Rc::new(CompactSparseMatrix::from_sparse(&self.matrix));
+        }
         self.objective = DenseRow::from_vec(
             (0..self.num_cols.to_usize())
                 .map(|column| {
@@ -1873,10 +2002,10 @@ impl RevisedSimplex {
             external_dual_limit / self.objective_scaling_factor - self.objective_offset;
         self.objective_limit_reached = false;
 
-        let mut info = VariablesInfo::new(&self.matrix);
+        let mut info = VariablesInfo::new_from_compact(Rc::clone(&self.compact_matrix));
         info.load_bounds_and_return_true_if_unchanged(
-            equation_lp.variable_lower_bounds().as_slice(),
-            equation_lp.variable_upper_bounds().as_slice(),
+            equation_lp.variable_lower_bounds(),
+            equation_lp.variable_upper_bounds(),
         );
         let has_external_basis = self
             .state_for_next_solve
@@ -2005,11 +2134,7 @@ impl RevisedSimplex {
                     .map(|row| ColIndex::from_usize(self.first_slack_col.to_usize() + row))
                     .collect(),
             );
-            let mut factorization = BasisRepresentation::new_for_basis(
-                Rc::clone(&self.matrix),
-                &slack_basis,
-                &self.parameters,
-            )?;
+            let mut factorization = self.new_basis_representation(&slack_basis)?;
             let candidates: Vec<_> = info.is_basic().iter_ones().collect();
             let recovered = factorization.compute_initial_basis(&candidates)?;
             basis = recovered.as_slice().to_vec();
@@ -2024,18 +2149,10 @@ impl RevisedSimplex {
             && self.parameters.initial_basis == InitialBasisHeuristic::Triangular;
         let mut retried_rejected_saved_basis = false;
         let mut basis_factorization = if let Some(mut factorization) = candidate_factorization {
-            factorization.reinitialize_for_basis(
-                Rc::clone(&self.matrix),
-                &self.basis,
-                &self.parameters,
-            )?;
+            self.reinitialize_basis_representation(&mut factorization, &self.basis)?;
             factorization
         } else {
-            match BasisRepresentation::new_for_basis(
-                Rc::clone(&self.matrix),
-                &self.basis,
-                &self.parameters,
-            ) {
+            match self.new_basis_representation(&self.basis) {
                 Ok(factorization) => factorization,
                 Err(_) if triangular_crash_can_fall_back => {
                     // CreateInitialBasis() immediately tests TRIANGULAR's proposed
@@ -2043,11 +2160,7 @@ impl RevisedSimplex {
                     // advanced crash is not factorizable.
                     self.use_all_slack_basis();
                     self.phase4_event("initial_triangular_basis_fallback");
-                    BasisRepresentation::new_for_basis(
-                        Rc::clone(&self.matrix),
-                        &self.basis,
-                        &self.parameters,
-                    )?
+                    self.new_basis_representation(&self.basis)?
                 }
                 Err(_) if has_external_basis => {
                     // FinishInitialization() retries a rejected complete
@@ -2057,19 +2170,11 @@ impl RevisedSimplex {
                             .map(|row| ColIndex::from_usize(self.first_slack_col.to_usize() + row))
                             .collect(),
                     );
-                    let mut factorization = BasisRepresentation::new_for_basis(
-                        Rc::clone(&self.matrix),
-                        &slack_basis,
-                        &self.parameters,
-                    )?;
+                    let mut factorization = self.new_basis_representation(&slack_basis)?;
                     let candidates: Vec<_> = info.is_basic().iter_ones().collect();
                     self.basis = factorization.compute_initial_basis(&candidates)?;
                     retried_rejected_saved_basis = true;
-                    factorization.reinitialize_for_basis(
-                        Rc::clone(&self.matrix),
-                        &self.basis,
-                        &self.parameters,
-                    )?;
+                    self.reinitialize_basis_representation(&mut factorization, &self.basis)?;
                     self.phase4_event("warm_rejected_basis_compute_initial_basis");
                     factorization
                 }
@@ -2095,8 +2200,8 @@ impl RevisedSimplex {
             let candidates: Vec<_> = info.is_basic().iter_ones().collect();
             self.basis = basis_factorization.compute_initial_basis(&candidates)?;
             self.phase4_event("warm_saved_basis_condition_candidates");
-            condition_rejected = if basis_factorization
-                .reinitialize_for_basis(Rc::clone(&self.matrix), &self.basis, &self.parameters)
+            condition_rejected = if self
+                .reinitialize_basis_representation(&mut basis_factorization, &self.basis)
                 .is_ok()
             {
                 self.absorb_initial_column_permutation(&mut basis_factorization);
@@ -2114,11 +2219,7 @@ impl RevisedSimplex {
             if triangular_crash_can_fall_back {
                 self.phase4_event("initial_triangular_basis_fallback");
             }
-            basis_factorization.reinitialize_for_basis(
-                Rc::clone(&self.matrix),
-                &self.basis,
-                &self.parameters,
-            )?;
+            self.reinitialize_basis_representation(&mut basis_factorization, &self.basis)?;
             self.absorb_initial_column_permutation(&mut basis_factorization);
             let upper_bound = basis_factorization.infinity_norm_condition_number_upper_bound();
             if upper_bound > self.parameters.initial_condition_number_threshold {
@@ -2144,11 +2245,7 @@ impl RevisedSimplex {
                 // just like a factorization or condition-number failure.
                 self.use_all_slack_basis();
                 self.phase4_event("initial_triangular_basis_fallback");
-                basis_factorization.reinitialize_for_basis(
-                    Rc::clone(&self.matrix),
-                    &self.basis,
-                    &self.parameters,
-                )?;
+                self.reinitialize_basis_representation(&mut basis_factorization, &self.basis)?;
                 info = info_before_advanced_basis;
                 info.change_unused_basic_variables_to_free(&self.basis);
                 self.compute_initial_values(&info, &basis_factorization)?
@@ -2164,7 +2261,7 @@ impl RevisedSimplex {
         self.cost_perturbations = DenseRow::filled(self.num_cols, 0.0);
         self.has_cost_shift = false;
         self.dual_values = DenseColumn::filled(self.num_rows, 0.0);
-        let mut primal_edge_norms = PrimalEdgeNorms::new(&self.matrix);
+        let mut primal_edge_norms = PrimalEdgeNorms::new_shared(Rc::clone(&self.compact_matrix));
         primal_edge_norms.set_glop_parameters(&self.parameters);
         self.primal_edge_norms = Some(primal_edge_norms);
         self.primal_prices = PrimalPrices::new_with_random(self.random.clone());
@@ -2176,7 +2273,15 @@ impl RevisedSimplex {
         self.entering_variable = EnteringVariable::new_with_random(self.random.clone());
         self.entering_variable.set_parameters(&self.parameters);
         self.bound_flip_candidates.clear();
-        let mut update_row = UpdateRow::new(&self.matrix);
+        let mut update_row = if compact_matrix_prepopulated {
+            UpdateRow::new_from_transposed_compact(
+                Rc::clone(&self.transposed_matrix_with_slack),
+                self.num_rows,
+                self.num_cols,
+            )
+        } else {
+            UpdateRow::new_from_compact(&self.compact_matrix)
+        };
         update_row.set_glop_parameters(&self.parameters);
         self.update_row = Some(update_row);
         self.primal_ray = DenseRow::new();
@@ -2204,10 +2309,8 @@ impl RevisedSimplex {
 
     /// Native `RevisedSimplex::Initialize()` keeps its LU when a primal warm
     /// start only appends zero-bound structural variables.
-    fn try_reuse_with_added_columns(&mut self, equation_lp: &LinearProgram) -> bool {
-        let new_first_slack = equation_lp
-            .first_slack_variable()
-            .unwrap_or(equation_lp.num_variables());
+    fn try_reuse_with_added_columns(&mut self, equation_lp: &EquationFormView<'_>) -> bool {
+        let new_first_slack = equation_lp.first_slack_variable();
         let old_first_slack = self.first_slack_col.to_usize();
         let new_first_slack = new_first_slack.to_usize();
         if self.parameters.use_dual_simplex
@@ -2227,8 +2330,8 @@ impl RevisedSimplex {
             return false;
         }
         let old_info = self.variables_info.as_ref().unwrap();
-        let lower = equation_lp.variable_lower_bounds().as_slice();
-        let upper = equation_lp.variable_upper_bounds().as_slice();
+        let lower = equation_lp.variable_lower_bounds();
+        let upper = equation_lp.variable_upper_bounds();
         if (0..old_first_slack).any(|col| {
             old_info.lower_bounds()[col] != lower[col] || old_info.upper_bounds()[col] != upper[col]
         }) || (old_first_slack..new_first_slack)
@@ -2263,7 +2366,7 @@ impl RevisedSimplex {
         self.num_cols = equation_lp.num_variables();
         self.first_slack_col = ColIndex::from_usize(new_first_slack);
         self.matrix = Rc::new(equation_lp.matrix().clone());
-        self.compact_matrix = CompactSparseMatrix::from_sparse(&self.matrix);
+        self.compact_matrix = Rc::new(CompactSparseMatrix::from_sparse(&self.matrix));
         self.objective = DenseRow::from_vec(
             (0..self.num_cols.to_usize())
                 .map(|col| {
@@ -2292,7 +2395,7 @@ impl RevisedSimplex {
         };
         self.dual_objective_limit =
             dual_limit / self.objective_scaling_factor - self.objective_offset;
-        let mut info = VariablesInfo::new(&self.matrix);
+        let mut info = VariablesInfo::new_from_compact(Rc::clone(&self.compact_matrix));
         info.load_bounds_and_return_true_if_unchanged(lower, upper);
         info.initialize_from_basis_state(new_first_slack, added, &state);
         self.variables_info = Some(info);
@@ -2310,15 +2413,19 @@ impl RevisedSimplex {
         self.basis_factorization
             .as_mut()
             .unwrap()
-            .rebind_after_added_columns(Rc::clone(&self.matrix), old_first_slack, added);
+            .rebind_compact_after_added_columns(
+                Rc::clone(&self.compact_matrix),
+                old_first_slack,
+                added,
+            );
         self.primal_edge_norms
             .as_mut()
             .unwrap()
-            .rebind_matrix(&self.matrix);
+            .rebind_shared(Rc::clone(&self.compact_matrix));
         self.update_row
             .as_mut()
             .unwrap()
-            .rebind_matrix(&self.matrix);
+            .rebind_compact(&self.compact_matrix);
         self.reduced_costs = DenseRow::filled(self.num_cols, 0.0);
         self.reduced_costs_dirty = true;
         self.reduced_costs_precise = false;
@@ -2336,11 +2443,9 @@ impl RevisedSimplex {
     /// columns, give each new row its slack, then refactorize that basis.
     fn try_reuse_with_added_rows(
         &mut self,
-        equation_lp: &LinearProgram,
+        equation_lp: &EquationFormView<'_>,
     ) -> Result<bool, FactorizationError> {
-        let first_slack = equation_lp
-            .first_slack_variable()
-            .unwrap_or(equation_lp.num_variables());
+        let first_slack = equation_lp.first_slack_variable();
         if !self.parameters.use_dual_simplex
             || self.basis_factorization.is_none()
             || equation_lp.num_constraints().to_usize() <= self.num_rows.to_usize()
@@ -2392,7 +2497,7 @@ impl RevisedSimplex {
         self.num_rows = equation_lp.num_constraints();
         self.num_cols = equation_lp.num_variables();
         self.matrix = Rc::new(equation_lp.matrix().clone());
-        self.compact_matrix = CompactSparseMatrix::from_sparse(&self.matrix);
+        self.compact_matrix = Rc::new(CompactSparseMatrix::from_sparse(&self.matrix));
         self.objective = DenseRow::from_vec(
             (0..self.num_cols.to_usize())
                 .map(|col| {
@@ -2414,10 +2519,10 @@ impl RevisedSimplex {
         };
         self.dual_objective_limit =
             dual_limit / self.objective_scaling_factor - self.objective_offset;
-        let mut info = VariablesInfo::new(&self.matrix);
+        let mut info = VariablesInfo::new_from_compact(Rc::clone(&self.compact_matrix));
         info.load_bounds_and_return_true_if_unchanged(
-            equation_lp.variable_lower_bounds().as_slice(),
-            equation_lp.variable_upper_bounds().as_slice(),
+            equation_lp.variable_lower_bounds(),
+            equation_lp.variable_upper_bounds(),
         );
         info.initialize_from_basis_state(self.first_slack_col.to_usize(), 0, &state);
         let mut basis = self.basis.as_slice().to_vec();
@@ -2437,7 +2542,11 @@ impl RevisedSimplex {
             .basis_factorization
             .as_mut()
             .unwrap()
-            .reinitialize_for_basis(Rc::clone(&self.matrix), &self.basis, &self.parameters)
+            .reinitialize_for_compact_basis(
+                Rc::clone(&self.compact_matrix),
+                &self.basis,
+                &self.parameters,
+            )
             .is_err()
         {
             self.phase4_event("warm_added_row_basis_fallback");
@@ -2484,11 +2593,11 @@ impl RevisedSimplex {
         self.update_row
             .as_mut()
             .unwrap()
-            .rebind_matrix(&self.matrix);
+            .rebind_compact(&self.compact_matrix);
         self.primal_edge_norms
             .as_mut()
             .unwrap()
-            .rebind_matrix(&self.matrix);
+            .rebind_shared(Rc::clone(&self.compact_matrix));
         self.dual_values = DenseColumn::filled(self.num_rows, 0.0);
         self.primal_ray = DenseRow::new();
         self.dual_ray = DenseColumn::new();
@@ -2504,7 +2613,7 @@ impl RevisedSimplex {
     /// unchanged (even if bounds changed).
     fn try_reuse_unchanged_matrix(
         &mut self,
-        equation_lp: &LinearProgram,
+        equation_lp: &EquationFormView<'_>,
         matrix_known_unchanged: bool,
     ) -> Result<bool, FactorizationError> {
         if self.basis_factorization.is_none()
@@ -2553,8 +2662,8 @@ impl RevisedSimplex {
         }
         let info = self.variables_info.as_mut().unwrap();
         let bounds_unchanged = info.load_bounds_and_return_true_if_unchanged(
-            equation_lp.variable_lower_bounds().as_slice(),
-            equation_lp.variable_upper_bounds().as_slice(),
+            equation_lp.variable_lower_bounds(),
+            equation_lp.variable_upper_bounds(),
         );
         if !self.parameters.use_dual_simplex && !bounds_unchanged {
             return Ok(false);
@@ -2668,9 +2777,9 @@ impl RevisedSimplex {
                 VariableStatus::Basic => unreachable!(),
             };
             variable_values[index] = value;
-            for entry in self.matrix.column(index) {
-                let row = entry.index().to_usize();
-                rhs[row] = (-entry.coefficient()).mul_add(value, rhs[row]);
+            for (row, coefficient) in self.compact_matrix.column(index).iter() {
+                let row = row.to_usize();
+                rhs[row] = (-coefficient).mul_add(value, rhs[row]);
             }
         }
         // VariableValues::RecomputeBasicVariableValues() passes a scattered
@@ -2898,9 +3007,9 @@ impl RevisedSimplex {
         self.basis_factorization
             .as_ref()
             .unwrap()
-            .right_solve_for_problem_column(
+            .right_solve_for_compact_problem_column(
                 entering.to_usize(),
-                self.matrix.column(entering),
+                self.compact_matrix.column(entering),
                 direction,
             )?;
         // An empty position list is GLOP's dense-vector sentinel.  The ratio
@@ -2920,15 +3029,17 @@ impl RevisedSimplex {
             let mut residual = vec![0.0; self.num_rows.to_usize()];
             for row in 0..self.num_rows.to_usize() {
                 let coefficient = direction.value(RowIndex::from_usize(row));
-                for entry in self.matrix.column(self.basis[RowIndex::from_usize(row)]) {
-                    let residual_row = entry.index().to_usize();
-                    residual[residual_row] = entry
-                        .coefficient()
-                        .mul_add(coefficient, residual[residual_row]);
+                for (entry_row, value) in self
+                    .compact_matrix
+                    .column(self.basis[RowIndex::from_usize(row)])
+                    .iter()
+                {
+                    let residual_row = entry_row.to_usize();
+                    residual[residual_row] = value.mul_add(coefficient, residual[residual_row]);
                 }
             }
-            for entry in self.matrix.column(entering) {
-                residual[entry.index().to_usize()] -= entry.coefficient();
+            for (row, value) in self.compact_matrix.column(entering).iter() {
+                residual[row.to_usize()] -= value;
             }
             let maximum = residual
                 .into_iter()
@@ -3339,19 +3450,22 @@ impl RevisedSimplex {
                     // Dantzig edge norms do not need the update row. Native
                     // ReducedCosts computes it only when maintaining its
                     // incremental row; a pending full recomputation skips it.
-                    self.update_row.as_mut().unwrap().compute_update_row(
-                        self.basis_factorization.as_ref().unwrap(),
-                        &self.matrix,
-                        self.variables_info.as_ref().unwrap().relevance(),
-                        self.variables_info
-                            .as_ref()
-                            .unwrap()
-                            .num_entries_in_relevant_columns()
-                            .value()
-                            .try_into()
-                            .expect("negative relevant entry count"),
-                        row.to_usize(),
-                    )?;
+                    self.update_row
+                        .as_mut()
+                        .unwrap()
+                        .compute_update_row_compact(
+                            self.basis_factorization.as_ref().unwrap(),
+                            &self.compact_matrix,
+                            self.variables_info.as_ref().unwrap().relevance(),
+                            self.variables_info
+                                .as_ref()
+                                .unwrap()
+                                .num_entries_in_relevant_columns()
+                                .value()
+                                .try_into()
+                                .expect("negative relevant entry count"),
+                            row.to_usize(),
+                        )?;
                     update_reduced_cost_values_before_basis_pivot(
                         self.reduced_costs.as_mut_slice(),
                         entering,
@@ -3599,19 +3713,22 @@ impl RevisedSimplex {
                 );
                 continue;
             }
-            self.update_row.as_mut().unwrap().compute_update_row(
-                self.basis_factorization.as_ref().unwrap(),
-                &self.matrix,
-                self.variables_info.as_ref().unwrap().relevance(),
-                self.variables_info
-                    .as_ref()
-                    .unwrap()
-                    .num_entries_in_relevant_columns()
-                    .value()
-                    .try_into()
-                    .expect("negative relevant entry count"),
-                leaving_position,
-            )?;
+            self.update_row
+                .as_mut()
+                .unwrap()
+                .compute_update_row_compact(
+                    self.basis_factorization.as_ref().unwrap(),
+                    &self.compact_matrix,
+                    self.variables_info.as_ref().unwrap().relevance(),
+                    self.variables_info
+                        .as_ref()
+                        .unwrap()
+                        .num_entries_in_relevant_columns()
+                        .value()
+                        .try_into()
+                        .expect("negative relevant entry count"),
+                    leaving_position,
+                )?;
             let entering = self
                 .entering_variable
                 .dual_phase_one_choose_entering_column_from_values(
@@ -3927,19 +4044,22 @@ impl RevisedSimplex {
             if self.dual_edge_norms.needs_basis_refactorization() {
                 self.phase4_event("dual_edge_norm_recomputation_requested");
             }
-            self.update_row.as_mut().unwrap().compute_update_row(
-                self.basis_factorization.as_ref().unwrap(),
-                &self.matrix,
-                self.variables_info.as_ref().unwrap().relevance(),
-                self.variables_info
-                    .as_ref()
-                    .unwrap()
-                    .num_entries_in_relevant_columns()
-                    .value()
-                    .try_into()
-                    .expect("negative relevant entry count"),
-                leaving_position,
-            )?;
+            self.update_row
+                .as_mut()
+                .unwrap()
+                .compute_update_row_compact(
+                    self.basis_factorization.as_ref().unwrap(),
+                    &self.compact_matrix,
+                    self.variables_info.as_ref().unwrap().relevance(),
+                    self.variables_info
+                        .as_ref()
+                        .unwrap()
+                        .num_entries_in_relevant_columns()
+                        .value()
+                        .try_into()
+                        .expect("negative relevant entry count"),
+                    leaving_position,
+                )?;
             let entering = self
                 .entering_variable
                 .dual_choose_entering_column_from_values(
@@ -3972,7 +4092,7 @@ impl RevisedSimplex {
                 );
                 self.dual_ray_row_combination = DenseRow::from_vec(
                     self.update_row.as_ref().unwrap().compute_full_update_row(
-                        &self.matrix,
+                        &self.compact_matrix,
                         &self
                             .basis
                             .as_slice()
@@ -4346,9 +4466,9 @@ impl RevisedSimplex {
         for column in 0..self.num_cols.to_usize() {
             let column = ColIndex::from_usize(column);
             let value = self.variable_values[column];
-            for entry in self.matrix.column(column) {
-                let row = entry.index().to_usize();
-                residual[row] = entry.coefficient().mul_add(value, residual[row]);
+            for (row, coefficient) in self.compact_matrix.column(column).iter() {
+                let row = row.to_usize();
+                residual[row] = coefficient.mul_add(value, residual[row]);
             }
         }
         let maximum = residual
@@ -4364,9 +4484,9 @@ impl RevisedSimplex {
         let mut rhs = vec![0.0; self.num_rows.to_usize()];
         for column in info.not_basic().iter_ones() {
             let value = self.variable_values[column];
-            for entry in self.matrix.column(column) {
-                let row = entry.index().to_usize();
-                rhs[row] = (-entry.coefficient()).mul_add(value, rhs[row]);
+            for (row, coefficient) in self.compact_matrix.column(column).iter() {
+                let row = row.to_usize();
+                rhs[row] = (-coefficient).mul_add(value, rhs[row]);
             }
         }
         let basic = self.basis_factorization.as_ref().unwrap().solve(&rhs)?;
@@ -4512,9 +4632,8 @@ impl RevisedSimplex {
         let mut residual = vec![0.0_f64; self.num_rows.to_usize()];
         for column in 0..self.num_cols.to_usize() {
             let column = ColIndex::from_usize(column);
-            for entry in self.matrix.column(column) {
-                residual[entry.index().to_usize()] +=
-                    entry.coefficient() * self.variable_values[column];
+            for (row, coefficient) in self.compact_matrix.column(column).iter() {
+                residual[row.to_usize()] += coefficient * self.variable_values[column];
             }
         }
         residual

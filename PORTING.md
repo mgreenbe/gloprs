@@ -10,7 +10,7 @@ component affects solver behavior.
 
 | Upstream source | Rust destination | Status | Notes |
 |---|---|---|---|
-| `basis_representation.{h,cc}` | `glop/src/basis_representation.rs` | validated | Sparse LU plus both of GLOP's update modes are present: the default middle-product form built from cached scattered/hypersparse partial solves, and the nondefault product-form eta factorization selected by `use_middle_product_form_update`. As upstream does, the simplex-owned factorization now retains a view of the immutable problem matrix plus its basis-column mapping: a pivot replaces one column index in O(1), and LU refactorization traverses the selected original columns directly without cloning, cleaning, or materializing a basis matrix. An `Rc` provides Rust-safe shared ownership of the immutable matrix without copying its sparse storage; the older owning path remains only for standalone kernel tests. The port also includes the identity-basis shortcut, basis-column permutation absorption, refactorization, adaptive cached `RightSolveForTau()` intermediate, matrix/inverse norms, condition estimates, entry counts, and deterministic-time accounting. Repeated unit-row solves cache their pre-update `U^T` result in a persistent `CompactSparseMatrix` pool keyed by row. Their construction uses the direct counterpart of upstream `LeftSolveUForUnitRow()`, including its unit-RHS starting-column solve; this preserves numerically nonzero residual entries that a generic symbolic hypersparse solve can omit. Problem-column solves likewise store their post-`L`/post-update, pre-`U` intermediate in a second compact pool keyed by problem column; the middle-product update consumes both stored columns exactly as upstream does and falls back to refactorization if either is missing. Both pools survive rank-one updates and clear with LU rebuild/permutation absorption. Specialized temporary unit-row solves and factor-only primal/dual squared-norm solves use scattered LU paths and GLOP's exact input-density time charges. Six separate 300-case multi-pivot native suites cover both update modes under ordinary, fixed-period, and dynamically adjusted refactorization policies; they agree after every update and after a final forced refactorization on solves, exact update sparsity, specialized squared norms, temporary unit rows, condition estimates, and deterministic time. The audit found and corrected three representation-sensitive mismatches: rank-one `x += alpha u` updates use the fused operation emitted by the pinned optimized GLOP build, an empty eta sparse column selects the populated dense representation rather than representing a zero column, and scattered right solves finish with GLOP's conditional nonzero-position sort. `Clear()`, conditional `Refactorize()`, unconditional `ForceRefactorization()`, statistics accumulation/reset, and their state-retention semantics now agree in all six 300-case update suites |
+| `basis_representation.{h,cc}` | `glop/src/basis_representation.rs` | validated | Sparse LU plus both of GLOP's update modes are present: the default middle-product form built from cached scattered/hypersparse partial solves, and the nondefault product-form eta factorization selected by `use_middle_product_form_update`. As upstream does, the simplex-owned factorization now retains a view of the immutable compact problem matrix plus its basis-column mapping: a pivot replaces one column index in O(1), and LU refactorization traverses the selected source columns directly without cloning, cleaning, or materializing a basis matrix. An `Rc` provides Rust-safe shared ownership of that compact matrix; the older owning path remains for standalone kernel tests. The port also includes the identity-basis shortcut, basis-column permutation absorption, refactorization, adaptive cached `RightSolveForTau()` intermediate, matrix/inverse norms, condition estimates, entry counts, and deterministic-time accounting. Repeated unit-row solves cache their pre-update `U^T` result in a persistent `CompactSparseMatrix` pool keyed by row. Their construction uses the direct counterpart of upstream `LeftSolveUForUnitRow()`, including its unit-RHS starting-column solve; this preserves numerically nonzero residual entries that a generic symbolic hypersparse solve can omit. Problem-column solves likewise store their post-`L`/post-update, pre-`U` intermediate in a second compact pool keyed by problem column; the middle-product update consumes both stored columns exactly as upstream does and falls back to refactorization if either is missing. Both pools survive rank-one updates and clear with LU rebuild/permutation absorption. Specialized temporary unit-row solves and factor-only primal/dual squared-norm solves use scattered LU paths and GLOP's exact input-density time charges. Six separate 300-case multi-pivot native suites cover both update modes under ordinary, fixed-period, and dynamically adjusted refactorization policies; they agree after every update and after a final forced refactorization on solves, exact update sparsity, specialized squared norms, temporary unit rows, condition estimates, and deterministic time. The audit found and corrected three representation-sensitive mismatches: rank-one `x += alpha u` updates use the fused operation emitted by the pinned optimized GLOP build, an empty eta sparse column selects the populated dense representation rather than representing a zero column, and scattered right solves finish with GLOP's conditional nonzero-position sort. `Clear()`, conditional `Refactorize()`, unconditional `ForceRefactorization()`, statistics accumulation/reset, and their state-retention semantics now agree in all six 300-case update suites |
 | `dual_edge_norms.{h,cc}` | `glop/src/dual_edge_norms.rs` | validated | Exact recomputation, Koberstein incremental update with contracted arithmetic ordering, precision-triggered recomputation, lower bound, resize, and basis-permutation paths are ported; exact initialization calls GLOP's specialized row-indexed LU squared-norm kernel rather than allocating dense unit vectors and using the general transpose solve. Incremental updates consume the existing scattered BTRAN result directly, preserving its sparse/hypersparse support without a per-pivot allocation and dense scan. Five hundred native traces over independently row- and column-permuted sparse triangular bases agree on solves, precision decisions, adaptive cached tau solves, and incremental norms; the validated multi-pivot basis suites separately cover cached tau solves across updates and refactorizations. Full recomputation uses GLOP's same optional `TimeLimit` check only above 10,000 LU entries; a dedicated large trace asserts that threshold is crossed and agrees on the resulting partial norm vector after an immediate deterministic stop. The always-enabled accuracy statistic and pinned-release compiled-out statistics surface are included in the differential trace |
 | `entering_variable.{h,cc}` | `glop/src/entering_variable.rs` | validated | Both dual phase-I and phase-II breakpoint heaps, Harris tolerances, stable-pivot preference, bound-flip accounting, minimum steps, deterministic-operation accounting, and exact-comparison tie detection are direct ports. Breakpoint ordering uses GLOP's ordinary comparisons, including equality of negative and positive zero, rather than Rust's sign-sensitive `f64::total_cmp()`. A 100-case native trace builds actual GLOP update rows and reduced costs, then agrees on phase-I/phase-II entering columns and ordered bound-flip candidates. An explicit-collaborator Phase-II entry point lets the revised-simplex owner reuse the same validated ratio test without a self-referential `ReducedCosts` borrow. All randomized simplex collaborators consume the shared port of GLOP's deterministic `std::mt19937_64` stream and libc++/Abseil distributions |
 | `initial_basis.{h,cc}` | `glop/src/initial_basis.rs` | validated | Bixby, primal/dual triangular, and primal/dual Maros crashes retain the incremental `MatrixNonZeroPattern`, stability thresholds, source-order scans, and category/penalty rules. The triangular queue reproduces the pinned libc++ `make_heap`/`push_heap`/`pop_heap` behavior rather than Rust `BinaryHeap`, whose equivalent-key child choice changes bases. A 375-case native trace agrees exactly on all five returned bases and exposed two subtle requirements now preserved: `RestrictedInfinityNorm()` returns a magnitude, and Maros uses GLOP's literal row-to-column availability lookup |
@@ -30,6 +30,38 @@ component affects solver behavior.
 | `variable_values.{h,cc}` | `glop/src/variable_values.rs` | validated | Status-derived nonbasic values, sparse `-B^-1 A_N x_N` basic recomputation, residual and infeasibility summaries, pivot updates, sparse incremental nonbasic updates, primal phase-I costs, and dense/incremental dual infeasibility prices are ported. Mutable norm/price collaborators are explicit Rust method arguments rather than stored raw pointers. A 100-case native state trace agrees on every variable value and all three feasibility summaries; 20 controlled three-pivot native traces agree on final numerical state |
 | `variables_info.{h,cc}` | `glop/src/variables_info.rs` | validated | Equation-form and allocation-free incremental structural/slack bound loading, type derivation, warm/default statuses, all movement/basic/relevance bitsets, relevant-entry accounting, boxed relevance, snapping, and dual phase-I transformations are ported with direct invariant tests. The advanced zero-copy mutable-bound API and `InitializeFromMutatedState()` are included. An expanded 500-case native trace agrees on types, statuses, every bitset, relevant entry counts, bound transformations, mutated-state reconstruction, and the structural/slack unchanged fast path. Rust owns its compact matrix to avoid a self-referential solver object; this changes lifetime organization but not behavior or traversal |
 
+The validated `basis_representation` path now also accepts a shared compact
+matrix view for the advanced entry. Its Markowitz/LU selected-column traversal
+uses the same source entry order and operation accounting as the sparse view;
+128 generated equivalence cases, the seven pinned advanced cases, and two
+fast-96 trajectory suites pass. `VariablesInfo` now shares the solver's compact
+allocation in both ordinary and advanced initialization, including dimension-
+changing warm rebuilds. Both ordinary and advanced solver bases now use the
+same compact view, including incremental added-column rebinding and added-row
+reinitialization. A focused added-column test checks sharing, unchanged LU,
+and subsequent refactorization. Both fast-96 trajectory fixtures and the
+100,000-pivot qap15 native-state/clock fixture pass. `PrimalEdgeNorms` now
+shares the solver's immutable `Rc<CompactSparseMatrix>` rather than cloning
+columns at initialization or rebinding; its native-pinned state and clock
+tests remain green.
+`UpdateRow` now stores the compact transpose used by native GLOP and shares
+the advanced caller's transposed allocation directly. The row-wise kernels
+iterate that compact storage in source order; the small native Phase-4 cases
+and numerical-kernel tests pass. The solver's direct update-row calls now use
+the compact matrix for column-wise products too. The ordinary entry still constructs its
+compact transpose from the LP matrix once per full initialization.
+Problem-column FTRAN now traverses the compact column through the same LU
+lower-solve kernel used by sparse-column tests, matching upstream's source
+representation; the fast-96 strict trajectory fixture remains exact.
+`PrimalEdgeNorms` now consumes the shared compact matrix for column norms,
+exact edge norms, and incremental products. The remaining advanced sparse
+copy is not considered faithful and must be removed as initialization and
+inspection/certificate consumers are migrated. Basis updates already store
+compact problem-column indices; the dual-unbounded full update row now also
+reads compact columns. The solver's numerical residual, pivot-check, and
+correction loops likewise read the compact source; `UpdateRow` builds/rebinds
+its transpose from that source without converting through sparse columns.
+
 The `revised_simplex` row remains in progress. The opt-in
 `SetIntegralityScale()`/`Polish()` path now follows upstream's candidate
 selection, integrality-gain test, bound flip, and basis-pivot updates. Nine
@@ -45,15 +77,19 @@ called it only after the first optimization.
 `MinimizeFromTransposedMatrixWithSlack()` now has a functional Rust entry point
 and native-pinned first-solve, changed-bound warm-start, changed-matrix,
 transformed nonzero-slack-cost, zero-row, changed-objective, and external-basis
-cases with exact
-operation clocks. It still
-materializes a cached equation-form
-`LinearProgram` instead of operating directly on GLOP's compact matrix and
-`VariablesInfo` storage. A cached advanced call now skips the matrix equality
-scan, as upstream's unchanged-transpose path does. The remaining
-materialization is an
-explicit performance-architecture divergence, so the advanced path is not
-yet ported or validated despite agreeing small-case outcomes. The ordinary
+cases with exact operation clocks. The entry now initializes from an
+equation-form view of the caller's compact transpose, objective, and mutable
+bounds without materializing a cached `LinearProgram`. An unchanged advanced
+call skips the matrix equality scan, and full initialization retains the
+directly transposed compact matrix as its numerical source. The basis
+representation now shares that exact compact allocation and Markowitz/LU
+factorize selected columns through a compact view, as upstream does. The
+ordinary entry and dimension-changing warm paths use this compact view too. A
+focused sparse-versus-compact factorization test agrees on pivots, factors,
+and operation count; the seven native-pinned advanced cases and both fast-96
+Netlib trajectory suites pass. Other solver collaborators still require a
+sparse-column copy of the advanced matrix, so the advanced entry remains an
+incomplete performance port. The ordinary
 continuous-LP solve does not invoke either optional path.
 
 Trajectory evidence in the `revised_simplex` row predating the October 2026
@@ -96,9 +132,9 @@ the reusable prefix
 diagnostic is `tools/compare_netlib_prefix.py`.
 
 The opt-in `qap15_dual` fixture separately pins direct, unscaled dual
-snapshots at 0, 10,000, 20,000, 30,000, and 40,000 pivots. Status, ordered
+snapshots at 0, 10,000, 20,000, 30,000, 40,000, 50,000, and 100,000 pivots. Status, ordered
 basis, reduced-cost bits, dual-norm bits, and deterministic-operation clock
-agree with native GLOP at all five caps. The separate 28,148/28,149 transition
+agree with native GLOP at all seven caps. The separate 28,148/28,149 transition
 fixture pins the former clock split, now reconciled: after a dual-loop
 small-direction retry on an already refactorized LU, GLOP retains its cached
 unit-row inverse, while Rust previously invalidated it and paid for an extra
@@ -110,16 +146,19 @@ terminate under a 600-second wall bound with a one-million-iteration cap,
 so qap15 terminal validation remains open. The scaled/preprocessed
 public-solver timing is not a direct comparison for this Phase-4 path.
 At a 100,000-pivot cap, native returned `DUAL_FEASIBLE` in 253 seconds while
-the pre-optimization Rust build exceeded a 300-second wall bound. This is
-not a status or trajectory comparison at that depth; it is an unresolved
-direct-solver performance gap.
-The deepest completed serial trajectory comparison is now 40,000 pivots;
+the pre-optimization Rust build exceeded a 300-second wall bound. The new
+native-pinned 100,000-pivot regression now passes in Rust for status, ordered
+basis, reduced-cost bits, dual-norm bits, and exact deterministic clock; a
+controlled serial timing comparison remains to be done.
+The deepest completed direct state/clock comparison is now 100,000 pivots;
 the 20,000-pivot timings were 13.5 seconds native and 18.3 seconds Rust.
 At 40,000 pivots, native took 141.7 seconds and Rust initially took 240.8;
 after safe slice iteration in the Markowitz partially-permuted lower sparse
 solve, Rust took 177.5 seconds with the same pinned numerical snapshots.
 Before that optimization, at 50,000 pivots native took 171.8 seconds and
-Rust exceeded a 180-second bound; that depth has not been rerun since.
+Rust exceeded a 180-second bound. The new 50,000-pivot regression passes
+after the optimization, but a controlled serial timing comparison at that
+depth remains to be done.
 
 A fresh 10-second-per-model native audit has 96 exact terminal path
 fingerprints—status, iteration count, and ordered basis—and two timeouts

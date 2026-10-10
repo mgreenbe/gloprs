@@ -122,22 +122,27 @@ work needed to make that claim.
 | Explicitly cleared integrality scales | `post_optimal_integrality_scales_cleared` | Setting then clearing the scale vector disables polishing; native fractional solution, basis, and clock agree |
 | Polishing after cleanup reoptimization | `post_optimal_integrality_polish_after_cleanup_reoptimization` | Primal-to-dual cleanup causes a second optimization; both post-optimal polishing calls match native terminal state and operation clock |
 | Polishing accepts a pivot, then rejects the next candidate or stops at the deterministic limit | `post_optimal_integrality_polish_accept_then_reject`, `post_optimal_integrality_polish_time_limit_after_pivot` | Candidate removal and the post-pivot time check match native terminal state and exact clocks; the limited case forbids the later rejection |
-| Advanced transposed-matrix entry, changed bounds/matrix, and transformed slack objective | `transposed_matrix_with_slack_entry`, `transposed_matrix_with_slack_warm_bound_change`, `transposed_matrix_with_slack_changed_matrix`, `transposed_matrix_with_slack_nonzero_slack_cost_and_objective_transform` | First solve, quick dual warm solve after a bound mutation, full reinitialization after a matrix mutation, and nonzero slack cost with objective scale/offset match native state and exact operation clocks. Unchanged advanced calls skip the sparse-matrix equality scan; Rust still caches an equation-form model, so direct compact-matrix ownership and large-model performance remain to reconcile |
+| Advanced transposed-matrix entry, changed bounds/matrix, and transformed slack objective | `transposed_matrix_with_slack_entry`, `transposed_matrix_with_slack_warm_bound_change`, `transposed_matrix_with_slack_changed_matrix`, `transposed_matrix_with_slack_nonzero_slack_cost_and_objective_transform` | First solve, quick dual warm solve after a bound mutation, full reinitialization after a matrix mutation, and nonzero slack cost with objective scale/offset match native state and exact operation clocks. Unchanged advanced calls skip the matrix scan; the numerical matrix, basis representation, and VariablesInfo share the caller's compact allocation. Other collaborators still use a sparse-column copy, so large-model performance remains to reconcile |
 | Zero-row advanced transposed solve | `transposed_matrix_with_slack_zero_rows` | Native/Rust status, variable values, reduced costs, and operation clocks agree without a basis or slack columns |
 | Changed objective on the advanced transposed entry | `transposed_matrix_with_slack_warm_objective_change` | Native and Rust reject the unchanged-objective dual fast path, rebuild from the saved basis, and agree on status, basis, values, reduced costs, and exact clock |
 | External starting basis on the advanced transposed entry | `transposed_matrix_with_slack_external_basis` | Native and Rust initialize from the caller-supplied structural basis with matching terminal state and exact clock |
-| Direct, unscaled qap15 prefixes and former clock split | `qap15_dual`, `qap15-clock-transition.json` | Status, ordered basis, reduced-cost bits, dual-norm bits, and deterministic clock agree through 40,000 pivots. The former pivot-28,149 split was caused by invalidating `UpdateRow` after a no-op refactorization; the opt-in fixture now requires exact native clock equality |
+| Direct, unscaled qap15 prefixes and former clock split | `qap15_dual`, `qap15-clock-transition.json` | Status, ordered basis, reduced-cost bits, dual-norm bits, and deterministic clock agree through 100,000 pivots. The former pivot-28,149 split was caused by invalidating `UpdateRow` after a no-op refactorization; the opt-in fixture now requires exact native clock equality |
 
 Still needed:
 
-- Direct, unscaled qap15 terminal behavior and prefixes beyond 40,000 pivots
+- Direct, unscaled qap15 terminal behavior and prefixes beyond 100,000 pivots
   remain unvalidated.
 
 - The alternate `MinimizeFromTransposedMatrixWithSlack()` entry point now has
-  seven native-pinned functional cases but still builds a cached equation-form
-  `LinearProgram` from the compact transpose. Unchanged incremental calls now
-  skip the matrix scan. Eliminate the extra sparse-model materialization before
-  calling the advanced port performance-faithful. Optional
+  seven native-pinned functional cases and no longer builds a cached
+  equation-form `LinearProgram`. Unchanged incremental calls skip the matrix
+  scan, and full initialization keeps the directly transposed compact
+  numerical matrix. The basis representation and `VariablesInfo` share that
+  compact allocation, and factorization reads selected columns directly,
+  matching upstream's view.
+  Other collaborators still need a sparse-column copy of the advanced matrix;
+  eliminate that copy and validate performance before calling the advanced
+  port performance-faithful. Optional
   `SetIntegralityScale()`/`Polish()` has native-pinned
   bound-flip, pivot, multi-candidate rejection, post-cleanup reoptimization,
   and no-scale controls;

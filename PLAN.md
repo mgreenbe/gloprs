@@ -1115,12 +1115,53 @@ changed-matrix rebuild, a nonzero slack cost with objective scale/offset, and
 a zero-row case, a changed-objective warm solve, and an externally supplied
 basis.
 Status, basis, numerical state, and exact operation
-clock agree. Its Rust implementation still caches a synthetic equation-form
-`LinearProgram` instead of directly owning the compact matrix and bounds.
-Unchanged advanced calls now skip the sparse-matrix equality scan, matching
-the shape of upstream's fast path. The remaining representation and
-performance divergence must be eliminated before the advanced path or Phase 4
-can be declared complete.
+clock agree. The advanced entry now supplies an equation-form view to shared
+initialization, removing the cached synthetic `LinearProgram` and its
+bound/objective update pass. Unchanged calls skip the sparse-matrix equality
+scan, and full initialization keeps the compact numerical matrix transposed
+directly from the caller. The basis representation now shares the same
+`Rc<CompactSparseMatrix>` as numerical operations and factors selected
+columns directly through a compact Markowitz/LU view. A 128-case generated
+test matches sparse-view pivots, factors, and operation counts; `VariablesInfo`
+also shares that compact allocation on ordinary and advanced initialization.
+The seven pinned advanced
+cases and the ordinary and perturbed fast-96 Netlib regressions pass. The
+advanced entry still materializes a sparse-column copy for other solver
+collaborators, so complete compact ownership and its performance validation
+remain open before declaring this path or Phase 4 complete.
+`PrimalEdgeNorms` now shares the solver's immutable compact matrix, rather
+than cloning sparse columns on initialization or rebind; the workspace tests
+and strict lint pass.
+`UpdateRow` now shares the advanced entry's compact transpose instead of
+building a sparse transpose copy; ordinary full initialization builds a
+compact transpose directly from the LP matrix. The pinned small-case and
+numerical-kernel tests pass. The advanced sparse-column compatibility copy is
+still present for initialization and comparison paths.
+The solver's four direct update-row calls now consume the compact numerical
+matrix; the column-wise update kernel uses its four-accumulator scalar product.
+The focused numerical tests, pinned Phase 4 cases, and both fast-96 native
+trajectory fixtures pass after this change.
+Problem-column FTRAN now accepts compact columns directly through the shared
+LU lower-solve kernel; the strict fast-96 native trajectory fixture still
+passes. `PrimalEdgeNorms` now also shares the compact matrix and traverses its
+columns for exact and incremental norms. Basis updates already retain a
+compact problem-column index; they do not need a sparse replacement column.
+The dual-unbounded certificate's full update row now also reads compact
+columns. The sparse-column compatibility copy remains for the initialization
+input and comparison paths and several solver inspection/certificate loops.
+Those are Rust-only dependencies to remove,
+not justified deviations from upstream.
+The solver's residual, imprecise-pivot, and value-correction loops now use
+compact columns, and `UpdateRow` constructs or rebinds its transpose directly
+from the compact matrix. The remaining sparse copy is increasingly isolated
+to the equation-form input adapter and warm-start matrix comparisons.
+The ordinary solver basis now uses the shared compact view as well. Added
+columns rebind the view and shift slack indices without numerical rebuild;
+added rows reinitialize from the compact source. Standalone sparse-view
+regression tests remain, but solver refactorization no longer selects sparse
+columns from its copied matrix. The full workspace suite, strict lint, both
+fast-96 Netlib trajectory fixtures, and the 100,000-pivot qap15 native-state
+and clock fixture pass on this compact-view implementation.
 
 Exit criteria:
 
@@ -1372,14 +1413,17 @@ preprocessing and is not comparable to this direct Phase-4 experiment.
 A deeper 100,000-pivot cap reached `DUAL_FEASIBLE` in native GLOP after 253
 seconds, but the pre-optimization Rust port did not reach that cap within
 300 seconds.
-No terminal-state or 100,000-pivot equality claim is made from those runs;
-this large-model performance discrepancy remains part of Phase 4.
+Those earlier runs did not establish 100,000-pivot equality; the new pinned
+fixture and Rust regression now do, including status, ordered basis,
+reduced-cost bits, dual-norm bits, and exact deterministic clock. Controlled
+serial timing at this depth and terminal behavior remain Phase-4 work.
 At 50,000 pivots, native took 171.8 seconds and Rust exceeded a 180-second
-bound before the safe sparse-solve iteration change; that depth has not been
-rerun since, so no trajectory comparison there is claimed.
+bound before the safe sparse-solve iteration change. A later direct,
+unscaled 50,000-pivot run has now passed the pinned-native status, ordered
+basis, reduced-cost bits, dual-norm bits, and exact deterministic clock.
 
 The qap15 fixture now also pins native deterministic-operation clock bits.
-Rust agrees bit-for-bit at 0, 10,000, 20,000, 30,000, and 40,000 pivots.
+Rust agrees bit-for-bit at 0, 10,000, 20,000, 30,000, 40,000, 50,000, and 100,000 pivots.
 The former first split at pivot 28,149 was a cache-lifecycle discrepancy:
 after a small-direction-pivot retry, `RefactorizeBasisIfNeeded()` leaves an
 already refactorized LU and its cached `UpdateRow` untouched in GLOP. Rust
@@ -1387,8 +1431,8 @@ correctly skipped the LU rebuild but invalidated `UpdateRow` anyway, paying
 for one unnecessary unit-row BTRAN. Conditional invalidation now matches
 upstream. The `qap15-clock-transition.json` regression requires native clock,
 status, ordered basis, reduced-cost bits, and dual-norm bits at 28,148 and
-28,149; the five-cap regression requires the same exact native clock through
-40,000 pivots. Terminal behavior and deeper prefixes remain unvalidated.
+28,149; the seven-cap regression requires the same exact native clock through
+100,000 pivots. Terminal behavior and deeper prefixes remain unvalidated.
 
 Benchmark entry point: `tools/benchmark_netlib_solve.py` with release-built
 `glop/examples/netlib_timing.rs` and the native

@@ -6,7 +6,7 @@
 //! columns. The active matrix is never expanded into a dense array.
 
 use lp_data::lp_types::{ColIndex, RowIndex, VectorIndex};
-use lp_data::sparse::SparseMatrix;
+use lp_data::sparse::{CompactColumn, CompactSparseMatrix, SparseMatrix};
 use lp_data::sparse_vector::SparseColumn;
 use lp_data::triangular_matrix::{Triangle, TriangularMatrix};
 
@@ -48,38 +48,137 @@ struct MarkowitzResult {
 }
 
 #[derive(Clone, Copy)]
-struct MatrixView<'a> {
-    matrix: &'a SparseMatrix,
+struct InputEntry {
+    row: RowIndex,
+    value: f64,
+}
+
+impl InputEntry {
+    fn index(self) -> RowIndex {
+        self.row
+    }
+    fn coefficient(self) -> f64 {
+        self.value
+    }
+}
+
+trait InputColumn: Copy {
+    fn num_entries(self) -> usize;
+    fn entry(self, index: usize) -> InputEntry;
+    fn is_empty(self) -> bool {
+        self.num_entries() == 0
+    }
+    fn first(self) -> Option<InputEntry> {
+        (!self.is_empty()).then(|| self.entry(0))
+    }
+    fn look_up_coefficient(self, row: RowIndex) -> f64 {
+        self.iter()
+            .filter(|entry| entry.index() == row)
+            .last()
+            .map_or(0.0, InputEntry::coefficient)
+    }
+    fn iter(self) -> impl Iterator<Item = InputEntry>;
+}
+
+impl InputColumn for &SparseColumn {
+    fn num_entries(self) -> usize {
+        SparseColumn::num_entries(self)
+    }
+    fn entry(self, index: usize) -> InputEntry {
+        let entry = SparseColumn::entry(self, index);
+        InputEntry {
+            row: entry.index(),
+            value: entry.coefficient(),
+        }
+    }
+    fn look_up_coefficient(self, row: RowIndex) -> f64 {
+        SparseColumn::look_up_coefficient(self, row)
+    }
+    fn iter(self) -> impl Iterator<Item = InputEntry> {
+        SparseColumn::iter(self).map(|entry| InputEntry {
+            row: entry.index(),
+            value: entry.coefficient(),
+        })
+    }
+}
+
+impl InputColumn for CompactColumn<'_> {
+    fn num_entries(self) -> usize {
+        self.len()
+    }
+    fn entry(self, index: usize) -> InputEntry {
+        InputEntry {
+            row: self.entry_row(index),
+            value: self.entry_coefficient(index),
+        }
+    }
+    fn iter(self) -> impl Iterator<Item = InputEntry> {
+        CompactColumn::iter(self).map(|(row, value)| InputEntry { row, value })
+    }
+}
+
+trait InputMatrix: Copy {
+    type Column: InputColumn;
+    fn num_rows(self) -> usize;
+    fn num_cols(self) -> usize;
+    fn column(self, column: usize) -> Self::Column;
+}
+
+impl<'a> InputMatrix for &'a SparseMatrix {
+    type Column = &'a SparseColumn;
+    fn num_rows(self) -> usize {
+        SparseMatrix::num_rows(self).to_usize()
+    }
+    fn num_cols(self) -> usize {
+        SparseMatrix::num_cols(self).to_usize()
+    }
+    fn column(self, column: usize) -> Self::Column {
+        SparseMatrix::column(self, ColIndex::from_usize(column))
+    }
+}
+
+impl<'a> InputMatrix for &'a CompactSparseMatrix {
+    type Column = CompactColumn<'a>;
+    fn num_rows(self) -> usize {
+        CompactSparseMatrix::num_rows(self).to_usize()
+    }
+    fn num_cols(self) -> usize {
+        CompactSparseMatrix::num_cols(self).to_usize()
+    }
+    fn column(self, column: usize) -> Self::Column {
+        CompactSparseMatrix::column(self, ColIndex::from_usize(column))
+    }
+}
+
+#[derive(Clone, Copy)]
+struct MatrixView<'a, M: InputMatrix> {
+    matrix: M,
     columns: Option<&'a [usize]>,
 }
 
-impl<'a> MatrixView<'a> {
-    fn full(matrix: &'a SparseMatrix) -> Self {
+impl<'a, M: InputMatrix> MatrixView<'a, M> {
+    fn full(matrix: M) -> Self {
         Self {
             matrix,
             columns: None,
         }
     }
-
-    fn selected(matrix: &'a SparseMatrix, columns: &'a [usize]) -> Self {
+    fn selected(matrix: M, columns: &'a [usize]) -> Self {
         Self {
             matrix,
             columns: Some(columns),
         }
     }
-
     fn num_rows(self) -> usize {
-        self.matrix.num_rows().to_usize()
+        self.matrix.num_rows()
     }
-
     fn num_columns(self) -> usize {
         self.columns
-            .map_or_else(|| self.matrix.num_cols().to_usize(), <[usize]>::len)
+            .map_or_else(|| self.matrix.num_cols(), <[usize]>::len)
     }
-
-    fn column(self, column: usize) -> &'a SparseColumn {
+    fn column(self, column: usize) -> M::Column {
         let source = self.columns.map_or(column, |columns| columns[column]);
-        self.matrix.column(ColIndex::from_usize(source))
+        self.matrix.column(source)
     }
 }
 
@@ -96,9 +195,9 @@ struct MatrixNonZeroPattern {
 }
 
 impl MatrixNonZeroPattern {
-    fn reset_from_matrix_subset(
+    fn reset_from_matrix_subset<M: InputMatrix>(
         &mut self,
-        matrix: MatrixView<'_>,
+        matrix: MatrixView<'_, M>,
         row_permutation: &[usize],
         column_permutation: &[usize],
         singleton_columns: &mut Vec<usize>,
@@ -127,7 +226,7 @@ impl MatrixNonZeroPattern {
                 self.non_deleted_columns -= 1;
                 continue;
             }
-            for entry in matrix.column(column) {
+            for entry in matrix.column(column).iter() {
                 let row = entry.index().to_usize();
                 if row_permutation[row] != INVALID {
                     continue;
@@ -231,8 +330,8 @@ impl MatrixNonZeroPattern {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn store_pivot_column(
-    matrix: MatrixView<'_>,
+fn store_pivot_column<M: InputMatrix>(
+    matrix: MatrixView<'_, M>,
     row: usize,
     column: usize,
     row_permutation: &mut [usize],
@@ -439,11 +538,15 @@ impl Default for MarkowitzWorkspace {
     }
 }
 
-fn copy_input_column(matrix: MatrixView<'_>, column: usize, result: &mut SparseColumn) {
+fn copy_input_column<M: InputMatrix>(
+    matrix: MatrixView<'_, M>,
+    column: usize,
+    result: &mut SparseColumn,
+) {
     let source = matrix.column(column);
     result.clear();
     result.reserve(source.num_entries());
-    for entry in source {
+    for entry in source.iter() {
         result.add_entry(entry.index(), entry.coefficient());
     }
 }
@@ -460,8 +563,8 @@ fn structural_singleton_row(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn compute_column<'a>(
-    matrix: MatrixView<'_>,
+fn compute_column<'a, M: InputMatrix>(
+    matrix: MatrixView<'_, M>,
     column: usize,
     row_permutation: &[usize],
     lower_factor: &mut TriangularMatrix,
@@ -520,8 +623,8 @@ fn compute_column<'a>(
 }
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-fn find_pivot(
-    matrix: MatrixView<'_>,
+fn find_pivot<M: InputMatrix>(
+    matrix: MatrixView<'_, M>,
     parameters: &GlopParameters,
     pattern: &MatrixNonZeroPattern,
     row_perm: &[usize],
@@ -545,7 +648,7 @@ fn find_pivot(
         if *contains_only_singleton_columns {
             let row = matrix
                 .column(column)
-                .into_iter()
+                .iter()
                 .find(|entry| row_perm[entry.index().to_usize()] == INVALID)?
                 .index()
                 .to_usize();
@@ -714,8 +817,8 @@ fn update_degree(
 }
 
 #[allow(clippy::too_many_lines)]
-fn compute(
-    matrix: MatrixView<'_>,
+fn compute<M: InputMatrix>(
+    matrix: MatrixView<'_, M>,
     parameters: &GlopParameters,
     workspace: &mut MarkowitzWorkspace,
     lower_factor: &mut TriangularMatrix,
@@ -789,7 +892,7 @@ fn compute(
         }
         let mut residual_row = INVALID;
         let mut residual_degree = 0;
-        for entry in matrix.column(column) {
+        for entry in matrix.column(column).iter() {
             let row = entry.index().to_usize();
             if row_perm[row] == INVALID {
                 residual_row = row;
@@ -1012,6 +1115,26 @@ pub(crate) fn factorize_selected(
     factors_from_result(result, n, lower, upper)
 }
 
+/// Factorizes selected columns directly from GLOP's compact numerical matrix.
+pub(crate) fn factorize_selected_compact(
+    matrix: &CompactSparseMatrix,
+    columns: &[usize],
+    parameters: &GlopParameters,
+    workspace: &mut MarkowitzWorkspace,
+    lower: &mut TriangularMatrix,
+    upper: &mut TriangularMatrix,
+) -> Result<SparseLu, usize> {
+    let n = matrix.num_rows().to_usize();
+    let result = compute(
+        MatrixView::selected(matrix, columns),
+        parameters,
+        workspace,
+        lower,
+        upper,
+    );
+    factors_from_result(result, n, lower, upper)
+}
+
 fn factors_from_result(
     result: MarkowitzResult,
     n: usize,
@@ -1065,9 +1188,200 @@ pub(crate) fn compute_pivot_sequence_with_operations(
     )
 }
 
+pub(crate) fn compute_pivot_sequence_compact_with_operations(
+    matrix: &CompactSparseMatrix,
+    columns: &[usize],
+    parameters: &GlopParameters,
+) -> (Vec<usize>, Vec<usize>, i64) {
+    let mut lower = TriangularMatrix::empty(Triangle::Lower, true);
+    let mut upper = TriangularMatrix::empty(Triangle::Upper, false);
+    let result = compute(
+        MatrixView::selected(matrix, columns),
+        parameters,
+        &mut MarkowitzWorkspace::default(),
+        &mut lower,
+        &mut upper,
+    );
+    (
+        result.pivot_rows,
+        result.pivot_columns,
+        result.num_fp_operations,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compact_input_uses_last_duplicate_coefficient() {
+        let mut matrix = SparseMatrix::new();
+        matrix.populate_from_zero(RowIndex::new(1), ColIndex::new(1));
+        matrix
+            .mutable_column(ColIndex::new(0))
+            .add_entry(RowIndex::new(0), 2.0);
+        matrix
+            .mutable_column(ColIndex::new(0))
+            .add_entry(RowIndex::new(0), -3.0);
+        let compact = CompactSparseMatrix::from_sparse(&matrix);
+        assert_eq!(
+            MatrixView::full(&matrix)
+                .column(0)
+                .look_up_coefficient(RowIndex::new(0))
+                .to_bits(),
+            (-3.0_f64).to_bits()
+        );
+        assert_eq!(
+            MatrixView::full(&compact)
+                .column(0)
+                .look_up_coefficient(RowIndex::new(0))
+                .to_bits(),
+            (-3.0_f64).to_bits()
+        );
+    }
+
+    #[test]
+    fn compact_selected_columns_match_sparse_factorization_and_candidate_order() {
+        let mut matrix = SparseMatrix::new();
+        matrix.populate_from_zero(RowIndex::new(3), ColIndex::new(5));
+        for (column, row, value) in [
+            (2, 0, 2.0),
+            (2, 1, 1.0),
+            (0, 1, 3.0),
+            (0, 2, 2.0),
+            (4, 0, 1.0),
+            (4, 2, 4.0),
+        ] {
+            matrix
+                .mutable_column(ColIndex::new(column))
+                .add_entry(RowIndex::new(row), value);
+        }
+        let compact = CompactSparseMatrix::from_sparse(&matrix);
+        let selected = [2, 0, 4];
+        let parameters = GlopParameters::default();
+        let mut sparse_workspace = MarkowitzWorkspace::default();
+        let mut compact_workspace = MarkowitzWorkspace::default();
+        let mut sparse_lower = TriangularMatrix::empty(Triangle::Lower, true);
+        let mut sparse_upper = TriangularMatrix::empty(Triangle::Upper, false);
+        let mut compact_lower = TriangularMatrix::empty(Triangle::Lower, true);
+        let mut compact_upper = TriangularMatrix::empty(Triangle::Upper, false);
+        let sparse = factorize_selected(
+            &matrix,
+            &selected,
+            &parameters,
+            &mut sparse_workspace,
+            &mut sparse_lower,
+            &mut sparse_upper,
+        )
+        .unwrap();
+        let packed = factorize_selected_compact(
+            &compact,
+            &selected,
+            &parameters,
+            &mut compact_workspace,
+            &mut compact_lower,
+            &mut compact_upper,
+        )
+        .unwrap();
+        assert_eq!(sparse.row_permutation, packed.row_permutation);
+        assert_eq!(sparse.column_permutation, packed.column_permutation);
+        assert_eq!(sparse.num_fp_operations, packed.num_fp_operations);
+        for column in 0..3 {
+            assert_eq!(
+                sparse_lower.column(column).collect::<Vec<_>>(),
+                compact_lower.column(column).collect::<Vec<_>>()
+            );
+            assert_eq!(
+                sparse_upper.column(column).collect::<Vec<_>>(),
+                compact_upper.column(column).collect::<Vec<_>>()
+            );
+        }
+        assert_eq!(
+            compute_pivot_sequence_with_operations(&matrix, &selected, &parameters),
+            compute_pivot_sequence_compact_with_operations(&compact, &selected, &parameters),
+        );
+    }
+
+    #[test]
+    #[allow(clippy::cast_precision_loss, clippy::float_cmp)]
+    fn generated_compact_and_sparse_selected_factorizations_agree() {
+        let selected = [6, 0, 4, 2, 7];
+        let parameters = GlopParameters::default();
+        for seed in 0..128_usize {
+            let mut state = (seed as u64) + 1;
+            let mut matrix = SparseMatrix::new();
+            matrix.populate_from_zero(RowIndex::new(5), ColIndex::new(8));
+            for (position, &column) in selected.iter().enumerate() {
+                for offset in 0..5 {
+                    let row = (offset + seed) % 5;
+                    state = state
+                        .wrapping_mul(6_364_136_223_846_793_005)
+                        .wrapping_add(1);
+                    let value = if row == position {
+                        10.0
+                    } else if (state >> 32).is_multiple_of(3) {
+                        ((state >> 40) % 5) as f64 - 2.0
+                    } else {
+                        0.0
+                    };
+                    if value != 0.0 {
+                        matrix
+                            .mutable_column(ColIndex::from_usize(column))
+                            .add_entry(RowIndex::from_usize(row), value);
+                    }
+                }
+            }
+            let compact = CompactSparseMatrix::from_sparse(&matrix);
+            let mut sparse_workspace = MarkowitzWorkspace::default();
+            let mut compact_workspace = MarkowitzWorkspace::default();
+            let mut sparse_lower = TriangularMatrix::empty(Triangle::Lower, true);
+            let mut sparse_upper = TriangularMatrix::empty(Triangle::Upper, false);
+            let mut compact_lower = TriangularMatrix::empty(Triangle::Lower, true);
+            let mut compact_upper = TriangularMatrix::empty(Triangle::Upper, false);
+            let sparse = factorize_selected(
+                &matrix,
+                &selected,
+                &parameters,
+                &mut sparse_workspace,
+                &mut sparse_lower,
+                &mut sparse_upper,
+            )
+            .unwrap();
+            let packed = factorize_selected_compact(
+                &compact,
+                &selected,
+                &parameters,
+                &mut compact_workspace,
+                &mut compact_lower,
+                &mut compact_upper,
+            )
+            .unwrap();
+            assert_eq!(
+                sparse.row_permutation, packed.row_permutation,
+                "seed {seed}"
+            );
+            assert_eq!(
+                sparse.column_permutation, packed.column_permutation,
+                "seed {seed}"
+            );
+            assert_eq!(
+                sparse.num_fp_operations, packed.num_fp_operations,
+                "seed {seed}"
+            );
+            for column in 0..5 {
+                assert_eq!(
+                    sparse_lower.column(column).collect::<Vec<_>>(),
+                    compact_lower.column(column).collect::<Vec<_>>(),
+                    "seed {seed}"
+                );
+                assert_eq!(
+                    sparse_upper.column(column).collect::<Vec<_>>(),
+                    compact_upper.column(column).collect::<Vec<_>>(),
+                    "seed {seed}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn incomplete_candidate_permutation_skips_final_storage_clock() {

@@ -1,8 +1,11 @@
 //! Primal steepest-edge and Devex norm maintenance.
 
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
+
 use lp_data::lp_types::{ColBitVec, ColIndex, VectorIndex, deterministic_time_for_fp_operations};
 use lp_data::lp_utils::{precise_squared_norm, squared_norm};
-use lp_data::sparse::SparseMatrix;
+use lp_data::sparse::{CompactSparseMatrix, SparseMatrix};
 
 use crate::basis_representation::BasisRepresentation;
 use crate::lu_factorization::FactorizationError;
@@ -20,7 +23,7 @@ pub enum PricingRule {
 
 #[derive(Clone, Debug)]
 pub struct PrimalEdgeNorms {
-    matrix: SparseMatrix,
+    matrix: Rc<CompactSparseMatrix>,
     pricing_rule: PricingRule,
     recompute_edge_squared_norms: bool,
     reset_devex_weights: bool,
@@ -41,8 +44,13 @@ pub struct PrimalEdgeNorms {
 impl PrimalEdgeNorms {
     #[must_use]
     pub fn new(matrix: &SparseMatrix) -> Self {
+        Self::new_shared(Rc::new(CompactSparseMatrix::from_sparse(matrix)))
+    }
+
+    #[must_use]
+    pub fn new_shared(matrix: Rc<CompactSparseMatrix>) -> Self {
         Self {
-            matrix: matrix.clone(),
+            matrix,
             pricing_rule: PricingRule::Dantzig,
             recompute_edge_squared_norms: true,
             reset_devex_weights: true,
@@ -70,10 +78,10 @@ impl PrimalEdgeNorms {
         }
     }
 
-    /// The native matrix is updated in place; refresh our owned view while
-    /// retaining the edge-norm clock and its recomputation watchers.
-    pub(crate) fn rebind_matrix(&mut self, matrix: &SparseMatrix) {
-        self.matrix = matrix.clone();
+    /// Rebind to the current immutable problem matrix while retaining the
+    /// edge-norm clock and its recomputation watchers.
+    pub(crate) fn rebind_shared(&mut self, matrix: Rc<CompactSparseMatrix>) {
+        self.matrix = matrix;
         self.clear();
     }
 
@@ -155,11 +163,8 @@ impl PrimalEdgeNorms {
             self.matrix_column_norms = (0..self.matrix.num_cols().to_usize())
                 .map(|column| {
                     let entries = self.matrix.column(ColIndex::from_usize(column));
-                    self.num_operations += i64::try_from(entries.num_entries()).unwrap_or(i64::MAX);
-                    entries
-                        .into_iter()
-                        .map(|entry| entry.coefficient() * entry.coefficient())
-                        .sum()
+                    self.num_operations += i64::try_from(entries.len()).unwrap_or(i64::MAX);
+                    entries.iter().map(|(_, value)| value * value).sum()
                 })
                 .collect();
         }
@@ -230,7 +235,7 @@ impl PrimalEdgeNorms {
             return Err(FactorizationError::DimensionMismatch);
         }
         if !self.recompute_edge_squared_norms {
-            update_row.compute_update_row(
+            update_row.compute_update_row_compact(
                 basis,
                 &self.matrix,
                 relevant,
@@ -251,7 +256,7 @@ impl PrimalEdgeNorms {
             if self.num_devex_updates_since_reset > self.devex_weights_reset_period {
                 self.reset_devex_weights = true;
             } else {
-                update_row.compute_update_row(
+                update_row.compute_update_row_compact(
                     basis,
                     &self.matrix,
                     relevant,
@@ -289,8 +294,9 @@ impl PrimalEdgeNorms {
         for typed_column in relevant.iter_ones() {
             let column = typed_column.to_usize();
             self.edge_squared_norms[column] = 1.0
-                + basis
-                    .right_solve_squared_norm(self.matrix.column(ColIndex::from_usize(column)))?;
+                + basis.right_solve_compact_squared_norm(
+                    self.matrix.column(ColIndex::from_usize(column)),
+                )?;
             if test_limit
                 && self
                     .time_limit
@@ -330,18 +336,14 @@ impl PrimalEdgeNorms {
             } else {
                 self.matrix
                     .column(ColIndex::from_usize(column))
-                    .into_iter()
-                    .fold(0.0, |sum, entry| {
-                        self.direction_left_inverse[entry.index().to_usize()]
-                            .mul_add(entry.coefficient(), sum)
+                    .iter()
+                    .fold(0.0, |sum, (row, value)| {
+                        self.direction_left_inverse[row.to_usize()].mul_add(value, sum)
                     })
             };
-            self.num_operations += i64::try_from(
-                self.matrix
-                    .column(ColIndex::from_usize(column))
-                    .num_entries(),
-            )
-            .unwrap_or(i64::MAX);
+            self.num_operations +=
+                i64::try_from(self.matrix.column(ColIndex::from_usize(column)).len())
+                    .unwrap_or(i64::MAX);
             let inner = coefficient.mul_add(leaving_squared_norm, factor * scalar_product);
             self.edge_squared_norms[column] =
                 coefficient.mul_add(inner, self.edge_squared_norms[column]);
@@ -401,5 +403,24 @@ pub fn compute_primal_edge_squared_norms(
     }
     Ok(norms)
 }
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lp_data::lp_types::RowIndex;
+
+    #[test]
+    fn solver_owned_matrix_is_shared_through_rebind() {
+        let mut first = SparseMatrix::new();
+        first.populate_from_zero(RowIndex::new(1), ColIndex::new(1));
+        let first = Rc::new(CompactSparseMatrix::from_sparse(&first));
+        let mut norms = PrimalEdgeNorms::new_shared(Rc::clone(&first));
+        assert!(Rc::ptr_eq(&norms.matrix, &first));
+
+        let mut second = SparseMatrix::new();
+        second.populate_from_zero(RowIndex::new(2), ColIndex::new(2));
+        let second = Rc::new(CompactSparseMatrix::from_sparse(&second));
+        norms.rebind_shared(Rc::clone(&second));
+        assert!(Rc::ptr_eq(&norms.matrix, &second));
+    }
+}

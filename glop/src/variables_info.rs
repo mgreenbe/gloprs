@@ -1,6 +1,6 @@
 //! Variable bounds, statuses, movement flags, and pricing relevance.
 //!
-//! This follows `ortools/glop/variables_info.{h,cc}`. The matrix is owned here
+//! This follows `ortools/glop/variables_info.{h,cc}`. The matrix is shared here
 //! to avoid self-referential solver state in Rust; all maintained invariants
 //! and update ordering otherwise mirror GLOP.
 
@@ -10,6 +10,8 @@ use lp_data::lp_types::{
     ColBitVec, ColIndex, EntryIndex, INFINITY, RowToColMapping, TypedVec, VariableStatus,
     VariableStatusRow, VariableType, VariableTypeRow, VectorIndex,
 };
+use std::rc::Rc;
+
 use lp_data::sparse::{CompactSparseMatrix, SparseMatrix};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -34,7 +36,7 @@ impl BasisState {
 
 #[derive(Clone, Debug)]
 pub struct VariablesInfo {
-    matrix: CompactSparseMatrix,
+    matrix: Rc<CompactSparseMatrix>,
     lower_bounds: Vec<f64>,
     upper_bounds: Vec<f64>,
     saved_lower_bounds: Vec<f64>,
@@ -55,10 +57,14 @@ pub struct VariablesInfo {
 impl VariablesInfo {
     #[must_use]
     pub fn new(matrix: &SparseMatrix) -> Self {
-        let compact = CompactSparseMatrix::from_sparse(matrix);
-        let num_cols = compact.num_cols();
+        Self::new_from_compact(Rc::new(CompactSparseMatrix::from_sparse(matrix)))
+    }
+
+    #[must_use]
+    pub fn new_from_compact(matrix: Rc<CompactSparseMatrix>) -> Self {
+        let num_cols = matrix.num_cols();
         Self {
-            matrix: compact,
+            matrix,
             lower_bounds: Vec::new(),
             upper_bounds: Vec::new(),
             saved_lower_bounds: Vec::new(),
@@ -631,6 +637,13 @@ mod tests {
     use lp_data::lp_types::RowIndex;
 
     use super::*;
+
+    #[test]
+    fn compact_constructor_shares_the_caller_matrix() {
+        let compact = Rc::new(CompactSparseMatrix::from_sparse(&matrix()));
+        let info = VariablesInfo::new_from_compact(Rc::clone(&compact));
+        assert!(Rc::ptr_eq(&info.matrix, &compact));
+    }
 
     fn matrix() -> SparseMatrix {
         let mut matrix = SparseMatrix::new();

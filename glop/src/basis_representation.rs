@@ -163,8 +163,13 @@ struct TauState {
 #[derive(Clone, Debug)]
 enum BasisMatrix {
     Owned(SparseMatrix),
+    #[allow(dead_code)] // Retained for standalone sparse-view regression tests.
     View {
         matrix: Rc<SparseMatrix>,
+        columns: Vec<usize>,
+    },
+    CompactView {
+        matrix: Rc<CompactSparseMatrix>,
         columns: Vec<usize>,
     },
 }
@@ -178,7 +183,7 @@ impl BasisMatrix {
     fn dimension(&self) -> usize {
         match self {
             Self::Owned(matrix) => matrix.num_rows().to_usize(),
-            Self::View { columns, .. } => columns.len(),
+            Self::View { columns, .. } | Self::CompactView { columns, .. } => columns.len(),
         }
     }
 
@@ -187,7 +192,10 @@ impl BasisMatrix {
             (Self::Owned(matrix), ReplacementColumn::Owned(column)) => {
                 matrix.replace_column(ColIndex::from_usize(position), column);
             }
-            (Self::View { columns, .. }, ReplacementColumn::Problem(column)) => {
+            (
+                Self::View { columns, .. } | Self::CompactView { columns, .. },
+                ReplacementColumn::Problem(column),
+            ) => {
                 columns[position] = column.to_usize();
             }
             _ => panic!("replacement column does not match the basis representation"),
@@ -197,7 +205,7 @@ impl BasisMatrix {
     fn apply_column_permutation(&mut self, permutation: &[usize]) {
         match self {
             Self::Owned(matrix) => matrix.apply_column_permutation(permutation),
-            Self::View { columns, .. } => {
+            Self::View { columns, .. } | Self::CompactView { columns, .. } => {
                 let old = columns.clone();
                 for (source, &destination) in permutation.iter().enumerate() {
                     columns[destination] = old[source];
@@ -215,6 +223,11 @@ impl BasisMatrix {
             Self::View { matrix, columns } => {
                 LuFactorization::factorize_selected_with_parameters(matrix, columns, parameters)
             }
+            Self::CompactView { matrix, columns } => {
+                LuFactorization::factorize_selected_compact_with_parameters(
+                    matrix, columns, parameters,
+                )
+            }
         }
     }
 
@@ -229,6 +242,10 @@ impl BasisMatrix {
             }
             Self::View { matrix, columns } => factorization
                 .compute_factorization_selected_with_parameters(matrix, columns, parameters),
+            Self::CompactView { matrix, columns } => factorization
+                .compute_factorization_selected_compact_with_parameters(
+                    matrix, columns, parameters,
+                ),
         }
     }
 
@@ -244,6 +261,17 @@ impl BasisMatrix {
                         .sum(),
                 )
             }),
+            Self::CompactView { matrix, columns } => {
+                columns.iter().fold(0.0, |maximum, &column| {
+                    maximum.max(
+                        matrix
+                            .column(ColIndex::from_usize(column))
+                            .iter()
+                            .map(|(_, value)| value.abs())
+                            .sum(),
+                    )
+                })
+            }
         }
     }
 
@@ -255,6 +283,15 @@ impl BasisMatrix {
                 for &column in columns {
                     for entry in matrix.column(ColIndex::from_usize(column)) {
                         sums[entry.index().to_usize()] += entry.coefficient().abs();
+                    }
+                }
+                sums.into_iter().fold(0.0_f64, f64::max)
+            }
+            Self::CompactView { matrix, columns } => {
+                let mut sums = vec![0.0; matrix.num_rows().to_usize()];
+                for &column in columns {
+                    for (row, value) in matrix.column(ColIndex::from_usize(column)).iter() {
+                        sums[row.to_usize()] += value.abs();
                     }
                 }
                 sums.into_iter().fold(0.0_f64, f64::max)
@@ -280,6 +317,14 @@ impl BasisMatrix {
                     column.num_entries() == 1
                         && column.entry(0).index().to_usize() == position
                         && column.entry(0).coefficient() == 1.0
+                })
+            }
+            Self::CompactView { matrix, columns } => {
+                columns.iter().enumerate().all(|(position, &source)| {
+                    let column = matrix.column(ColIndex::from_usize(source));
+                    column.len() == 1
+                        && column.entry_row(0).to_usize() == position
+                        && column.entry_coefficient(0) == 1.0
                 })
             }
         }
@@ -336,6 +381,7 @@ impl BasisRepresentation {
         Self::initialize(BasisMatrix::Owned(basis), parameters)
     }
 
+    #[allow(dead_code)] // Sparse-view constructor remains available to unit tests.
     pub(crate) fn new_for_basis(
         matrix: Rc<SparseMatrix>,
         columns: &RowToColMapping,
@@ -349,6 +395,19 @@ impl BasisRepresentation {
         Self::initialize(BasisMatrix::View { matrix, columns }, parameters)
     }
 
+    pub(crate) fn new_for_compact_basis(
+        matrix: Rc<CompactSparseMatrix>,
+        columns: &RowToColMapping,
+        parameters: &GlopParameters,
+    ) -> Result<Self, FactorizationError> {
+        let columns = columns
+            .as_slice()
+            .iter()
+            .map(|column| column.to_usize())
+            .collect();
+        Self::initialize(BasisMatrix::CompactView { matrix, columns }, parameters)
+    }
+
     /// Reinitializes this factorization for a replacement basis.
     ///
     /// GLOP uses the same `BasisFactorization` object when an advanced crash
@@ -356,6 +415,7 @@ impl BasisRepresentation {
     /// deterministic clock and the last factorization cost, which the dynamic
     /// refactorization-period heuristic subsequently uses. Preserve that
     /// lifecycle instead of replacing the whole object.
+    #[allow(dead_code)] // Sparse-view reinitialization remains available to unit tests.
     pub(crate) fn reinitialize_for_basis(
         &mut self,
         matrix: Rc<SparseMatrix>,
@@ -377,16 +437,34 @@ impl BasisRepresentation {
         Ok(())
     }
 
-    /// Rebind the unchanged basis to a matrix with appended structural columns.
-    /// The old slack columns move by `added_columns`, but the numerical basis
-    /// and its factorization do not change.
-    pub(crate) fn rebind_after_added_columns(
+    pub(crate) fn reinitialize_for_compact_basis(
         &mut self,
-        matrix: Rc<SparseMatrix>,
+        matrix: Rc<CompactSparseMatrix>,
+        columns: &RowToColMapping,
+        parameters: &GlopParameters,
+    ) -> Result<(), FactorizationError> {
+        let deterministic_time = self.deterministic_time.get();
+        let last_factorization_deterministic_time = self.last_factorization_deterministic_time;
+        let mut replacement = Self::new_for_compact_basis(matrix, columns, parameters)?;
+        replacement
+            .deterministic_time
+            .set(deterministic_time + replacement.deterministic_time.get());
+        if replacement.last_factorization_deterministic_time == 0.0 {
+            replacement.last_factorization_deterministic_time =
+                last_factorization_deterministic_time;
+        }
+        std::mem::swap(&mut replacement.stats, &mut self.stats);
+        *self = replacement;
+        Ok(())
+    }
+
+    pub(crate) fn rebind_compact_after_added_columns(
+        &mut self,
+        matrix: Rc<CompactSparseMatrix>,
         first_new_column: usize,
         added_columns: usize,
     ) {
-        if let BasisMatrix::View {
+        if let BasisMatrix::CompactView {
             matrix: basis_matrix,
             columns,
         } = &mut self.basis
@@ -411,14 +489,23 @@ impl BasisRepresentation {
         &mut self,
         candidates: &[ColIndex],
     ) -> Result<RowToColMapping, FactorizationError> {
-        let BasisMatrix::View { matrix, .. } = &self.basis else {
-            return Err(FactorizationError::DimensionMismatch);
+        let (basis, operations) = match &self.basis {
+            BasisMatrix::View { matrix, .. } => {
+                LuFactorization::compute_initial_basis_with_operations(
+                    matrix,
+                    candidates,
+                    &self.parameters,
+                )?
+            }
+            BasisMatrix::CompactView { matrix, .. } => {
+                LuFactorization::compute_initial_basis_compact_with_operations(
+                    matrix,
+                    candidates,
+                    &self.parameters,
+                )?
+            }
+            BasisMatrix::Owned(_) => return Err(FactorizationError::DimensionMismatch),
         };
-        let (basis, operations) = LuFactorization::compute_initial_basis_with_operations(
-            matrix,
-            candidates,
-            &self.parameters,
-        )?;
         self.deterministic_time
             .set(self.deterministic_time.get() + deterministic_time_for_fp_operations(operations));
         Ok(basis)
@@ -445,6 +532,14 @@ impl BasisRepresentation {
                     basis_column.num_entries() == 1
                         && basis_column.entry(0).index().to_usize() == row
                         && basis_column.entry(0).coefficient() == 1.0
+                })
+            }
+            BasisMatrix::CompactView { matrix, columns } => {
+                columns.iter().enumerate().all(|(row, &column)| {
+                    let basis_column = matrix.column(ColIndex::from_usize(column));
+                    basis_column.len() == 1
+                        && basis_column.entry_row(0).to_usize() == row
+                        && basis_column.entry_coefficient(0) == 1.0
                 })
             }
         };
@@ -519,7 +614,9 @@ impl BasisRepresentation {
     pub fn basis(&self) -> &SparseMatrix {
         match &self.basis {
             BasisMatrix::Owned(matrix) => matrix,
-            BasisMatrix::View { .. } => panic!("a viewed basis is not materialized"),
+            BasisMatrix::View { .. } | BasisMatrix::CompactView { .. } => {
+                panic!("a viewed basis is not materialized")
+            }
         }
     }
 
@@ -836,16 +933,45 @@ impl BasisRepresentation {
         column: &SparseColumn,
         result: &mut ScatteredColumn,
     ) -> Result<(), FactorizationError> {
+        self.right_solve_for_problem_column_entries(
+            problem_column,
+            || {
+                column
+                    .into_iter()
+                    .map(|entry| (entry.index(), entry.coefficient()))
+            },
+            result,
+        )
+    }
+
+    pub(crate) fn right_solve_for_compact_problem_column(
+        &self,
+        problem_column: usize,
+        column: lp_data::sparse::CompactColumn<'_>,
+        result: &mut ScatteredColumn,
+    ) -> Result<(), FactorizationError> {
+        self.right_solve_for_problem_column_entries(problem_column, || column.iter(), result)
+    }
+
+    fn right_solve_for_problem_column_entries<I>(
+        &self,
+        problem_column: usize,
+        entries: impl Fn() -> I,
+        result: &mut ScatteredColumn,
+    ) -> Result<(), FactorizationError>
+    where
+        I: Iterator<Item = (lp_data::lp_types::RowIndex, f64)>,
+    {
         if result.len().to_usize() != self.dimension() {
             return Err(FactorizationError::DimensionMismatch);
         }
         if !self.parameters.use_middle_product_form_update {
             let mut dense = vec![0.0; self.dimension()];
-            for entry in column {
-                if entry.index().to_usize() >= self.dimension() {
+            for (row, value) in entries() {
+                if row.to_usize() >= self.dimension() {
                     return Err(FactorizationError::DimensionMismatch);
                 }
-                dense[entry.index().to_usize()] = entry.coefficient();
+                dense[row.to_usize()] = value;
             }
             let mut solved = self.factorization.solve(&dense)?;
             self.eta_updates.right_solve(&mut solved);
@@ -856,7 +982,7 @@ impl BasisRepresentation {
             return Ok(());
         }
         self.factorization
-            .right_solve_lower_for_column(column, result)?;
+            .right_solve_lower_for_entries(entries(), result)?;
         self.updates.right_solve_with_nonzeros(result);
 
         let mut storage = self.right_storage.borrow_mut();
@@ -1294,6 +1420,19 @@ impl BasisRepresentation {
         self.factorization.right_solve_squared_norm(&entries)
     }
 
+    pub(crate) fn right_solve_compact_squared_norm(
+        &self,
+        column: lp_data::sparse::CompactColumn<'_>,
+    ) -> Result<f64, FactorizationError> {
+        assert!(self.is_refactorized());
+        let entries: Vec<_> = column
+            .iter()
+            .map(|(row, value)| (row.to_usize(), value))
+            .collect();
+        self.bump_deterministic_time_for_solve(column.len());
+        self.factorization.right_solve_squared_norm(&entries)
+    }
+
     /// Computes `||B^-T e_row||_2^2` with a unit-input time charge.
     ///
     /// # Errors
@@ -1465,6 +1604,71 @@ mod tests {
     use lp_data::lp_types::RowIndex;
 
     use super::*;
+
+    #[test]
+    fn compact_basis_view_shares_the_problem_allocation_across_reinitialization() {
+        let sparse = matrix(&[&[1.0, 0.0], &[0.0, 1.0]]);
+        let compact = Rc::new(CompactSparseMatrix::from_sparse(&sparse));
+        let basis = RowToColMapping::from_vec(vec![ColIndex::new(0), ColIndex::new(1)]);
+        let mut factorization = BasisRepresentation::new_for_compact_basis(
+            Rc::clone(&compact),
+            &basis,
+            &GlopParameters::default(),
+        )
+        .unwrap();
+        assert!(
+            matches!(&factorization.basis, BasisMatrix::CompactView { matrix, .. } if Rc::ptr_eq(matrix, &compact))
+        );
+        let swapped = RowToColMapping::from_vec(vec![ColIndex::new(1), ColIndex::new(0)]);
+        factorization
+            .reinitialize_for_compact_basis(
+                Rc::clone(&compact),
+                &swapped,
+                &GlopParameters::default(),
+            )
+            .unwrap();
+        assert!(
+            matches!(&factorization.basis, BasisMatrix::CompactView { matrix, .. } if Rc::ptr_eq(matrix, &compact))
+        );
+    }
+
+    #[test]
+    fn added_column_rebind_keeps_compact_basis_and_existing_factors() {
+        let mut old = SparseMatrix::new();
+        old.populate_from_zero(RowIndex::new(2), ColIndex::new(3));
+        old.mutable_column(ColIndex::new(0))
+            .add_entry(RowIndex::new(0), 2.0);
+        old.mutable_column(ColIndex::new(1))
+            .add_entry(RowIndex::new(0), 1.0);
+        old.mutable_column(ColIndex::new(2))
+            .add_entry(RowIndex::new(1), 1.0);
+        let old = Rc::new(CompactSparseMatrix::from_sparse(&old));
+        let basis = RowToColMapping::from_vec(vec![ColIndex::new(0), ColIndex::new(2)]);
+        let parameters = GlopParameters::default();
+        let mut factorization =
+            BasisRepresentation::new_for_compact_basis(old, &basis, &parameters).unwrap();
+        let before_solution = factorization.solve(&[4.0, 3.0]).unwrap();
+        let before_clock = factorization.deterministic_time().to_bits();
+
+        let mut extended = SparseMatrix::new();
+        extended.populate_from_zero(RowIndex::new(2), ColIndex::new(4));
+        for (column, row, value) in [(0, 0, 2.0), (1, 1, 5.0), (2, 0, 1.0), (3, 1, 1.0)] {
+            extended
+                .mutable_column(ColIndex::new(column))
+                .add_entry(RowIndex::new(row), value);
+        }
+        let extended = Rc::new(CompactSparseMatrix::from_sparse(&extended));
+        factorization.rebind_compact_after_added_columns(Rc::clone(&extended), 1, 1);
+        assert_eq!(factorization.deterministic_time().to_bits(), before_clock);
+        assert_eq!(factorization.solve(&[4.0, 3.0]).unwrap(), before_solution);
+        assert!(matches!(
+            &factorization.basis,
+            BasisMatrix::CompactView { matrix, columns }
+                if Rc::ptr_eq(matrix, &extended) && columns == &[0, 3]
+        ));
+        factorization.force_refactorization().unwrap();
+        assert_eq!(factorization.solve(&[4.0, 3.0]).unwrap(), before_solution);
+    }
 
     fn matrix(values: &[&[f64]]) -> SparseMatrix {
         let mut result = SparseMatrix::new();
