@@ -1,11 +1,15 @@
 //! Small, branch-targeted `RevisedSimplex` cases against pinned native GLOP.
 
+use glop::lu_factorization::FactorizationError;
 use glop::parameters::{GlopParameters, InitialBasisHeuristic, PricingRule};
 use glop::revised_simplex::RevisedSimplex;
 use glop::time_limit::TimeLimit;
 use glop::variables_info::BasisState;
 use lp_data::lp_data::LinearProgram;
-use lp_data::lp_types::{ColIndex, RowIndex, VariableStatus, VariableStatusRow, VectorIndex};
+use lp_data::lp_types::{
+    ColIndex, DenseBooleanColumn, DenseBooleanRow, RowIndex, VariableStatus, VariableStatusRow,
+    VectorIndex,
+};
 use serde::Deserialize;
 use sha2::Digest;
 use std::collections::BTreeSet;
@@ -45,15 +49,27 @@ struct Fixture {
 #[derive(Deserialize)]
 struct NativeResult {
     name: String,
+    #[serde(default)]
+    error: Option<String>,
+    #[serde(default)]
     status: String,
+    #[serde(default)]
     iterations: u64,
+    #[serde(default)]
     objective_bits: u64,
+    #[serde(default)]
     lu_pivot_threshold_bits: u64,
+    #[serde(default)]
     deterministic_time_bits: u64,
+    #[serde(default)]
     basis: Vec<usize>,
+    #[serde(default)]
     value_bits: Vec<u64>,
+    #[serde(default)]
     reduced_bits: Vec<u64>,
+    #[serde(default)]
     primal_ray_bits: Vec<u64>,
+    #[serde(default)]
     dual_ray_bits: Vec<u64>,
 }
 
@@ -71,6 +87,30 @@ fn normalized_zero(bits: u64) -> u64 {
     } else {
         bits
     }
+}
+
+#[test]
+fn all_slack_basis_rejected_by_condition_threshold() {
+    // Pinned native GLOP returns ERROR_LU with upper bound 1 when this
+    // threshold is below 1; the fallback basis must not silently pass.
+    let mut lp = LinearProgram::default();
+    let column = lp.create_new_variable();
+    let row = lp.create_new_constraint();
+    lp.set_coefficient(row, column, 1.0);
+    lp.set_variable_bounds(column, 0.0, 2.0);
+    lp.set_constraint_bounds(row, f64::NEG_INFINITY, 1.0);
+    lp.set_objective_coefficient(column, -1.0);
+    let mut simplex = RevisedSimplex::new();
+    simplex.set_parameters(&GlopParameters {
+        use_scaling: false,
+        initial_basis: InitialBasisHeuristic::None,
+        initial_condition_number_threshold: 0.1,
+        ..GlopParameters::default()
+    });
+    assert_eq!(
+        simplex.solve(&lp, &mut TimeLimit::new(20.0, f64::INFINITY)),
+        Err(FactorizationError::IllConditioned { upper_bound: 1.0 })
+    );
 }
 
 #[test]
@@ -131,14 +171,33 @@ fn small_phase4_cases_match_pinned_native_glop() {
         simplex.set_phase4_events_enabled(true);
         simplex.set_parameters(&GlopParameters {
             use_scaling: false,
-            initial_basis: InitialBasisHeuristic::None,
+            initial_basis: match case.mode.as_str() {
+                "initial_triangular_primal"
+                | "initial_triangular_dual"
+                | "initial_triangular_condition_fallback" => InitialBasisHeuristic::Triangular,
+                "initial_maros_primal" | "initial_maros_dual" => InitialBasisHeuristic::Maros,
+                "initial_bixby_without_scaling" => InitialBasisHeuristic::Bixby,
+                _ => InitialBasisHeuristic::None,
+            },
             exploit_singleton_column_in_initial_basis: false,
             use_dual_simplex: !matches!(
                 case.mode.as_str(),
                 "primal"
+                    | "initial_triangular_primal"
+                    | "initial_triangular_condition_fallback"
+                    | "initial_maros_primal"
+                    | "initial_bixby_without_scaling"
                     | "primal_limit"
                     | "primal_no_imprecise"
                     | "primal_time_zero"
+                    | "primal_wall_tiny"
+                    | "primal_steepest"
+                    | "primal_steepest_zero_norm_threshold"
+                    | "primal_devex"
+                    | "primal_harris_wide"
+                    | "primal_eta"
+                    | "primal_eta_phase_one"
+                    | "no_reopt_primal"
                     | "tight_internal_primal"
                     | "relaxed_internal_primal"
                     | "warm_primal"
@@ -170,8 +229,33 @@ fn small_phase4_cases_match_pinned_native_glop() {
                     | "zero_tolerance_no_imprecise"
             ),
             perturb_costs_in_dual_simplex: case.mode == "dual_perturbed",
+            use_middle_product_form_update: !matches!(
+                case.mode.as_str(),
+                "primal_eta" | "primal_eta_phase_one" | "dual_eta" | "dual_eta_phase_one"
+            ),
             use_dedicated_dual_feasibility_algorithm: case.mode != "dual_transformed",
             max_number_of_iterations: case.iterations,
+            harris_tolerance_ratio: if case.mode == "primal_harris_wide" {
+                10.0
+            } else {
+                GlopParameters::default().harris_tolerance_ratio
+            },
+            initial_condition_number_threshold: if case.mode == "initial_all_slack_condition_error"
+            {
+                0.1
+            } else if case.mode == "initial_triangular_condition_fallback" {
+                1.0
+            } else {
+                GlopParameters::default().initial_condition_number_threshold
+            },
+            max_number_of_reoptimizations: if matches!(
+                case.mode.as_str(),
+                "no_reopt_primal" | "no_reopt_dual"
+            ) {
+                0.0
+            } else {
+                GlopParameters::default().max_number_of_reoptimizations
+            },
             push_to_vertex: !matches!(
                 case.mode.as_str(),
                 "starting_values" | "starting_values_two_no_push"
@@ -194,7 +278,18 @@ fn small_phase4_cases_match_pinned_native_glop() {
             } else {
                 GlopParameters::default().recompute_reduced_costs_threshold
             },
-            refactorization_threshold: if case.mode == "adaptive_pivot" {
+            recompute_edges_norm_threshold: if matches!(
+                case.mode.as_str(),
+                "primal_steepest_zero_norm_threshold" | "dual_zero_norm_threshold"
+            ) {
+                0.0
+            } else {
+                GlopParameters::default().recompute_edges_norm_threshold
+            },
+            refactorization_threshold: if matches!(
+                case.mode.as_str(),
+                "adaptive_pivot" | "dual_adaptive_pivot"
+            ) {
                 0.0
             } else {
                 GlopParameters::default().refactorization_threshold
@@ -215,7 +310,14 @@ fn small_phase4_cases_match_pinned_native_glop() {
                 GlopParameters::default().crossover_bound_snapping_distance
             },
             feasibility_rule: PricingRule::Dantzig,
-            optimization_rule: PricingRule::Dantzig,
+            dual_price_prioritize_norm: case.mode == "dual_prioritize_norm",
+            optimization_rule: match case.mode.as_str() {
+                "primal_steepest" | "primal_steepest_zero_norm_threshold" => {
+                    PricingRule::SteepestEdge
+                }
+                "primal_devex" => PricingRule::Devex,
+                _ => PricingRule::Dantzig,
+            },
             primal_feasibility_tolerance: if matches!(
                 case.mode.as_str(),
                 "relaxed_internal_primal" | "relaxed_internal_dual"
@@ -223,7 +325,10 @@ fn small_phase4_cases_match_pinned_native_glop() {
                 1e-15
             } else if matches!(
                 case.mode.as_str(),
-                "tight_internal_dual" | "tight_internal_primal"
+                "tight_internal_dual"
+                    | "tight_internal_primal"
+                    | "no_reopt_primal"
+                    | "no_reopt_dual"
             ) {
                 1e-16
             } else {
@@ -236,7 +341,10 @@ fn small_phase4_cases_match_pinned_native_glop() {
                 1e-15
             } else if matches!(
                 case.mode.as_str(),
-                "tight_internal_dual" | "tight_internal_primal"
+                "tight_internal_dual"
+                    | "tight_internal_primal"
+                    | "no_reopt_primal"
+                    | "no_reopt_dual"
             ) {
                 1e-16
             } else {
@@ -329,8 +437,18 @@ fn small_phase4_cases_match_pinned_native_glop() {
                 | "warm_dual_multiple_bound_changes"
                 | "warm_added_column"
                 | "warm_added_row"
+                | "warm_added_row_and_column"
+                | "warm_removed_row"
+                | "warm_removed_column"
                 | "warm_added_row_low_condition_threshold"
                 | "warm_added_row_slack"
+                | "warm_added_row_changed_coefficient"
+                | "warm_singular_saved_basis"
+                | "warm_singular_saved_basis_condition_reject"
+                | "warm_singular_saved_basis_condition_error"
+                | "warm_changed_coefficient_only"
+                | "warm_changed_two_row_full_rank"
+                | "warm_saved_basis_condition_reject"
         ) {
             simplex
                 .solve(&lp, &mut TimeLimit::new(20.0, f64::INFINITY))
@@ -360,9 +478,19 @@ fn small_phase4_cases_match_pinned_native_glop() {
                 parameters.objective_upper_limit = 0.5;
                 simplex.set_parameters(&parameters);
             }
-            if case.mode == "warm_added_row_low_condition_threshold" {
+            if matches!(
+                case.mode.as_str(),
+                "warm_added_row_low_condition_threshold"
+                    | "warm_saved_basis_condition_reject"
+                    | "warm_singular_saved_basis_condition_reject"
+            ) {
                 let mut parameters = simplex.parameters().clone();
                 parameters.initial_condition_number_threshold = 1.0;
+                simplex.set_parameters(&parameters);
+            }
+            if case.mode == "warm_singular_saved_basis_condition_error" {
+                let mut parameters = simplex.parameters().clone();
+                parameters.initial_condition_number_threshold = 0.1;
                 simplex.set_parameters(&parameters);
             }
             if matches!(
@@ -384,17 +512,47 @@ fn small_phase4_cases_match_pinned_native_glop() {
                 lp.set_constraint_bounds(RowIndex::from_usize(0), f64::NEG_INFINITY, 0.5);
                 lp.set_constraint_bounds(RowIndex::from_usize(1), f64::NEG_INFINITY, 0.5);
             }
-            if case.mode == "warm_added_column" {
+            if matches!(
+                case.mode.as_str(),
+                "warm_added_column" | "warm_added_row_and_column"
+            ) {
                 let added = lp.create_new_variable();
                 lp.set_variable_bounds(added, 0.0, f64::INFINITY);
-                lp.set_objective_coefficient(added, -2.0);
+                lp.set_objective_coefficient(
+                    added,
+                    if case.mode == "warm_added_column" {
+                        -2.0
+                    } else {
+                        0.0
+                    },
+                );
                 lp.set_coefficient(RowIndex::from_usize(0), added, 1.0);
             }
             if matches!(
                 case.mode.as_str(),
+                "warm_singular_saved_basis"
+                    | "warm_singular_saved_basis_condition_reject"
+                    | "warm_singular_saved_basis_condition_error"
+            ) {
+                lp.set_coefficient(RowIndex::from_usize(0), ColIndex::from_usize(1), 1.0);
+                lp.set_coefficient(RowIndex::from_usize(1), ColIndex::from_usize(1), 0.0);
+            }
+            if case.mode == "warm_changed_coefficient_only" {
+                lp.set_coefficient(RowIndex::from_usize(0), ColIndex::from_usize(0), 2.0);
+            }
+            if case.mode == "warm_changed_two_row_full_rank" {
+                lp.set_coefficient(RowIndex::from_usize(0), ColIndex::from_usize(1), 1.0);
+            }
+            if case.mode == "warm_saved_basis_condition_reject" {
+                lp.set_coefficient(RowIndex::from_usize(0), ColIndex::from_usize(0), 2.0);
+            }
+            if matches!(
+                case.mode.as_str(),
                 "warm_added_row"
+                    | "warm_added_row_and_column"
                     | "warm_added_row_slack"
                     | "warm_added_row_low_condition_threshold"
+                    | "warm_added_row_changed_coefficient"
             ) {
                 let added = lp.create_new_constraint();
                 let lower = if case.mode == "warm_added_row_slack" {
@@ -404,6 +562,22 @@ fn small_phase4_cases_match_pinned_native_glop() {
                 };
                 lp.set_constraint_bounds(added, lower, f64::INFINITY);
                 lp.set_coefficient(added, ColIndex::from_usize(0), 1.0);
+                if case.mode == "warm_added_row_and_column" {
+                    lp.set_coefficient(added, ColIndex::from_usize(1), 1.0);
+                }
+                if case.mode == "warm_added_row_changed_coefficient" {
+                    lp.set_coefficient(RowIndex::from_usize(0), ColIndex::from_usize(0), 2.0);
+                }
+            }
+            if case.mode == "warm_removed_row" {
+                let mut deleted = DenseBooleanColumn::filled(RowIndex::from_usize(2), false);
+                deleted[RowIndex::from_usize(1)] = true;
+                lp.delete_rows(&deleted);
+            }
+            if case.mode == "warm_removed_column" {
+                let mut deleted = DenseBooleanRow::filled(ColIndex::from_usize(2), false);
+                deleted[ColIndex::from_usize(1)] = true;
+                lp.delete_columns(&deleted);
             }
         }
         let deterministic_limit =
@@ -415,40 +589,36 @@ fn small_phase4_cases_match_pinned_native_glop() {
                     .map_or(f64::INFINITY, number)
             };
         let clock_before = simplex.deterministic_time();
-        let mut time_limit = TimeLimit::new(20.0, deterministic_limit);
-        simplex
-            .solve(&lp, &mut time_limit)
-            .unwrap_or_else(|error| panic!("{}: {error}", case.name));
+        let wall_limit = if matches!(case.mode.as_str(), "primal_wall_tiny" | "dual_wall_tiny") {
+            1e-6
+        } else {
+            20.0
+        };
+        let mut time_limit = TimeLimit::new(wall_limit, deterministic_limit);
+        let result = simplex.solve(&lp, &mut time_limit);
+        if let Some(expected_error) = &expected.error {
+            assert_eq!(
+                result.unwrap_err().to_string(),
+                *expected_error,
+                "{}: error",
+                case.name
+            );
+            for event in &case.covers {
+                assert!(
+                    simplex.phase4_events().contains(&event.as_str()),
+                    "{}: expected branch {event}",
+                    case.name
+                );
+            }
+            continue;
+        }
+        result.unwrap_or_else(|error| panic!("{}: {error}", case.name));
         let charged = simplex.deterministic_time() - clock_before;
         assert!(
             (time_limit.elapsed_deterministic_time() - charged).abs() <= 1e-18,
             "{}: deterministic clock was not fully charged",
             case.name
         );
-        // These branches still have localized operation-count differences.
-        // Every other pinned native clock is a strict regression anchor.
-        let clock_exceptions = [
-            "primal_phase_two_positive_iteration_limit",
-            "dual_phase_two_positive_iteration_limit",
-            "dual_deterministic_limit_positive",
-            "dual_objective_limit",
-            "warm_dual_changed_objective_limit",
-            "primal_phase_one_consumes_iteration_limit",
-            "primal_phase_one_coupled_rows_limit_one",
-            "primal_weak_ray_rejected_without_imprecise_conversion",
-            "primal_phase_one_positive_limit_with_remaining_infeasibility",
-            "primal_deterministic_limit_positive",
-            "starting_free_variable_push_pivot",
-        ];
-        if !clock_exceptions.contains(&case.name.as_str()) {
-            assert!(
-                (simplex.deterministic_time() - f64::from_bits(expected.deterministic_time_bits))
-                    .abs()
-                    <= 1e-18,
-                "{}: deterministic clock diverges from native",
-                case.name
-            );
-        }
         if std::env::var_os("GLOPRS_AUDIT_CLOCK").is_some() {
             eprintln!(
                 "{}: native={} rust={}",
@@ -457,6 +627,14 @@ fn small_phase4_cases_match_pinned_native_glop() {
                 simplex.deterministic_time()
             );
         }
+        let native_clock = f64::from_bits(expected.deterministic_time_bits);
+        assert!(
+            (simplex.deterministic_time() - native_clock).abs() <= 1e-18,
+            "{}: deterministic clock diverges from native: rust={} native={}",
+            case.name,
+            simplex.deterministic_time(),
+            native_clock
+        );
         for event in &case.covers {
             assert!(
                 simplex.phase4_events().contains(&event.as_str()),
@@ -562,5 +740,22 @@ fn small_phase4_cases_match_pinned_native_glop() {
             .map(normalized_zero)
             .collect();
         assert_eq!(dual_ray, native_dual_ray, "{}: dual ray", case.name);
+        if case.name == "primal_unbounded_coupled_ray" {
+            assert_eq!(
+                primal_ray[..case.variables.len()]
+                    .iter()
+                    .filter(|&&bits| bits != 0)
+                    .count(),
+                2,
+                "coupled primal certificate must involve both structural columns"
+            );
+        }
+        if case.name == "dual_unbounded_coupled_ray" {
+            assert_eq!(
+                dual_ray.iter().filter(|&&bits| bits != 0).count(),
+                2,
+                "coupled dual certificate must involve both rows"
+            );
+        }
     }
 }

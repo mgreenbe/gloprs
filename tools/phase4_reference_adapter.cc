@@ -60,10 +60,34 @@ int main() {
   glop::GlopParameters parameters;
   parameters.set_use_scaling(false);
   parameters.set_initial_basis(glop::GlopParameters::NONE);
+  if (mode == "initial_all_slack_condition_error")
+    parameters.set_initial_condition_number_threshold(0.1);
+  if (mode == "initial_triangular_primal" || mode == "initial_triangular_dual")
+    parameters.set_initial_basis(glop::GlopParameters::TRIANGULAR);
+  if (mode == "initial_triangular_condition_fallback") {
+    parameters.set_initial_basis(glop::GlopParameters::TRIANGULAR);
+    parameters.set_initial_condition_number_threshold(1.0);
+  }
+  if (mode == "initial_maros_primal" || mode == "initial_maros_dual")
+    parameters.set_initial_basis(glop::GlopParameters::MAROS);
+  if (mode == "initial_bixby_without_scaling")
+    parameters.set_initial_basis(glop::GlopParameters::BIXBY);
   parameters.set_exploit_singleton_column_in_initial_basis(false);
   parameters.set_use_dual_simplex(mode != "primal" && mode != "primal_limit" &&
+                                   mode != "initial_triangular_primal" &&
+                                   mode != "initial_triangular_condition_fallback" &&
+                                   mode != "initial_maros_primal" &&
+                                   mode != "initial_bixby_without_scaling" &&
                                    mode != "primal_no_imprecise" &&
                                    mode != "primal_time_zero" &&
+                                   mode != "primal_wall_tiny" &&
+                                   mode != "primal_steepest" &&
+                                   mode != "primal_steepest_zero_norm_threshold" &&
+                                   mode != "primal_devex" &&
+                                   mode != "primal_harris_wide" &&
+                                   mode != "primal_eta" &&
+                                   mode != "primal_eta_phase_one" &&
+                                   mode != "no_reopt_primal" &&
                                    mode != "tight_internal_primal" &&
                                    mode != "relaxed_internal_primal" &&
                                    mode != "warm_primal" && mode != "warm_bound_change" &&
@@ -97,10 +121,27 @@ int main() {
     parameters.set_use_dual_simplex(false);
     parameters.set_refactorization_threshold(0.0);
   }
+  if (mode == "dual_adaptive_pivot")
+    parameters.set_refactorization_threshold(0.0);
   parameters.set_perturb_costs_in_dual_simplex(mode == "dual_perturbed");
   parameters.set_use_dedicated_dual_feasibility_algorithm(mode != "dual_transformed");
   parameters.set_feasibility_rule(glop::GlopParameters::DANTZIG);
   parameters.set_optimization_rule(glop::GlopParameters::DANTZIG);
+  if (mode == "primal_harris_wide")
+    parameters.set_harris_tolerance_ratio(10.0);
+  if (mode == "primal_eta" || mode == "primal_eta_phase_one" ||
+      mode == "dual_eta" || mode == "dual_eta_phase_one")
+    parameters.set_use_middle_product_form_update(false);
+  if (mode == "dual_prioritize_norm")
+    parameters.set_dual_price_prioritize_norm(true);
+  if (mode == "primal_steepest" ||
+      mode == "primal_steepest_zero_norm_threshold")
+    parameters.set_optimization_rule(glop::GlopParameters::STEEPEST_EDGE);
+  if (mode == "primal_steepest_zero_norm_threshold" ||
+      mode == "dual_zero_norm_threshold")
+    parameters.set_recompute_edges_norm_threshold(0.0);
+  if (mode == "primal_devex")
+    parameters.set_optimization_rule(glop::GlopParameters::DEVEX);
   parameters.set_max_number_of_iterations(iterations);
   if (mode == "starting_values_push_refactorize")
     parameters.set_small_pivot_threshold(0.1);
@@ -125,6 +166,11 @@ int main() {
   if (mode == "tight_internal_dual" || mode == "tight_internal_primal") {
     parameters.set_primal_feasibility_tolerance(1e-16);
     parameters.set_dual_feasibility_tolerance(1e-16);
+  }
+  if (mode == "no_reopt_primal" || mode == "no_reopt_dual") {
+    parameters.set_primal_feasibility_tolerance(1e-16);
+    parameters.set_dual_feasibility_tolerance(1e-16);
+    parameters.set_max_number_of_reoptimizations(0);
   }
   if (mode == "relaxed_internal_primal" || mode == "relaxed_internal_dual") {
     parameters.set_primal_feasibility_tolerance(1e-15);
@@ -172,7 +218,9 @@ int main() {
     simplex.SetStartingVariableValuesForNextSolve(values);
   }
   operations_research::TimeLimit limit(
-      std::numeric_limits<double>::infinity(),
+      (mode == "primal_wall_tiny" || mode == "dual_wall_tiny")
+          ? 1e-6
+          : std::numeric_limits<double>::infinity(),
       (mode == "primal_time_zero" || mode == "dual_time_zero")
           ? 0.0
       : deterministic_limit);
@@ -190,8 +238,17 @@ int main() {
       mode == "warm_objective_change" || mode == "warm_multiple_bound_changes" ||
       mode == "warm_dual_multiple_bound_changes" ||
       mode == "warm_added_column" || mode == "warm_added_row" ||
+      mode == "warm_added_row_and_column" ||
+      mode == "warm_removed_row" ||
+      mode == "warm_removed_column" ||
       mode == "warm_added_row_low_condition_threshold" ||
-      mode == "warm_added_row_slack") {
+      mode == "warm_added_row_slack" || mode == "warm_added_row_changed_coefficient" ||
+      mode == "warm_singular_saved_basis" ||
+      mode == "warm_singular_saved_basis_condition_reject" ||
+      mode == "warm_singular_saved_basis_condition_error" ||
+      mode == "warm_changed_coefficient_only" ||
+      mode == "warm_changed_two_row_full_rank" ||
+      mode == "warm_saved_basis_condition_reject") {
     const auto first = simplex.Solve(lp, &limit);
     if (!first.ok()) return 4;
     if (mode == "warm_clear_state")
@@ -215,8 +272,14 @@ int main() {
       parameters.set_objective_upper_limit(0.5);
       simplex.SetParameters(parameters);
     }
-    if (mode == "warm_added_row_low_condition_threshold") {
+    if (mode == "warm_added_row_low_condition_threshold" ||
+        mode == "warm_saved_basis_condition_reject" ||
+        mode == "warm_singular_saved_basis_condition_reject") {
       parameters.set_initial_condition_number_threshold(1.0);
+      simplex.SetParameters(parameters);
+    }
+    if (mode == "warm_singular_saved_basis_condition_error") {
+      parameters.set_initial_condition_number_threshold(0.1);
       simplex.SetParameters(parameters);
     }
     if (mode == "warm_bound_change" || mode == "warm_dual_bound_change" ||
@@ -232,20 +295,61 @@ int main() {
       lp.SetConstraintBounds(glop::RowIndex(0), -std::numeric_limits<double>::infinity(), 0.5);
       lp.SetConstraintBounds(glop::RowIndex(1), -std::numeric_limits<double>::infinity(), 0.5);
     }
-    if (mode == "warm_added_column") {
+    if (mode == "warm_added_column" || mode == "warm_added_row_and_column") {
       const auto added = lp.CreateNewVariable();
       ++columns;
       lp.SetVariableBounds(added, 0.0, std::numeric_limits<double>::infinity());
-      lp.SetObjectiveCoefficient(added, -2.0);
+      lp.SetObjectiveCoefficient(added, mode == "warm_added_column" ? -2.0 : 0.0);
       lp.SetCoefficient(glop::RowIndex(0), added, 1.0);
     }
-    if (mode == "warm_added_row" || mode == "warm_added_row_slack" ||
-        mode == "warm_added_row_low_condition_threshold") {
+    if (mode == "warm_singular_saved_basis" ||
+        mode == "warm_singular_saved_basis_condition_reject" ||
+        mode == "warm_singular_saved_basis_condition_error") {
+      lp.SetCoefficient(glop::RowIndex(0), glop::ColIndex(1), 1.0);
+      lp.SetCoefficient(glop::RowIndex(1), glop::ColIndex(1), 0.0);
+      lp.CleanUp();
+    }
+    if (mode == "warm_changed_coefficient_only") {
+      lp.SetCoefficient(glop::RowIndex(0), glop::ColIndex(0), 2.0);
+      lp.CleanUp();
+    }
+    if (mode == "warm_changed_two_row_full_rank") {
+      lp.SetCoefficient(glop::RowIndex(0), glop::ColIndex(1), 1.0);
+      lp.CleanUp();
+    }
+    if (mode == "warm_saved_basis_condition_reject") {
+      lp.SetCoefficient(glop::RowIndex(0), glop::ColIndex(0), 2.0);
+      lp.CleanUp();
+    }
+    if (mode == "warm_added_row" || mode == "warm_added_row_and_column" ||
+        mode == "warm_added_row_slack" ||
+        mode == "warm_added_row_low_condition_threshold" ||
+        mode == "warm_added_row_changed_coefficient") {
       const auto added = lp.CreateNewConstraint();
       ++rows;
       lp.SetConstraintBounds(added, mode == "warm_added_row_slack" ? 1.0 : 2.0,
                              std::numeric_limits<double>::infinity());
       lp.SetCoefficient(added, glop::ColIndex(0), 1.0);
+      if (mode == "warm_added_row_and_column")
+        lp.SetCoefficient(added, glop::ColIndex(columns - 1), 1.0);
+      if (mode == "warm_added_row_changed_coefficient") {
+        lp.SetCoefficient(glop::RowIndex(0), glop::ColIndex(0), 2.0);
+        lp.CleanUp();
+      }
+    }
+    if (mode == "warm_removed_row") {
+      glop::DenseBooleanColumn deleted;
+      deleted.resize(glop::RowIndex(rows), false);
+      deleted[glop::RowIndex(1)] = true;
+      lp.DeleteRows(deleted);
+      --rows;
+    }
+    if (mode == "warm_removed_column") {
+      glop::DenseBooleanRow deleted;
+      deleted.resize(glop::ColIndex(columns), false);
+      deleted[glop::ColIndex(1)] = true;
+      lp.DeleteColumns(deleted);
+      --columns;
     }
   }
   const auto result = simplex.Solve(lp, &limit);

@@ -1,0 +1,50 @@
+{
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "mps_sha256": "872a7cfa2ea3d11b67d932c34ffa90a2ada9dc400558151a2b719889c0c595b2",
+  "parameters": {
+    "use_dual_simplex": true,
+    "use_scaling": false
+  },
+  "snapshots": [
+    {
+      "limit": 0,
+      "status": "DUAL_FEASIBLE",
+      "iterations": 0,
+      "basis_sha256": "e79a0cd2d21a09765595ab84f0906df37394e2d217c3d2a1d70fb843cf033be9",
+      "reduced_bits_sha256": "ffa225255870755044bfd13217e5945f55aeeeb74ed67b2ad0a7e5d6cd58a8a1",
+      "norm_bits_sha256": "32c2ff2e3502411e9bf694d56187f688cb55c09d86038d85ca7e3dd0bf29c967"
+    },
+    {
+      "limit": 10000,
+      "status": "DUAL_FEASIBLE",
+      "iterations": 10000,
+      "basis_sha256": "81bc78cdd3bb0b19ac3d4ddfe9b7f17de12c07385a5b9e57c2633b7ac49c71ee",
+      "reduced_bits_sha256": "c0ac92f427e809fcf62c97bba6fe79f95bc70af3bea4371d300bcfcf89e75dd3",
+      "norm_bits_sha256": "109f7ff6262dc151facae220ad874d4a852088df3779c1cfd470ebbbeb6bab5a"
+    },
+    {
+      "limit": 20000,
+      "status": "DUAL_FEASIBLE",
+      "iterations": 20000,
+      "basis_sha256": "f20694c47437b3dff3d3c49570dd8d93cf6fe97a7393695ed7e2da10b991010f",
+      "reduced_bits_sha256": "76b2f69589d2b65e14ac96dfb2be1709767d7f1209624911e47d0e9022d5bb84",
+      "norm_bits_sha256": "2a4bfad71889acc15677f924fb4344f03fab7bd3446524f772703e0473726000"
+    },
+    {
+      "limit": 30000,
+      "status": "IMPRECISE",
+      "iterations": 30000,
+      "basis_sha256": "0d143a254575ce8f699293c7487f20cdd4a95ffb2038659af1142e1fb39ee525",
+      "reduced_bits_sha256": "8b14cf3cebe64daac9d4ffae07aa3e5ea7b97c7cf7c4b227054e93daa1ad4fb2",
+      "norm_bits_sha256": "1ccab51ad497a50fb5b912a3083a6d8bcbf740859e48289df12303247e3042df"
+    },
+    {
+      "limit": 40000,
+      "status": "DUAL_FEASIBLE",
+      "iterations": 40000,
+      "basis_sha256": "30dcf62365b02b3dee0fd3a35217c0ce99375f88f2bae8aaa6bece0205ef0d67",
+      "reduced_bits_sha256": "3f03c5f3a1b853da9bdce5b553f65b8302fa9d712feb3519e64099f54ca14730",
+      "norm_bits_sha256": "d1355ba0a95a4e916e81a609442411e5307e8ea7155f0538028bc80cd800488a"
+    }
+  ]
+}

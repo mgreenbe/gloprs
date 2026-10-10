@@ -212,32 +212,41 @@ impl CompactSparseMatrix {
 
     #[must_use]
     pub fn column_scalar_product(&self, column: ColIndex, vector: &DenseRow) -> Fractional {
+        self.column_scalar_product_slice(column, vector.as_slice())
+    }
+
+    /// Same four-accumulator kernel for a row-indexed untyped slice.
+    #[must_use]
+    pub fn column_scalar_product_slice(
+        &self,
+        column: ColIndex,
+        vector: &[Fractional],
+    ) -> Fractional {
         let start = self.starts[column.to_usize()];
         let end = self.starts[column.to_usize() + 1];
         let shifted_end = end.saturating_sub(3);
         let mut entry = start;
         let (mut result1, mut result2, mut result3, mut result4) = (0.0, 0.0, 0.0, 0.0);
         while entry < shifted_end {
-            result1 = self.coefficients[entry]
-                .mul_add(vector[ColIndex::new(self.rows[entry].value())], result1);
+            result1 =
+                self.coefficients[entry].mul_add(vector[self.rows[entry].to_usize()], result1);
             result2 = self.coefficients[entry + 1]
-                .mul_add(vector[ColIndex::new(self.rows[entry + 1].value())], result2);
+                .mul_add(vector[self.rows[entry + 1].to_usize()], result2);
             result3 = self.coefficients[entry + 2]
-                .mul_add(vector[ColIndex::new(self.rows[entry + 2].value())], result3);
+                .mul_add(vector[self.rows[entry + 2].to_usize()], result3);
             result4 = self.coefficients[entry + 3]
-                .mul_add(vector[ColIndex::new(self.rows[entry + 3].value())], result4);
+                .mul_add(vector[self.rows[entry + 3].to_usize()], result4);
             entry += 4;
         }
         let mut result = result1 + result2 + result3 + result4;
         if entry < end {
-            result = self.coefficients[entry]
-                .mul_add(vector[ColIndex::new(self.rows[entry].value())], result);
+            result = self.coefficients[entry].mul_add(vector[self.rows[entry].to_usize()], result);
             if entry + 1 < end {
                 result = self.coefficients[entry + 1]
-                    .mul_add(vector[ColIndex::new(self.rows[entry + 1].value())], result);
+                    .mul_add(vector[self.rows[entry + 1].to_usize()], result);
                 if entry + 2 < end {
                     result = self.coefficients[entry + 2]
-                        .mul_add(vector[ColIndex::new(self.rows[entry + 2].value())], result);
+                        .mul_add(vector[self.rows[entry + 2].to_usize()], result);
                 }
             }
         }
@@ -942,6 +951,12 @@ mod tests {
         assert_eq!(
             compact.column_scalar_product(ColIndex::new(0), &vector),
             expected
+        );
+        assert_eq!(
+            compact
+                .column_scalar_product_slice(ColIndex::new(0), vector.as_slice())
+                .to_bits(),
+            expected.to_bits()
         );
     }
 }

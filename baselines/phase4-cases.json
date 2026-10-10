@@ -2,6 +2,69 @@
   "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
   "cases": [
     {
+      "name": "initial_triangular_primal",
+      "mode": "initial_triangular_primal",
+      "iterations": 0,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["-1", "0", "inf"], ["-1", "0", "inf"]],
+      "constraints": [["1", "1"], ["1", "1"]],
+      "covers": ["initial_triangular_primal"]
+    },
+    {
+      "name": "initial_maros_primal",
+      "mode": "initial_maros_primal",
+      "iterations": 0,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["-1", "0", "inf"], ["-1", "0", "inf"]],
+      "constraints": [["1", "1"], ["1", "1"]],
+      "covers": ["initial_maros_primal"]
+    },
+    {
+      "name": "initial_triangular_dual",
+      "mode": "initial_triangular_dual",
+      "iterations": 0,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["0", "0", "inf"], ["0", "0", "inf"]],
+      "constraints": [["1", "1"], ["1", "1"]],
+      "covers": ["initial_triangular_dual"]
+    },
+    {
+      "name": "initial_maros_dual",
+      "mode": "initial_maros_dual",
+      "iterations": 0,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["0", "0", "inf"], ["0", "0", "inf"]],
+      "constraints": [["1", "1"], ["1", "1"]],
+      "covers": ["initial_maros_dual"]
+    },
+    {
+      "name": "initial_bixby_without_scaling",
+      "mode": "initial_bixby_without_scaling",
+      "iterations": 0,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["-1", "0", "inf"], ["-1", "0", "inf"]],
+      "constraints": [["1", "1"], ["1", "1"]],
+      "covers": ["initial_bixby_skipped_without_scaling"]
+    },
+    {
+      "name": "initial_triangular_condition_fallback",
+      "mode": "initial_triangular_condition_fallback",
+      "iterations": 0,
+      "matrix": [[0, 0, "1"], [0, 1, "1"], [1, 1, "1"]],
+      "variables": [["-1", "0", "inf"], ["-1", "0", "inf"]],
+      "constraints": [["1", "1"], ["1", "1"]],
+      "covers": ["initial_triangular_primal", "initial_triangular_basis_fallback"]
+    },
+    {
+      "name": "initial_all_slack_rejected_by_condition_threshold",
+      "mode": "initial_all_slack_condition_error",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "2"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["initial_all_slack_condition_failure"]
+    },
+    {
       "name": "primal_phase_one_two_pivots_incremental",
       "mode": "primal",
       "iterations": 100,
@@ -56,6 +119,33 @@
       "covers": ["warm_start_basis", "warm_added_row_reinitialize_basis", "dual_phase_two"]
     },
     {
+      "name": "warm_added_row_and_column",
+      "mode": "warm_added_row_and_column",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["1", "0", "inf"]],
+      "constraints": [["1", "inf"]],
+      "covers": ["warm_start_basis", "warm_changed_matrix_compute_initial_basis"]
+    },
+    {
+      "name": "warm_removed_row",
+      "mode": "warm_removed_row",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["1", "0", "inf"], ["1", "0", "inf"]],
+      "constraints": [["1", "inf"], ["1", "inf"]],
+      "covers": ["warm_start_basis", "warm_changed_matrix_compute_initial_basis"]
+    },
+    {
+      "name": "warm_removed_basic_column",
+      "mode": "warm_removed_column",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["1", "0", "inf"], ["1", "0", "inf"]],
+      "constraints": [["1", "inf"], ["1", "inf"]],
+      "covers": ["warm_start_basis"]
+    },
+    {
       "name": "warm_added_row_condition_fallback",
       "mode": "warm_added_row_low_condition_threshold",
       "iterations": 100,
@@ -63,6 +153,73 @@
       "variables": [["1", "0", "inf"]],
       "constraints": [["1", "inf"]],
       "covers": ["warm_start_basis", "warm_added_row_reinitialize_basis", "warm_added_row_basis_fallback", "warm_added_row_compute_initial_basis", "warm_added_row_recovered_basis_used", "dual_phase_two"]
+    },
+    {
+      "name": "warm_added_row_with_changed_old_coefficient",
+      "mode": "warm_added_row_changed_coefficient",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["1", "0", "inf"]],
+      "constraints": [["1", "inf"]],
+      "covers": ["warm_start_basis", "warm_changed_matrix_compute_initial_basis"],
+      "forbids": ["warm_added_row_reinitialize_basis"]
+    },
+    {
+      "name": "warm_singular_saved_basis_after_matrix_change",
+      "mode": "warm_singular_saved_basis",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["-1", "0", "2"], ["-1", "0", "2"]],
+      "constraints": [["-inf", "1"], ["-inf", "1"]],
+      "covers": ["warm_start_basis", "warm_rejected_basis_compute_initial_basis"]
+    },
+    {
+      "name": "warm_singular_saved_basis_with_lowered_condition_threshold",
+      "mode": "warm_singular_saved_basis_condition_reject",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["-1", "0", "2"], ["-1", "0", "2"]],
+      "constraints": [["-inf", "1"], ["-inf", "1"]],
+      "covers": ["warm_start_basis", "warm_rejected_basis_compute_initial_basis"],
+      "forbids": ["warm_saved_basis_condition_candidates"]
+    },
+    {
+      "name": "warm_singular_saved_basis_fallback_condition_error",
+      "mode": "warm_singular_saved_basis_condition_error",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["-1", "0", "2"], ["-1", "0", "2"]],
+      "constraints": [["-inf", "1"], ["-inf", "1"]],
+      "covers": ["warm_start_basis", "warm_rejected_basis_compute_initial_basis", "warm_saved_basis_condition_fallback", "initial_all_slack_condition_failure"]
+    },
+    {
+      "name": "warm_full_rank_saved_basis_after_matrix_change",
+      "mode": "warm_changed_coefficient_only",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["1", "0", "inf"]],
+      "constraints": [["1", "inf"]],
+      "covers": ["warm_start_basis"],
+      "forbids": ["warm_changed_matrix_compute_initial_basis", "warm_rejected_basis_compute_initial_basis"]
+    },
+    {
+      "name": "warm_full_rank_two_row_saved_basis_after_matrix_change",
+      "mode": "warm_changed_two_row_full_rank",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["-1", "0", "2"], ["-1", "0", "2"]],
+      "constraints": [["-inf", "1"], ["-inf", "1"]],
+      "covers": ["warm_start_basis"],
+      "forbids": ["warm_changed_matrix_compute_initial_basis", "warm_rejected_basis_compute_initial_basis"]
+    },
+    {
+      "name": "warm_saved_basis_rejected_by_condition_threshold",
+      "mode": "warm_saved_basis_condition_reject",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["-1", "0", "2"], ["-1", "0", "2"]],
+      "constraints": [["-inf", "1"], ["-inf", "1"]],
+      "covers": ["warm_start_basis", "warm_saved_basis_condition_fallback", "warm_saved_basis_condition_candidates"]
     },
     {
       "name": "primal_phase_two_positive_iteration_limit",
@@ -74,6 +231,71 @@
       "covers": ["primal_phase_two", "primal_phase_two_limit"]
     },
     {
+      "name": "primal_steepest_edge_two_pivots",
+      "mode": "primal_steepest",
+      "iterations": 100,
+      "matrix": [[0, 0, "0.1"], [1, 0, "0.7"], [0, 1, "1.1"], [1, 1, "0.1"]],
+      "variables": [["-1", "0", "inf"], ["-2", "0", "inf"]],
+      "constraints": [["-inf", "0.2"], ["-inf", "0.2"]],
+      "covers": ["primal_phase_two", "primal_steepest_edge_pricing"]
+    },
+    {
+      "name": "primal_steepest_zero_norm_threshold",
+      "mode": "primal_steepest_zero_norm_threshold",
+      "iterations": 100,
+      "matrix": [[0, 0, "0.6454545454545454"], [0, 1, "0.8272727272727273"], [0, 2, "1.3727272727272728"], [0, 3, "0.4636363636363636"], [1, 0, "0.4636363636363636"], [1, 1, "1.1"], [1, 2, "1.4636363636363636"], [1, 3, "1.3727272727272728"], [2, 0, "0.6454545454545454"], [2, 1, "0.9181818181818182"], [2, 2, "0.7363636363636363"], [2, 3, "0.6454545454545454"], [3, 0, "1.5545454545454547"], [3, 1, "0.1"], [3, 2, "0.6454545454545454"], [3, 3, "0.7363636363636363"]],
+      "variables": [["-2", "0", "inf"], ["-1.1428571428571428", "0", "inf"], ["-3", "0", "inf"], ["-2", "0", "inf"]],
+      "constraints": [["-inf", "1.376923076923077"], ["-inf", "0.6846153846153846"], ["-inf", "0.3769230769230769"], ["-inf", "1.3"]],
+      "covers": ["primal_phase_two", "primal_steepest_edge_pricing", "primal_edge_norm_recomputation_requested", "primal_edge_norm_refactorization_requested", "primal_precision_refactorization"]
+    },
+    {
+      "name": "primal_devex_two_pivots",
+      "mode": "primal_devex",
+      "iterations": 100,
+      "matrix": [[0, 0, "0.1"], [1, 0, "0.7"], [0, 1, "1.1"], [1, 1, "0.1"]],
+      "variables": [["-1", "0", "inf"], ["-2", "0", "inf"]],
+      "constraints": [["-inf", "0.2"], ["-inf", "0.2"]],
+      "covers": ["primal_phase_two", "primal_devex_pricing"]
+    },
+    {
+      "name": "primal_eta_basis_updates",
+      "mode": "primal_eta",
+      "iterations": 100,
+      "matrix": [[0, 0, "0.1"], [1, 0, "0.7"], [0, 1, "1.1"], [1, 1, "0.1"]],
+      "variables": [["-1", "0", "inf"], ["-2", "0", "inf"]],
+      "constraints": [["-inf", "0.2"], ["-inf", "0.2"]],
+      "covers": ["primal_phase_two", "primal_eta_basis_update"]
+    },
+    {
+      "name": "primal_phase_one_eta_basis_updates",
+      "mode": "primal_eta_phase_one",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["0", "0", "inf"], ["0", "0", "inf"]],
+      "constraints": [["1", "inf"], ["1", "inf"]],
+      "covers": ["primal_phase_one", "primal_eta_basis_update"]
+    },
+    {
+      "name": "primal_phase_two_limit_at_clock_boundary",
+      "mode": "primal",
+      "iterations": 100,
+      "deterministic_limit": "4.2000000000000006e-8",
+      "matrix": [[0, 0, "0.1"], [1, 0, "0.7"], [0, 1, "1.1"], [1, 1, "0.1"]],
+      "variables": [["-1", "0", "inf"], ["-2", "0", "inf"]],
+      "constraints": [["-inf", "0.2"], ["-inf", "0.2"]],
+      "covers": ["primal_phase_two", "primal_phase_time_limit", "primal_phase_two_limit"]
+    },
+    {
+      "name": "primal_phase_two_limit_after_clock_boundary",
+      "mode": "primal",
+      "iterations": 100,
+      "deterministic_limit": "4.200000000000001e-8",
+      "matrix": [[0, 0, "0.1"], [1, 0, "0.7"], [0, 1, "1.1"], [1, 1, "0.1"]],
+      "variables": [["-1", "0", "inf"], ["-2", "0", "inf"]],
+      "constraints": [["-inf", "0.2"], ["-inf", "0.2"]],
+      "covers": ["primal_phase_two", "primal_phase_time_limit", "primal_phase_two_limit"]
+    },
+    {
       "name": "dual_phase_two_positive_iteration_limit",
       "mode": "dual",
       "iterations": 1,
@@ -81,6 +303,53 @@
       "variables": [["1", "0", "inf"], ["1", "0", "inf"]],
       "constraints": [["2", "inf"], ["3", "inf"]],
       "covers": ["dual_phase_two", "dual_iteration_limit"]
+    },
+    {
+      "name": "dual_norm_prioritized_pricing",
+      "mode": "dual_prioritize_norm",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"], [1, 0, "1"], [0, 1, "1"], [1, 1, "2"]],
+      "variables": [["1", "0", "inf"], ["1", "0", "inf"]],
+      "constraints": [["2", "inf"], ["3", "inf"]],
+      "covers": ["dual_dedicated_phase_one", "dual_phase_two", "dual_norm_prioritized_pricing"]
+    },
+    {
+      "name": "dual_eta_basis_updates",
+      "mode": "dual_eta",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"], [1, 0, "1"], [0, 1, "1"], [1, 1, "2"]],
+      "variables": [["1", "0", "inf"], ["1", "0", "inf"]],
+      "constraints": [["2", "inf"], ["3", "inf"]],
+      "covers": ["dual_dedicated_phase_one", "dual_phase_two", "dual_eta_basis_update"]
+    },
+    {
+      "name": "dual_phase_one_eta_basis_updates",
+      "mode": "dual_eta_phase_one",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["-1", "0", "inf"], ["-1", "0", "inf"]],
+      "constraints": [["-inf", "1"], ["-inf", "1"]],
+      "covers": ["dual_dedicated_phase_one", "dual_phase_one_eta_basis_update"]
+    },
+    {
+      "name": "dual_phase_two_limit_at_clock_boundary",
+      "mode": "dual",
+      "iterations": 100,
+      "deterministic_limit": "5.8e-8",
+      "matrix": [[0, 0, "1"], [1, 0, "1"], [0, 1, "1"], [1, 1, "2"]],
+      "variables": [["1", "0", "inf"], ["1", "0", "inf"]],
+      "constraints": [["2", "inf"], ["3", "inf"]],
+      "covers": ["dual_phase_two"]
+    },
+    {
+      "name": "dual_phase_two_limit_after_clock_boundary",
+      "mode": "dual",
+      "iterations": 100,
+      "deterministic_limit": "5.800000000000001e-8",
+      "matrix": [[0, 0, "1"], [1, 0, "1"], [0, 1, "1"], [1, 1, "2"]],
+      "variables": [["1", "0", "inf"], ["1", "0", "inf"]],
+      "constraints": [["2", "inf"], ["3", "inf"]],
+      "covers": ["dual_phase_two"]
     },
     {
       "name": "primal_precision_refactorization",
@@ -101,6 +370,25 @@
       "covers": ["primal_phase_two", "adaptive_lu_pivot_threshold"]
     },
     {
+      "name": "dual_adaptive_lu_pivot_threshold",
+      "mode": "dual_adaptive_pivot",
+      "iterations": 100,
+      "matrix": [[0, 0, "-0.001"], [0, 1, "0.01"], [0, 2, "-0.01"], [0, 3, "100"], [1, 0, "100"], [1, 1, "-2"], [1, 2, "100"], [1, 3, "-0.7"], [2, 0, "0.001"], [2, 1, "0.7"], [2, 2, "0.01"], [2, 3, "0.7"], [3, 0, "-0.001"], [3, 1, "-0.001"], [3, 2, "0.001"], [3, 3, "2"]],
+      "variables": [["1", "0", "1"], ["-2", "0", "1"], ["2", "0", "1"], ["-1", "0", "1"]],
+      "constraints": [["0", "inf"], ["1", "inf"], ["0.1", "inf"], ["2", "inf"]],
+      "covers": ["dual_phase_two", "adaptive_lu_pivot_threshold"]
+    },
+    {
+      "name": "dual_adaptive_lu_default_control",
+      "mode": "dual",
+      "iterations": 100,
+      "matrix": [[0, 0, "-0.001"], [0, 1, "0.01"], [0, 2, "-0.01"], [0, 3, "100"], [1, 0, "100"], [1, 1, "-2"], [1, 2, "100"], [1, 3, "-0.7"], [2, 0, "0.001"], [2, 1, "0.7"], [2, 2, "0.01"], [2, 3, "0.7"], [3, 0, "-0.001"], [3, 1, "-0.001"], [3, 2, "0.001"], [3, 3, "2"]],
+      "variables": [["1", "0", "1"], ["-2", "0", "1"], ["2", "0", "1"], ["-1", "0", "1"]],
+      "constraints": [["0", "inf"], ["1", "inf"], ["0.1", "inf"], ["2", "inf"]],
+      "covers": ["dual_phase_two"],
+      "forbids": ["adaptive_lu_pivot_threshold"]
+    },
+    {
       "name": "primal_degenerate_pivot",
       "mode": "primal",
       "iterations": 100,
@@ -108,6 +396,35 @@
       "variables": [["-1", "0", "inf"]],
       "constraints": [["-inf", "0"]],
       "covers": ["primal_phase_two", "primal_degenerate_pivot", "primal_bound_shift", "optimal_cleanup"]
+    },
+    {
+      "name": "primal_bound_shift_tight_cleanup",
+      "mode": "tight_internal_primal",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "inf"]],
+      "constraints": [["-inf", "0"]],
+      "covers": ["primal_phase_two", "primal_degenerate_pivot", "primal_bound_shift", "optimal_cleanup"],
+      "forbids": ["cleanup_primal_to_dual"]
+    },
+    {
+      "name": "primal_bound_shift_forces_dual_cleanup",
+      "mode": "primal_harris_wide",
+      "iterations": 100,
+      "matrix": [[0, 0, "100"], [0, 1, "0.7"], [0, 2, "-0.01"], [1, 0, "-0.01"], [1, 1, "-100"], [1, 2, "-100"], [2, 0, "-100"], [2, 1, "2"], [2, 2, "100"]],
+      "variables": [["-1", "0", "1"], ["-1", "0", "1"], ["0", "0", "inf"]],
+      "constraints": [["-inf", "0.1"], ["0", "inf"], ["-inf", "0.1"]],
+      "covers": ["primal_phase_two", "primal_degenerate_pivot", "primal_bound_shift", "optimal_cleanup", "cleanup_primal_to_dual", "cleanup_dual_reoptimization"]
+    },
+    {
+      "name": "primal_cleanup_stopped_by_time_limit",
+      "mode": "primal_harris_wide",
+      "iterations": 100,
+      "deterministic_limit": "5e-7",
+      "matrix": [[0, 0, "100"], [0, 1, "0.7"], [0, 2, "-0.01"], [1, 0, "-0.01"], [1, 1, "-100"], [1, 2, "-100"], [2, 0, "-100"], [2, 1, "2"], [2, 2, "100"]],
+      "variables": [["-1", "0", "1"], ["-1", "0", "1"], ["0", "0", "inf"]],
+      "constraints": [["-inf", "0.1"], ["0", "inf"], ["-inf", "0.1"]],
+      "covers": ["primal_phase_two", "primal_bound_shift", "cleanup_primal_to_dual", "cleanup_dual_reoptimization", "cleanup_time_limit"]
     },
     {
       "name": "primal_harris_exact_tie",
@@ -137,6 +454,16 @@
       "covers": ["dual_unbounded_termination", "dual_ray_rejected", "imprecise_status_disabled"]
     },
     {
+      "name": "primal_strong_ray_without_imprecise_conversion",
+      "mode": "primal_no_imprecise",
+      "iterations": 100,
+      "matrix": [[0, 0, "0.0000000001"], [0, 1, "1"]],
+      "variables": [["-0.0001", "0", "inf"], ["0", "-0.000001", "0.000001"]],
+      "constraints": [["0", "0"]],
+      "covers": ["primal_unbounded_termination", "primal_ray_validated", "imprecise_status_disabled"],
+      "forbids": ["primal_ray_rejected"]
+    },
+    {
       "name": "primal_strong_ray_accepted",
       "mode": "primal",
       "iterations": 100,
@@ -144,6 +471,16 @@
       "variables": [["-0.0001", "0", "inf"], ["0", "-0.000001", "0.000001"]],
       "constraints": [["0", "0"]],
       "covers": ["primal_unbounded_termination", "primal_ray_validated"]
+    },
+    {
+      "name": "dual_ray_at_tolerance_without_imprecise_conversion",
+      "mode": "dual_no_imprecise",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["0", "0", "0"]],
+      "constraints": [["0.000001", "inf"]],
+      "covers": ["dual_unbounded_termination", "dual_ray_validated", "imprecise_status_disabled"],
+      "forbids": ["dual_ray_rejected"]
     },
     {
       "name": "dual_ray_at_solution_tolerance",
@@ -198,6 +535,15 @@
       "variables": [["-1", "0", "inf"]],
       "constraints": [],
       "covers": ["primal_unbounded_termination", "primal_ray_validated"]
+    },
+    {
+      "name": "primal_unbounded_coupled_ray",
+      "mode": "primal",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"], [0, 1, "-1"]],
+      "variables": [["-1", "0", "inf"], ["0", "0", "inf"]],
+      "constraints": [["0", "0"]],
+      "covers": ["primal_phase_two", "primal_unbounded_termination", "primal_ray_validated"]
     },
     {
       "name": "dual_phase_two",
@@ -260,7 +606,27 @@
       "matrix": [[0, 0, "1"]],
       "variables": [["-1", "0", "inf"]],
       "constraints": [["-inf", "1"]],
-      "covers": ["primal_objective_limit"]
+      "covers": ["primal_objective_limit", "primal_objective_limit_cleanup"]
+    },
+    {
+      "name": "primal_objective_no_limit_control",
+      "mode": "primal",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "inf"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["primal_phase_two", "optimal_cleanup"],
+      "forbids": ["primal_objective_limit", "primal_objective_limit_cleanup"]
+    },
+    {
+      "name": "dual_objective_no_limit_control",
+      "mode": "dual",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["1", "0", "inf"]],
+      "constraints": [["1", "inf"]],
+      "covers": ["dual_phase_two"],
+      "forbids": ["dual_objective_limit"]
     },
     {
       "name": "dual_objective_limit",
@@ -269,7 +635,7 @@
       "matrix": [[0, 0, "1"]],
       "variables": [["1", "0", "inf"]],
       "constraints": [["1", "inf"]],
-      "covers": ["dual_objective_limit"]
+      "covers": ["dual_objective_limit", "dual_objective_limit_cleanup"]
     },
     {
       "name": "warm_primal_repeat",
@@ -379,7 +745,7 @@
       "matrix": [[0, 0, "1"]],
       "variables": [["1", "0", "inf"]],
       "constraints": [["1", "inf"]],
-      "covers": ["warm_reuse_factorization", "dual_objective_limit"]
+      "covers": ["warm_reuse_factorization", "dual_objective_limit", "dual_objective_limit_cleanup"]
     },
     {
       "name": "dual_unbounded_ray",
@@ -388,6 +754,15 @@
       "matrix": [[0, 0, "1"]],
       "variables": [["0", "0", "0"]],
       "constraints": [["1", "inf"]],
+      "covers": ["dual_unbounded_termination", "dual_ray_validated"]
+    },
+    {
+      "name": "dual_unbounded_coupled_ray",
+      "mode": "dual",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"], [1, 0, "-1"]],
+      "variables": [["0", "-inf", "inf"]],
+      "constraints": [["1", "inf"], ["1", "inf"]],
       "covers": ["dual_unbounded_termination", "dual_ray_validated"]
     },
     {
@@ -472,6 +847,15 @@
       "covers": ["dual_phase_one_limit"]
     },
     {
+      "name": "dual_phase_one_positive_iteration_limit",
+      "mode": "dual",
+      "iterations": 1,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["-1", "0", "inf"], ["-1", "0", "inf"]],
+      "constraints": [["-inf", "1"], ["-inf", "1"]],
+      "covers": ["dual_dedicated_phase_one", "dual_phase_one_limit", "dual_phase_one_post_cleanup"]
+    },
+    {
       "name": "dual_already_optimal_at_zero_limit",
       "mode": "dual",
       "iterations": 0,
@@ -497,6 +881,64 @@
       "variables": [["0", "0", "inf"]],
       "constraints": [["1", "inf"]],
       "covers": ["dual_cost_shift", "dual_cost_shift_removed"]
+    },
+    {
+      "name": "dual_cost_shift_forces_primal_cleanup",
+      "mode": "dual",
+      "iterations": 100,
+      "matrix": [[0, 0, "-0.7"], [0, 1, "100"], [0, 2, "2"], [1, 0, "0.01"], [1, 1, "-0.01"], [1, 2, "100"], [2, 0, "0.7"], [2, 1, "100"], [2, 2, "0.7"]],
+      "variables": [["-2", "0", "1"], ["1", "0", "1"], ["0", "0", "1"]],
+      "constraints": [["1", "inf"], ["-inf", "0"], ["0.1", "inf"]],
+      "covers": ["dual_cost_shift", "dual_cost_shift_removed", "optimal_cleanup", "cleanup_dual_to_primal", "cleanup_primal_reoptimization"],
+      "forbids": ["dual_edge_norm_recomputation_requested"]
+    },
+    {
+      "name": "dual_zero_norm_threshold",
+      "mode": "dual_zero_norm_threshold",
+      "iterations": 100,
+      "matrix": [[0, 0, "-0.7"], [0, 1, "100"], [0, 2, "2"], [1, 0, "0.01"], [1, 1, "-0.01"], [1, 2, "100"], [2, 0, "0.7"], [2, 1, "100"], [2, 2, "0.7"]],
+      "variables": [["-2", "0", "1"], ["1", "0", "1"], ["0", "0", "1"]],
+      "constraints": [["1", "inf"], ["-inf", "0"], ["0.1", "inf"]],
+      "covers": ["dual_phase_two", "dual_edge_norm_recomputation_requested"]
+    },
+    {
+      "name": "dual_norm_precision_forces_refactorization",
+      "mode": "dual_zero_norm_threshold",
+      "iterations": 100,
+      "matrix": [[0, 0, "-0.7"], [0, 1, "0.01"], [0, 2, "2"], [0, 3, "-0.7"], [1, 0, "-0.01"], [1, 1, "100"], [1, 2, "2"], [1, 3, "-100"], [2, 0, "0.7"], [2, 1, "2"], [2, 2, "0.7"], [2, 3, "-2"], [3, 0, "-0.7"], [3, 1, "-2"], [3, 2, "-0.7"], [3, 3, "100"]],
+      "variables": [["1", "0", "1"], ["1", "0", "1"], ["0", "0", "1"], ["-2", "0", "1"]],
+      "constraints": [["0", "inf"], ["2", "inf"], ["2", "inf"], ["2", "inf"]],
+      "covers": ["dual_phase_two", "dual_edge_norm_recomputation_requested", "dual_edge_norm_forced_refactorization", "dual_phase_two_optimal"]
+    },
+    {
+      "name": "dual_norm_precision_default_control",
+      "mode": "dual",
+      "iterations": 100,
+      "matrix": [[0, 0, "-0.7"], [0, 1, "0.01"], [0, 2, "2"], [0, 3, "-0.7"], [1, 0, "-0.01"], [1, 1, "100"], [1, 2, "2"], [1, 3, "-100"], [2, 0, "0.7"], [2, 1, "2"], [2, 2, "0.7"], [2, 3, "-2"], [3, 0, "-0.7"], [3, 1, "-2"], [3, 2, "-0.7"], [3, 3, "100"]],
+      "variables": [["1", "0", "1"], ["1", "0", "1"], ["0", "0", "1"], ["-2", "0", "1"]],
+      "constraints": [["0", "inf"], ["2", "inf"], ["2", "inf"], ["2", "inf"]],
+      "covers": ["dual_phase_two", "dual_phase_two_optimal"],
+      "forbids": ["dual_edge_norm_recomputation_requested", "dual_edge_norm_forced_refactorization"]
+    },
+    {
+      "name": "dual_cleanup_stopped_by_time_limit",
+      "mode": "dual",
+      "iterations": 100,
+      "deterministic_limit": "1e-6",
+      "matrix": [[0, 0, "-0.7"], [0, 1, "100"], [0, 2, "2"], [1, 0, "0.01"], [1, 1, "-0.01"], [1, 2, "100"], [2, 0, "0.7"], [2, 1, "100"], [2, 2, "0.7"]],
+      "variables": [["-2", "0", "1"], ["1", "0", "1"], ["0", "0", "1"]],
+      "constraints": [["1", "inf"], ["-inf", "0"], ["0.1", "inf"]],
+      "covers": ["dual_cost_shift", "dual_cost_shift_removed", "cleanup_dual_to_primal", "cleanup_time_limit"]
+    },
+    {
+      "name": "dual_perturbation_removal_forces_primal_cleanup",
+      "mode": "dual_perturbed",
+      "iterations": 100,
+      "matrix": [[0, 0, "100"], [0, 1, "-2"], [0, 2, "0.7"], [1, 0, "2"], [1, 1, "100"], [1, 2, "0.01"], [2, 0, "100"], [2, 1, "0.01"], [2, 2, "-100"]],
+      "variables": [["-2", "0", "1"], ["0", "0", "1"], ["2", "0", "inf"]],
+      "constraints": [["0.1", "inf"], ["0.1", "inf"], ["-inf", "1"]],
+      "covers": ["dual_cost_perturbation", "dual_phase_two", "dual_cost_perturbation_removed", "optimal_cleanup", "cleanup_dual_to_primal", "cleanup_primal_reoptimization"],
+      "forbids": ["dual_cost_shift"]
     },
     {
       "name": "dual_boxed_bound_flip",
@@ -571,6 +1013,16 @@
       "covers": ["dual_phase_two", "optimal_cleanup", "cleanup_dual_to_primal", "cleanup_primal_reoptimization"]
     },
     {
+      "name": "cleanup_reoptimization_limit_zero_dual",
+      "mode": "no_reopt_dual",
+      "iterations": 4,
+      "matrix": [[0, 0, "0.1"], [0, 1, "-0.1"], [1, 0, "0.1"], [1, 1, "-0.7"]],
+      "variables": [["1", "0", "inf"], ["-1", "0", "inf"]],
+      "constraints": [["1", "inf"], ["1", "inf"]],
+      "covers": ["dual_phase_two", "optimal_cleanup", "cleanup_dual_to_primal", "cleanup_reoptimization_limit"],
+      "forbids": ["cleanup_primal_reoptimization"]
+    },
+    {
       "name": "cleanup_dual_to_primal_relaxed_tolerance",
       "mode": "relaxed_internal_dual",
       "iterations": 100,
@@ -588,6 +1040,16 @@
       "variables": [["2", "0", "inf"], ["-2", "0", "inf"], ["2", "0", "1"]],
       "constraints": [["-inf", "1"], ["0", "inf"], ["-inf", "1"]],
       "covers": ["primal_phase_two", "optimal_cleanup", "cleanup_primal_to_dual", "cleanup_dual_reoptimization"]
+    },
+    {
+      "name": "cleanup_reoptimization_limit_zero",
+      "mode": "no_reopt_primal",
+      "iterations": 100,
+      "matrix": [[0, 0, "-0.1"], [0, 1, "0.1"], [0, 2, "0.7"], [1, 0, "2"], [1, 1, "1"], [1, 2, "0.1"], [2, 0, "-1"], [2, 1, "0.1"], [2, 2, "0.7"]],
+      "variables": [["2", "0", "inf"], ["-2", "0", "inf"], ["2", "0", "1"]],
+      "constraints": [["-inf", "1"], ["0", "inf"], ["-inf", "1"]],
+      "covers": ["primal_phase_two", "optimal_cleanup", "cleanup_primal_to_dual", "cleanup_reoptimization_limit"],
+      "forbids": ["cleanup_dual_reoptimization"]
     },
     {
       "name": "cleanup_primal_to_dual_relaxed_tolerance",
@@ -609,8 +1071,26 @@
       "covers": ["primal_phase_one", "primal_phase_time_limit", "primal_phase_one_limit"]
     },
     {
+      "name": "primal_positive_wall_limit_before_phase_one",
+      "mode": "primal_wall_tiny",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "inf"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["primal_phase_one", "primal_phase_time_limit", "primal_phase_one_limit"]
+    },
+    {
       "name": "dual_deterministic_limit_zero",
       "mode": "dual_time_zero",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["1", "0", "inf"]],
+      "constraints": [["1", "inf"]],
+      "covers": ["dual_dedicated_phase_one", "dual_phase_one_time_limit"]
+    },
+    {
+      "name": "dual_positive_wall_limit_before_phase_one",
+      "mode": "dual_wall_tiny",
       "iterations": 100,
       "matrix": [[0, 0, "1"]],
       "variables": [["1", "0", "inf"]],
@@ -628,10 +1108,50 @@
       "covers": ["primal_phase_one", "primal_phase_time_limit", "primal_phase_one_limit"]
     },
     {
+      "name": "primal_phase_one_limit_at_clock_boundary",
+      "mode": "primal",
+      "iterations": 100,
+      "deterministic_limit": "2e-8",
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["0", "0", "inf"], ["0", "0", "inf"]],
+      "constraints": [["1", "inf"], ["1", "inf"]],
+      "covers": ["primal_phase_one", "primal_phase_time_limit", "primal_phase_one_limit"]
+    },
+    {
+      "name": "primal_phase_one_limit_after_clock_boundary",
+      "mode": "primal",
+      "iterations": 100,
+      "deterministic_limit": "2.0000000000000004e-8",
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["0", "0", "inf"], ["0", "0", "inf"]],
+      "constraints": [["1", "inf"], ["1", "inf"]],
+      "covers": ["primal_phase_one", "primal_phase_time_limit", "primal_phase_one_limit"]
+    },
+    {
       "name": "dual_deterministic_limit_positive",
       "mode": "dual",
       "iterations": 100,
       "deterministic_limit": "0.00000003",
+      "matrix": [[0, 0, "1"], [1, 0, "1"], [0, 1, "1"], [1, 1, "2"]],
+      "variables": [["1", "0", "inf"], ["1", "0", "inf"]],
+      "constraints": [["2", "inf"], ["3", "inf"]],
+      "covers": ["dual_phase_two"]
+    },
+    {
+      "name": "dual_limit_at_clock_boundary",
+      "mode": "dual",
+      "iterations": 100,
+      "deterministic_limit": "1.2000000000000002e-8",
+      "matrix": [[0, 0, "1"], [1, 0, "1"], [0, 1, "1"], [1, 1, "2"]],
+      "variables": [["1", "0", "inf"], ["1", "0", "inf"]],
+      "constraints": [["2", "inf"], ["3", "inf"]],
+      "covers": ["dual_dedicated_phase_one"]
+    },
+    {
+      "name": "dual_limit_after_clock_boundary",
+      "mode": "dual",
+      "iterations": 100,
+      "deterministic_limit": "1.2000000000000003e-8",
       "matrix": [[0, 0, "1"], [1, 0, "1"], [0, 1, "1"], [1, 1, "2"]],
       "variables": [["1", "0", "inf"], ["1", "0", "inf"]],
       "constraints": [["2", "inf"], ["3", "inf"]],

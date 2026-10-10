@@ -61,6 +61,10 @@ def main() -> None:
             for line in output.splitlines()
             if (parts := line.split())
         }
+        if "error" in fields:
+            results.append({"name": case["name"], "error": " ".join(fields["error"])})
+            print(f"{case['name']}: ERROR")
+            continue
         required = {
             "status", "iterations", "objective_bits", "basis", "value_bits",
             "reduced_bits", "primal_ray_bits", "dual_ray_bits",

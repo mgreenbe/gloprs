@@ -508,8 +508,7 @@ impl TriangularMatrix {
                 continue;
             }
             workspace.nodes_to_explore.push(invalid);
-            for position in starts[column]..workspace.pruned_ends[column] {
-                let successor = rows[position];
+            for &successor in &rows[starts[column]..workspace.pruned_ends[column]] {
                 if !workspace.stored.contains(RowIndex::from_usize(successor)) {
                     workspace.nodes_to_explore.push(successor);
                 }
@@ -535,10 +534,13 @@ impl TriangularMatrix {
             upper.add_entry(RowIndex::from_usize(pivot_row), pivot);
             workspace.num_fp_operations +=
                 1 + i64::try_from(starts[column + 1] - starts[column]).unwrap_or(i64::MAX);
-            for position in starts[column]..starts[column + 1] {
-                let successor = rows[position];
+            let end = starts[column + 1];
+            for (&successor, &coefficient) in rows[starts[column]..end]
+                .iter()
+                .zip(&coefficients[starts[column]..end])
+            {
                 workspace.scratchpad[successor] =
-                    (-coefficients[position]).mul_add(pivot, workspace.scratchpad[successor]);
+                    (-coefficient).mul_add(pivot, workspace.scratchpad[successor]);
             }
         }
         lower.reserve(workspace.lower_rows.len());

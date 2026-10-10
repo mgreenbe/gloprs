@@ -25,6 +25,7 @@ pub enum FactorizationError {
     NonSquare { rows: usize, columns: usize },
     NonFinite,
     Singular { step: usize },
+    IllConditioned { upper_bound: f64 },
     DimensionMismatch,
     InvalidParameters(String),
 }
@@ -37,6 +38,10 @@ impl fmt::Display for FactorizationError {
             }
             Self::NonFinite => formatter.write_str("matrix contains a nonfinite coefficient"),
             Self::Singular { step } => write!(formatter, "matrix is singular at step {step}"),
+            Self::IllConditioned { upper_bound } => write!(
+                formatter,
+                "The matrix condition number upper bound is too high: {upper_bound}"
+            ),
             Self::DimensionMismatch => formatter.write_str("right-hand side dimension mismatch"),
             Self::InvalidParameters(message) => formatter.write_str(message),
         }

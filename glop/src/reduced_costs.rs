@@ -540,6 +540,11 @@ impl PrimalPrices {
         self.recompute = true;
     }
 
+    #[must_use]
+    pub const fn recomputation_pending(&self) -> bool {
+        self.recompute
+    }
+
     /// Recomputes prices from already materialized reduced costs and norms.
     ///
     /// This is the explicit-collaborator form of GLOP's

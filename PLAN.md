@@ -475,7 +475,11 @@ flips, precision-triggered refactorization, and final optimality/unboundedness
 checks. Degenerate dual pivots now use GLOP's cost shifts, including the
 minimum reduced-cost displacement, incremental shifted reduced costs, removal
 of all shifts at a candidate termination, and refactorized reoptimization.
-Imprecise pivots also increase the LU pivot threshold before rebuilding the
+A pinned 3×3 case now follows cost-shift removal through the dual-to-primal
+cleanup switch and primal reoptimization, matching native state and clock.
+A separate 3×3 fixture removes a cost perturbation after dual Phase II, then
+switches to primal reoptimization with no cost shift; native state and clock
+agree. Imprecise pivots also increase the LU pivot threshold before rebuilding the
 basis when fewer than ten updates have accumulated, matching `UpdateAndPivot()`.
 The dual objective limit follows GLOP's shifted/scaled external
 coordinates and is tested separately. One- and two-pivot regressions cover
@@ -803,8 +807,12 @@ The native adapter does not expose pivot events in this mode, so this artifact
 does not claim complete perturbed pivot-sequence coverage.
 
 A new small-LP native branch fixture (`baselines/phase4-cases.json` and
-`phase4-native.json`) now covers 82 targeted primal, dual, limit, ray, and
-warm-start cases. The Rust test requires each case's diagnostic branch tags
+`phase4-native.json`) now covers 130 targeted primal, dual, limit, ray, and
+warm-start cases. Zero-pivot equality-row cases pin the structural bases
+selected by triangular and Maros crashes in both simplex orientations;
+separate cases pin Bixby's deliberate skip without scaling and triangular
+rejection by the initial condition-number threshold. The Rust test requires
+each case's diagnostic branch tags
 to be visited and compares native status, iterations, objective, ordered basis,
 values, reduced costs, and rays; it also rejects newly instrumented tags with
 no case. The first fixture exposed two final-snapshot gaps: on primal
@@ -813,6 +821,11 @@ the unsolved user objective; for unbounded outcomes it returns the appropriate
 signed infinity. These are now aligned. `baselines/phase4-coverage.md` lists
 the remaining uninstrumented and uncovered branches explicitly. Broad Netlib
 agreement is not being treated as proof of complete Phase-4 branch coverage.
+The new positive dual Phase-I iteration-limit case also validates native's
+post-Phase-I refactorization, reduced-cost precision restoration, and basic
+value recomputation even when Phase I stops at its limit. A dual pivot now
+invalidates the retained reduced-cost precision flag, so this cleanup makes
+the same 16 ns recomputation and reaches native's exact 220 ns total.
 The latest pair exercises an actual residual-driven `IMPRECISE` exit and its
 `change_status_to_imprecise = false` counterpart on the same small LP.
 Additional cases now cover primal limits before and after Phase I, an already
@@ -866,7 +879,10 @@ A one-row degenerate primal pivot also exercises GLOP's off-bound leaving
 value: Rust now retains the resulting bound shift until cleanup instead of
 unconditionally snapping the value to its target bound. The fixture matches
 native final status, iterations, basis, values, and reduced costs. Its shift
-does not force a shift-induced primal-to-dual cleanup switch, which remains uncovered.
+does not force a shift-induced primal-to-dual cleanup switch. A separate 3×3
+Harris-tolerance fixture now does force that switch and dual reoptimization;
+its native status, basis, certificate, and exact clock agree. A tight-tolerance
+one-row control still forbids the switch.
 A two-pivot native fixture with zero reduced-cost recomputation threshold
 also reaches the precision retry and forced basis refactorization; its final
 state matches native GLOP. A zero pivot-refactorization threshold on that LP
@@ -951,19 +967,75 @@ unbounded rays, PrimalPush's lazy reduced-cost invalidation, and the separate
 rebuild. A pending full reduced-cost recomputation now also skips the
 incremental `UpdateRow` work, matching the precision-retry path. Common
 optimal primal/dual solves, zero-limit cases, repeated cleanup reoptimization,
-precision refactorization, and most ray branches now match native clock totals;
-the fixture asserts all exact totals. Seventy-one of 82 small branch fixtures
-match native clock totals. One weak-ray case and positive-limit
-branches still differ. The weak-ray fixture with `change_status_to_imprecise=false`
-now correctly skips native's guarded terminal residual check; its remaining
-clock gap is 4 ns low rather than 4 ns high, pointing to final reduced-cost
-snapshot lifecycle. Reconcile those
-component call paths before treating close deterministic thresholds as
-trajectory-equivalent.
+precision refactorization, and ray branches now match native clock totals;
+the fixture asserts exact totals for all 135 terminal small branch cases;
+two more pin upstream LU error messages from cold and warm initialization.
+The two singular-saved-basis recovery cases now also match the native clock:
+upstream absorbs LU's column permutation before testing the initial condition
+bound, so the permuted identity basis avoids an extra 8 ns norm charge. The
+all-slack fallback now rechecks the condition-number
+upper bound and returns an ill-conditioned LU error when it too is rejected,
+matching upstream's error path; a focused test covers this case. The
+remaining Phase-I positive-limit gaps came from eagerly computing the user-
+objective reduced costs after Phase I stopped at `INIT`; upstream only
+invalidates them and computes them lazily for the final snapshot. The weak-ray
+fixture with `change_status_to_imprecise=false` now
+skips native's guarded terminal residual check and lazily refreshes reduced
+costs before its ray test, closing that case's final 4 ns gap. Exact clocks in
+this corpus do not yet establish fidelity for every limit boundary. Four new
+fixtures place deterministic limits at adjacent `f64` values around primal
+Phase-I and dedicated-dual Phase-I loop transitions. They match native paths
+and exact clocks: one versus two primal pivots and zero versus one dual pivot.
+Two further adjacent-limit pairs bracket one-versus-two pivots in primal and
+dual Phase II; both trajectories and exact clocks agree with native. The
+first dual boundary exposed an eager reduced-cost solve before the first
+dedicated-dual time check. Moving it inside the phase loop, as upstream does,
+reconciled the boundary without changing the final operation total.
+Two more deterministic-limit fixtures stop in cleanup after, respectively,
+a primal bound shift and a dual cost shift. Both require the cleanup time-limit
+branch and match native terminal state and exact operation clock.
+Strong primal and tolerance-boundary dual rays are now also pinned with
+imprecise-status conversion disabled. The strong primal case exposed the
+unconditional dual-residual solve in native's ray validation. Rust now performs
+that solve and, only for a weak ray, reuses the left inverse to refresh reduced
+costs without a second transpose solve. Both new clocks agree exactly.
+The dual objective-limit fixture is paired with an identical LP without a
+limit. Both cold and warm early-limit clocks now match native: the current
+dual optimization call performs cleanup before the objective limit prevents
+another call, and terminal `GetReducedCosts()` reuses the left inverse from
+`GetDualValues()` instead of solving again. A dedicated branch event pins the
+cleanup. The primal objective-limit shortcut is now removed. A native debugger
+trace confirmed that GLOP enters `RecomputeBasicVariableValues()` during
+cleanup, then localized the apparent 8 ns gap to earlier Phase-II work:
+Rust had recomputed reduced costs before checking the objective limit,
+whereas upstream checks the limit first and returns without that BTRAN.
+Moving the check before lazy pricing and restoring cleanup matches the native
+clock, status, and final values. A same-LP no-limit control forbids the limit
+and cleanup events and also matches native exactly.
+Two additional native fixtures use a positive 1 µs wall limit that is reached
+before primal and dedicated-dual Phase-I work. Both match Rust status and
+operation clock. Wall limits reached after meaningful work remain untested.
+End-to-end two-pivot fixtures now exercise both primal steepest-edge and Devex
+pricing. A four-row steepest-edge fixture with zero norm-drift threshold also
+forces exact norm recomputation and next-iteration refactorization. It exposed
+an eager retry in Rust after `TestEnteringEdgeNormPrecision()`: upstream marks
+norms/prices for recomputation but allows the current precise pivot to proceed.
+Rust now does likewise, and its explicit pricing call sites honor the native
+`PrimalPrices` watcher by returning before requesting norms when a full price
+pass is pending. The case matches native status, basis, values, and exact
+operation clock (830 ns), closing a 365.5 ns excess from premature work.
+A separate feasible 4×4 dual fixture now takes the zero-threshold norm-drift
+request through the next-iteration forced LU refactorization and optimal
+cleanup. The same LP at the default threshold forbids both precision events;
+both runs match native status, basis, numerical state, and exact clock.
+A second 4×4 dual fixture covers early imprecise-pivot detection and adaptive
+LU threshold escalation, with a matched default-threshold control. Both
+agree with native on the final threshold bits, state, and operation clock.
 The first optimization call is now explicitly tracked: when Phase I has already
 reached a time or iteration limit, Rust skips the optimization cleanup that
 native GLOP never enters. This removes one excess solve in the Phase-I
-iteration-limit case, although its total clock still differs by 4 ns.
+iteration-limit case. The remaining 4 ns gap was subsequently closed by
+making the post-Phase-I objective reset lazy, as described above.
 The transformed dual Phase-I path now uses the basic values recomputed during
 `EndDualPhaseI()` rather than solving the same basis again during common dual
 Phase-II setup. Its native clock now matches exactly.
@@ -1027,6 +1099,11 @@ Progress through dataset gates:
 3. Netlib 25-smallest;
 4. Netlib 50-smallest;
 5. full Netlib without preprocessing;
+
+The optional upstream integrality-scale polishing path and
+`MinimizeFromTransposedMatrixWithSlack()` entry point remain unported; the
+ordinary continuous-LP solve does not invoke them without client opt-in.
+These are explicit Phase-4 fidelity gaps, not validated branches.
 
 Exit criteria:
 
@@ -1240,6 +1317,37 @@ the native fixture.
 `tools/compare_netlib_prefix.py` reproduces the localization without
 modifying the pinned upstream checkout. Do not use the 22,308-versus-115,513
 iteration counts as a direct native/Rust comparison.
+
+The remaining outlier `qap15` has a separate direct, unscaled dual-prefix
+fixture (`baselines/qap15-dual.json`). Native and Rust agree exactly on
+status, iteration count, ordered basis, reduced-cost bits, and dual-norm bits
+at 0, 10,000, 20,000, 30,000, and 40,000 pivots; their primal-value differences
+through 20,000 are signed zeros. The 30,000-pivot cap ends `IMPRECISE` in
+both implementations, with identical ordered basis, reduced-cost bits, and
+dual-norm bits. The 40,000-pivot cap returns `DUAL_FEASIBLE` in both, with the
+same basis and numerical fingerprints. The 20,000-pivot serial runs took
+13.5 seconds native and 18.3 seconds Rust (1.35×). A serial 40,000-pivot
+comparison initially took 141.7 seconds native and 240.8 seconds Rust
+(1.70×). Sampling localized much of the Rust cost to the Markowitz
+partially-permuted lower sparse solve. Iterating its DFS adjacency and numeric
+column entries through borrowed slices removes repeated indexed-access work
+without changing traversal or arithmetic order. The 40,000-pivot Rust solve
+then took 177.5 seconds (1.25× native); all five pinned snapshots, including
+the 40,000-pivot basis, reduced-cost bits, and norm bits, still agree. The
+remaining runtime gap is open.
+The opt-in `qap15_dual` regression checks these pinned snapshots. A native
+direct solve with a one-million-iteration cap did not terminate within a
+600-second wall bound, so this is not yet terminal validation. The public
+GLOP solve time in `baselines/netlib-glop.json` includes scaling and
+preprocessing and is not comparable to this direct Phase-4 experiment.
+A deeper 100,000-pivot cap reached `DUAL_FEASIBLE` in native GLOP after 253
+seconds, but the pre-optimization Rust port did not reach that cap within
+300 seconds.
+No terminal-state or 100,000-pivot equality claim is made from those runs;
+this large-model performance discrepancy remains part of Phase 4.
+At 50,000 pivots, native took 171.8 seconds and Rust exceeded a 180-second
+bound before the safe sparse-solve iteration change; that depth has not been
+rerun since, so no trajectory comparison there is claimed.
 
 Benchmark entry point: `tools/benchmark_netlib_solve.py` with release-built
 `glop/examples/netlib_timing.rs` and the native

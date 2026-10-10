@@ -951,8 +951,12 @@ fn compute(
 
     let lower_entries = lower_factor.num_entries();
     let upper_entries = upper_factor.num_entries();
-    num_fp_operations +=
-        10 * i64::try_from(lower_entries.saturating_add(upper_entries)).unwrap_or(i64::MAX);
+    // Native Markowitz returns immediately on a missing/small pivot. Its
+    // final L/U storage charge is reached only for a complete permutation.
+    if pivot_rows.len() == maximum_pivots {
+        num_fp_operations +=
+            10 * i64::try_from(lower_entries.saturating_add(upper_entries)).unwrap_or(i64::MAX);
+    }
     #[allow(clippy::cast_precision_loss)]
     let stats = (!matrix_is_empty).then(|| MarkowitzStats {
         basis_singleton_column_ratio: basis_singletons as f64 / num_rows as f64,
@@ -1064,6 +1068,22 @@ pub(crate) fn compute_pivot_sequence_with_operations(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn incomplete_candidate_permutation_skips_final_storage_clock() {
+        let mut matrix = SparseMatrix::new();
+        matrix.populate_from_zero(RowIndex::new(2), lp_data::lp_types::ColIndex::new(2));
+        for column in 0..2 {
+            matrix
+                .mutable_column(lp_data::lp_types::ColIndex::from_usize(column))
+                .add_entry(RowIndex::new(0), 1.0);
+        }
+        let (rows, columns, operations) =
+            compute_pivot_sequence_with_operations(&matrix, &[0, 1], &GlopParameters::default());
+        assert_eq!(rows, vec![0]);
+        assert_eq!(columns, vec![0]);
+        assert_eq!(operations, 0);
+    }
 
     #[test]
     fn adjustable_queue_returns_lowest_degree_without_sorting() {
