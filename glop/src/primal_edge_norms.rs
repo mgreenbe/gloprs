@@ -70,6 +70,13 @@ impl PrimalEdgeNorms {
         }
     }
 
+    /// The native matrix is updated in place; refresh our owned view while
+    /// retaining the edge-norm clock and its recomputation watchers.
+    pub(crate) fn rebind_matrix(&mut self, matrix: &SparseMatrix) {
+        self.matrix = matrix.clone();
+        self.clear();
+    }
+
     #[must_use]
     pub fn needs_basis_refactorization(&self) -> bool {
         self.pricing_rule == PricingRule::SteepestEdge && self.recompute_edge_squared_norms

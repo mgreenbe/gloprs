@@ -377,6 +377,53 @@ impl BasisRepresentation {
         Ok(())
     }
 
+    /// Rebind the unchanged basis to a matrix with appended structural columns.
+    /// The old slack columns move by `added_columns`, but the numerical basis
+    /// and its factorization do not change.
+    pub(crate) fn rebind_after_added_columns(
+        &mut self,
+        matrix: Rc<SparseMatrix>,
+        first_new_column: usize,
+        added_columns: usize,
+    ) {
+        if let BasisMatrix::View {
+            matrix: basis_matrix,
+            columns,
+        } = &mut self.basis
+        {
+            for column in columns {
+                if *column >= first_new_column {
+                    *column += added_columns;
+                }
+            }
+            *basis_matrix = matrix;
+        }
+        for column in self.right_pool_mapping.get_mut().iter_mut().flatten() {
+            if column.to_usize() >= first_new_column {
+                *column = ColIndex::from_usize(column.to_usize() + added_columns);
+            }
+        }
+    }
+
+    /// GLOP's saved-basis recovery invokes Markowitz on the basic candidate
+    /// columns before attempting another `InitializeFirstBasis()`.
+    pub(crate) fn compute_initial_basis(
+        &mut self,
+        candidates: &[ColIndex],
+    ) -> Result<RowToColMapping, FactorizationError> {
+        let BasisMatrix::View { matrix, .. } = &self.basis else {
+            return Err(FactorizationError::DimensionMismatch);
+        };
+        let (basis, operations) = LuFactorization::compute_initial_basis_with_operations(
+            matrix,
+            candidates,
+            &self.parameters,
+        )?;
+        self.deterministic_time
+            .set(self.deterministic_time.get() + deterministic_time_for_fp_operations(operations));
+        Ok(basis)
+    }
+
     fn initialize(
         basis: BasisMatrix,
         parameters: &GlopParameters,

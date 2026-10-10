@@ -44,7 +44,7 @@
       "matrix": [[0, 0, "1"]],
       "variables": [["1", "0", "inf"]],
       "constraints": [["-inf", "1"]],
-      "covers": ["warm_start_basis", "dual_phase_two"]
+      "covers": ["warm_start_basis", "warm_added_row_reinitialize_basis", "dual_phase_two"]
     },
     {
       "name": "warm_added_row",
@@ -53,7 +53,16 @@
       "matrix": [[0, 0, "1"]],
       "variables": [["1", "0", "inf"]],
       "constraints": [["1", "inf"]],
-      "covers": ["warm_start_basis", "dual_phase_two"]
+      "covers": ["warm_start_basis", "warm_added_row_reinitialize_basis", "dual_phase_two"]
+    },
+    {
+      "name": "warm_added_row_condition_fallback",
+      "mode": "warm_added_row_low_condition_threshold",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["1", "0", "inf"]],
+      "constraints": [["1", "inf"]],
+      "covers": ["warm_start_basis", "warm_added_row_reinitialize_basis", "warm_added_row_basis_fallback", "warm_added_row_compute_initial_basis", "warm_added_row_recovered_basis_used", "dual_phase_two"]
     },
     {
       "name": "primal_phase_two_positive_iteration_limit",
@@ -81,6 +90,15 @@
       "variables": [["-1", "0", "inf"], ["-2", "0", "inf"]],
       "constraints": [["-inf", "0.2"], ["-inf", "0.2"]],
       "covers": ["primal_phase_two", "primal_reduced_cost_precision_retry", "primal_precision_refactorization"]
+    },
+    {
+      "name": "adaptive_lu_pivot_threshold",
+      "mode": "adaptive_pivot",
+      "iterations": 100,
+      "matrix": [[0, 0, "0.7"], [1, 0, "1.6"], [2, 0, "0.4"], [0, 1, "1.5"], [1, 1, "1.0"], [2, 1, "0.6"], [0, 2, "1.6"], [1, 2, "1.6"], [2, 2, "0.9"]],
+      "variables": [["-1", "0", "inf"], ["-2", "0", "inf"], ["-3", "0", "inf"]],
+      "constraints": [["-inf", "1"], ["-inf", "1"], ["-inf", "1"]],
+      "covers": ["primal_phase_two", "adaptive_lu_pivot_threshold"]
     },
     {
       "name": "primal_degenerate_pivot",
@@ -260,7 +278,54 @@
       "matrix": [[0, 0, "1"]],
       "variables": [["-1", "0", "inf"]],
       "constraints": [["-inf", "1"]],
-      "covers": ["warm_start_basis", "optimal_cleanup"]
+      "covers": ["warm_start_basis", "warm_primal_reuse_factorization", "optimal_cleanup"]
+    },
+    {
+      "name": "warm_auto_primal_repeat",
+      "mode": "warm_auto_primal_repeat",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "inf"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["warm_start_basis", "warm_primal_reuse_factorization", "optimal_cleanup"]
+    },
+    {
+      "name": "warm_clear_state_restarts_from_scratch",
+      "mode": "warm_clear_state",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "inf"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["primal_phase_two"],
+      "forbids": ["warm_primal_reuse_factorization", "warm_start_basis"]
+    },
+    {
+      "name": "warm_external_then_restore_saved_state",
+      "mode": "warm_external_then_restore",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "inf"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["warm_start_basis", "optimal_cleanup"],
+      "forbids": ["warm_primal_reuse_factorization"]
+    },
+    {
+      "name": "warm_auto_primal_objective_change",
+      "mode": "warm_auto_primal_objective_change",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "inf"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["warm_start_basis", "warm_primal_reuse_factorization", "primal_phase_two"]
+    },
+    {
+      "name": "warm_primal_changed_objective_limit",
+      "mode": "warm_primal_limit_change",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "inf"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["warm_start_basis", "warm_primal_reuse_factorization", "primal_objective_limit"]
     },
     {
       "name": "warm_bound_change",
@@ -279,6 +344,42 @@
       "variables": [["-1", "0", "inf"]],
       "constraints": [["-inf", "1"]],
       "covers": ["warm_reuse_factorization", "dual_phase_two"]
+    },
+    {
+      "name": "warm_dual_repeat_reuses_factorization",
+      "mode": "warm_dual_repeat",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "inf"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["warm_reuse_factorization", "dual_phase_two"]
+    },
+    {
+      "name": "warm_auto_dual_repeat",
+      "mode": "warm_auto_dual_repeat",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "inf"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["warm_reuse_factorization", "dual_phase_two"]
+    },
+    {
+      "name": "warm_auto_dual_bound_change",
+      "mode": "warm_auto_dual_bound_change",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "inf"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["warm_reuse_factorization", "dual_phase_two"]
+    },
+    {
+      "name": "warm_dual_changed_objective_limit",
+      "mode": "warm_dual_limit_change",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["1", "0", "inf"]],
+      "constraints": [["1", "inf"]],
+      "covers": ["warm_reuse_factorization", "dual_objective_limit"]
     },
     {
       "name": "dual_unbounded_ray",
@@ -386,7 +487,7 @@
       "matrix": [[0, 0, "1"]],
       "variables": [["-1", "0", "inf"]],
       "constraints": [["-inf", "1"]],
-      "covers": ["warm_start_basis", "primal_phase_two"]
+      "covers": ["warm_start_basis", "warm_primal_reuse_factorization", "primal_phase_two"]
     },
     {
       "name": "dual_degenerate_cost_shift",
@@ -413,7 +514,7 @@
       "matrix": [[0, 0, "1"]],
       "variables": [["-1", "0", "inf"]],
       "constraints": [["-inf", "1"]],
-      "covers": ["warm_start_basis", "warm_added_column_status_remap", "primal_phase_two"]
+      "covers": ["warm_start_basis", "warm_added_column_status_remap", "warm_added_column_reuse_factorization", "primal_phase_two"]
     },
     {
       "name": "warm_added_column_from_slack_basis",
@@ -422,7 +523,7 @@
       "matrix": [[0, 0, "1"]],
       "variables": [["1", "0", "inf"]],
       "constraints": [["-inf", "1"]],
-      "covers": ["warm_start_basis", "warm_added_column_status_remap", "primal_phase_two"]
+      "covers": ["warm_start_basis", "warm_added_column_status_remap", "warm_added_column_reuse_factorization", "primal_phase_two"]
     },
     {
       "name": "supplied_nondefault_basis",
@@ -517,6 +618,26 @@
       "covers": ["dual_dedicated_phase_one", "dual_phase_one_time_limit"]
     },
     {
+      "name": "primal_deterministic_limit_positive",
+      "mode": "primal",
+      "iterations": 100,
+      "deterministic_limit": "0.000000000001",
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["0", "0", "inf"], ["0", "0", "inf"]],
+      "constraints": [["1", "inf"], ["1", "inf"]],
+      "covers": ["primal_phase_one", "primal_phase_time_limit", "primal_phase_one_limit"]
+    },
+    {
+      "name": "dual_deterministic_limit_positive",
+      "mode": "dual",
+      "iterations": 100,
+      "deterministic_limit": "0.00000003",
+      "matrix": [[0, 0, "1"], [1, 0, "1"], [0, 1, "1"], [1, 1, "2"]],
+      "variables": [["1", "0", "inf"], ["1", "0", "inf"]],
+      "constraints": [["2", "inf"], ["3", "inf"]],
+      "covers": ["dual_phase_two"]
+    },
+    {
       "name": "starting_free_variable_value",
       "mode": "starting_values",
       "iterations": 100,
@@ -535,6 +656,44 @@
       "covers": ["starting_variable_values", "primal_push"]
     },
     {
+      "name": "starting_boxed_superbasic_snapped_to_lower_bound",
+      "mode": "starting_values_push_boxed",
+      "iterations": 100,
+      "matrix": [],
+      "variables": [["0", "0", "1"]],
+      "constraints": [],
+      "covers": ["starting_variable_values", "warm_start_basis", "warm_superbasic_snapped_to_bound"],
+      "forbids": ["primal_push"]
+    },
+    {
+      "name": "starting_boxed_superbasic_snapped_at_upper_distance_boundary",
+      "mode": "starting_values_push_boxed_snap_upper_boundary",
+      "iterations": 100,
+      "matrix": [],
+      "variables": [["0", "0", "1"]],
+      "constraints": [],
+      "covers": ["starting_variable_values", "warm_start_basis", "warm_superbasic_snapped_to_bound"],
+      "forbids": ["primal_push"]
+    },
+    {
+      "name": "starting_boxed_variable_pushed_to_lower_bound",
+      "mode": "starting_values_push_boxed_no_snap",
+      "iterations": 100,
+      "matrix": [],
+      "variables": [["0", "0", "1"]],
+      "constraints": [],
+      "covers": ["starting_variable_values", "warm_start_basis", "primal_push"]
+    },
+    {
+      "name": "starting_boxed_variable_pushed_to_upper_bound",
+      "mode": "starting_values_push_boxed_upper_no_snap",
+      "iterations": 100,
+      "matrix": [],
+      "variables": [["0", "0", "1"]],
+      "constraints": [],
+      "covers": ["starting_variable_values", "warm_start_basis", "primal_push"]
+    },
+    {
       "name": "starting_free_variable_push_pivot",
       "mode": "starting_values_push_with_row",
       "iterations": 100,
@@ -542,6 +701,56 @@
       "variables": [["0", "-inf", "inf"]],
       "constraints": [["0", "1"]],
       "covers": ["starting_variable_values", "primal_push", "primal_push_pivot"]
+    },
+    {
+      "name": "starting_free_variable_push_interrupted",
+      "mode": "starting_values_push_with_row",
+      "iterations": 100,
+      "deterministic_limit": "1.2e-8",
+      "matrix": [[0, 0, "1"]],
+      "variables": [["0", "-inf", "inf"]],
+      "constraints": [["0", "1"]],
+      "covers": ["starting_variable_values", "primal_push", "primal_push_time_limit"],
+      "forbids": ["primal_push_pivot"]
+    },
+    {
+      "name": "starting_free_variable_push_refactorization",
+      "mode": "starting_values_push_refactorize",
+      "iterations": 100,
+      "matrix": [[0, 0, "1e-5"], [1, 0, "1"], [2, 0, "1"], [1, 1, "1"]],
+      "variables": [["0", "-inf", "inf"], ["0", "-inf", "inf"]],
+      "constraints": [["4e-6", "inf"], ["0.75", "inf"], ["-10", "10"]],
+      "covers": ["starting_variable_values", "primal_push", "primal_push_refactorization_requested", "primal_push_pivot"]
+    },
+    {
+      "name": "starting_free_variable_push_control",
+      "mode": "starting_values_push_control",
+      "iterations": 100,
+      "matrix": [[0, 0, "1e-5"], [1, 0, "1"], [2, 0, "1"], [1, 1, "1"]],
+      "variables": [["0", "-inf", "inf"], ["0", "-inf", "inf"]],
+      "constraints": [["4e-6", "inf"], ["0.75", "inf"], ["-10", "10"]],
+      "covers": ["starting_variable_values", "primal_push", "primal_push_pivot"],
+      "forbids": ["primal_push_refactorization_requested"]
+    },
+    {
+      "name": "two_free_variables_no_start_control",
+      "mode": "primal",
+      "iterations": 100,
+      "matrix": [[0, 0, "1e-5"], [1, 0, "1"], [2, 0, "1"], [1, 1, "1"]],
+      "variables": [["0", "-inf", "inf"], ["0", "-inf", "inf"]],
+      "constraints": [["4e-6", "inf"], ["0.75", "inf"], ["-10", "10"]],
+      "covers": ["primal_phase_one", "optimal_cleanup"],
+      "forbids": ["starting_variable_values", "primal_push"]
+    },
+    {
+      "name": "starting_free_variable_no_push_control",
+      "mode": "starting_values_two_no_push",
+      "iterations": 100,
+      "matrix": [[0, 0, "1e-5"], [1, 0, "1"], [2, 0, "1"], [1, 1, "1"]],
+      "variables": [["0", "-inf", "inf"], ["0", "-inf", "inf"]],
+      "constraints": [["4e-6", "inf"], ["0.75", "inf"], ["-10", "10"]],
+      "covers": ["starting_variable_values", "optimal_cleanup"],
+      "forbids": ["primal_push"]
     }
   ]
 }

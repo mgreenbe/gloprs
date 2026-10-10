@@ -305,6 +305,15 @@ impl LuFactorization {
         candidates: &[ColIndex],
         parameters: &GlopParameters,
     ) -> Result<RowToColMapping, FactorizationError> {
+        Self::compute_initial_basis_with_operations(matrix, candidates, parameters)
+            .map(|(basis, _)| basis)
+    }
+
+    pub(crate) fn compute_initial_basis_with_operations(
+        matrix: &SparseMatrix,
+        candidates: &[ColIndex],
+        parameters: &GlopParameters,
+    ) -> Result<(RowToColMapping, i64), FactorizationError> {
         parameters
             .validate()
             .map_err(FactorizationError::InvalidParameters)?;
@@ -318,8 +327,12 @@ impl LuFactorization {
             return Err(FactorizationError::DimensionMismatch);
         }
         let candidate_indices: Vec<_> = candidates.iter().map(|column| column.to_usize()).collect();
-        let (pivot_rows, pivot_columns) =
-            markowitz::compute_pivot_sequence(matrix, &candidate_indices, parameters);
+        let (pivot_rows, pivot_columns, num_fp_operations) =
+            markowitz::compute_pivot_sequence_with_operations(
+                matrix,
+                &candidate_indices,
+                parameters,
+            );
         let mut pivoted_rows = vec![false; num_rows];
         for row in pivot_rows {
             pivoted_rows[row] = true;
@@ -341,7 +354,7 @@ impl LuFactorization {
                 basis.push(candidates[position]);
             }
         }
-        Ok(basis)
+        Ok((basis, num_fp_operations))
     }
 
     #[doc(hidden)]

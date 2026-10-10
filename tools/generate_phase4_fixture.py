@@ -23,7 +23,7 @@ def input_text(case: dict[str, object]) -> str:
     assert isinstance(variables, list)
     assert isinstance(constraints, list)
     lines = [
-        f"{case['mode']} {len(constraints)} {len(variables)} {len(matrix)} {case['iterations']}"
+        f"{case['mode']} {len(constraints)} {len(variables)} {len(matrix)} {case['iterations']} {case.get('deterministic_limit', 'inf')}"
     ]
     lines.extend(" ".join(map(str, row)) for row in matrix)
     lines.extend(" ".join(map(str, row)) for row in variables)
@@ -64,6 +64,8 @@ def main() -> None:
         required = {
             "status", "iterations", "objective_bits", "basis", "value_bits",
             "reduced_bits", "primal_ray_bits", "dual_ray_bits",
+            "lu_pivot_threshold_bits",
+            "deterministic_time_bits",
         }
         if not required <= fields.keys():
             raise RuntimeError(f"{case['name']}: native adapter returned {output!r}")
@@ -73,6 +75,8 @@ def main() -> None:
                 "status": fields["status"][0],
                 "iterations": int(fields["iterations"][0]),
                 "objective_bits": int(fields["objective_bits"][0]),
+                "lu_pivot_threshold_bits": int(fields["lu_pivot_threshold_bits"][0]),
+                "deterministic_time_bits": int(fields["deterministic_time_bits"][0]),
                 "basis": list(map(int, fields["basis"])),
                 "value_bits": list(map(int, fields["value_bits"])),
                 "reduced_bits": list(map(int, fields["reduced_bits"])),

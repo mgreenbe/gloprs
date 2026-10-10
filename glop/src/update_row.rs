@@ -88,6 +88,15 @@ impl UpdateRow {
         self.update_row_computed_for = None;
     }
 
+    pub(crate) fn rebind_matrix(&mut self, matrix: &SparseMatrix) {
+        self.transposed_matrix = matrix.transpose();
+        self.unit_row_left_inverse = ScatteredRow::new(ColIndex::new(matrix.num_rows().value()));
+        self.non_zero_positions.clear();
+        self.non_zero_position_set = ColBitVec::new(matrix.num_cols());
+        self.coefficients.resize(matrix.num_cols().to_usize(), 0.0);
+        self.invalidate();
+    }
+
     pub fn set_parameters(&mut self, use_transposed_matrix: bool, drop_tolerance: f64) {
         self.use_transposed_matrix = use_transposed_matrix;
         self.drop_tolerance = drop_tolerance;

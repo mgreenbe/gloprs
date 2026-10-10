@@ -1036,6 +1036,15 @@ pub(crate) fn compute_pivot_sequence(
     columns: &[usize],
     parameters: &GlopParameters,
 ) -> (Vec<usize>, Vec<usize>) {
+    let (rows, columns, _) = compute_pivot_sequence_with_operations(matrix, columns, parameters);
+    (rows, columns)
+}
+
+pub(crate) fn compute_pivot_sequence_with_operations(
+    matrix: &SparseMatrix,
+    columns: &[usize],
+    parameters: &GlopParameters,
+) -> (Vec<usize>, Vec<usize>, i64) {
     let mut lower = TriangularMatrix::empty(Triangle::Lower, true);
     let mut upper = TriangularMatrix::empty(Triangle::Upper, false);
     let result = compute(
@@ -1045,7 +1054,11 @@ pub(crate) fn compute_pivot_sequence(
         &mut lower,
         &mut upper,
     );
-    (result.pivot_rows, result.pivot_columns)
+    (
+        result.pivot_rows,
+        result.pivot_columns,
+        result.num_fp_operations,
+    )
 }
 
 #[cfg(test)]

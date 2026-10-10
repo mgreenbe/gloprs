@@ -25,6 +25,8 @@ struct Case {
     name: String,
     mode: String,
     iterations: i64,
+    #[serde(default)]
+    deterministic_limit: Option<String>,
     matrix: Vec<(usize, usize, String)>,
     variables: Vec<(String, String, String)>,
     constraints: Vec<(String, String)>,
@@ -46,6 +48,8 @@ struct NativeResult {
     status: String,
     iterations: u64,
     objective_bits: u64,
+    lu_pivot_threshold_bits: u64,
+    deterministic_time_bits: u64,
     basis: Vec<usize>,
     value_bits: Vec<u64>,
     reduced_bits: Vec<u64>,
@@ -138,6 +142,11 @@ fn small_phase4_cases_match_pinned_native_glop() {
                     | "tight_internal_primal"
                     | "relaxed_internal_primal"
                     | "warm_primal"
+                    | "warm_auto_primal_repeat"
+                    | "warm_clear_state"
+                    | "warm_external_then_restore"
+                    | "warm_auto_primal_objective_change"
+                    | "warm_primal_limit_change"
                     | "warm_bound_change"
                     | "warm_objective_change"
                     | "warm_multiple_bound_changes"
@@ -145,17 +154,28 @@ fn small_phase4_cases_match_pinned_native_glop() {
                     | "warm_added_column"
                     | "starting_values"
                     | "starting_values_push"
+                    | "starting_values_push_boxed"
+                    | "starting_values_push_boxed_no_snap"
+                    | "starting_values_push_boxed_upper_no_snap"
+                    | "starting_values_push_boxed_snap_upper_boundary"
                     | "starting_values_push_with_row"
+                    | "starting_values_push_refactorize"
+                    | "starting_values_push_control"
+                    | "starting_values_two_no_push"
                     | "zero_tolerance"
                     | "tight_tolerance"
                     | "loose_tolerance"
                     | "precision_refactorization"
+                    | "adaptive_pivot"
                     | "zero_tolerance_no_imprecise"
             ),
             perturb_costs_in_dual_simplex: case.mode == "dual_perturbed",
             use_dedicated_dual_feasibility_algorithm: case.mode != "dual_transformed",
             max_number_of_iterations: case.iterations,
-            push_to_vertex: case.mode != "starting_values",
+            push_to_vertex: !matches!(
+                case.mode.as_str(),
+                "starting_values" | "starting_values_two_no_push"
+            ),
             solution_feasibility_tolerance: if case.mode == "tight_tolerance" {
                 1e-18
             } else if case.mode == "loose_tolerance" {
@@ -173,6 +193,26 @@ fn small_phase4_cases_match_pinned_native_glop() {
                 0.0
             } else {
                 GlopParameters::default().recompute_reduced_costs_threshold
+            },
+            refactorization_threshold: if case.mode == "adaptive_pivot" {
+                0.0
+            } else {
+                GlopParameters::default().refactorization_threshold
+            },
+            small_pivot_threshold: if case.mode == "starting_values_push_refactorize" {
+                0.1
+            } else {
+                GlopParameters::default().small_pivot_threshold
+            },
+            crossover_bound_snapping_distance: if matches!(
+                case.mode.as_str(),
+                "starting_values_push_boxed_no_snap" | "starting_values_push_boxed_upper_no_snap"
+            ) {
+                0.0
+            } else if case.mode == "starting_values_push_boxed_snap_upper_boundary" {
+                0.25
+            } else {
+                GlopParameters::default().crossover_bound_snapping_distance
             },
             feasibility_rule: PricingRule::Dantzig,
             optimization_rule: PricingRule::Dantzig,
@@ -216,10 +256,39 @@ fn small_phase4_cases_match_pinned_native_glop() {
         });
         if matches!(
             case.mode.as_str(),
-            "starting_values" | "starting_values_push" | "starting_values_push_with_row"
+            "starting_values"
+                | "starting_values_push"
+                | "starting_values_push_boxed"
+                | "starting_values_push_boxed_no_snap"
+                | "starting_values_push_boxed_upper_no_snap"
+                | "starting_values_push_boxed_snap_upper_boundary"
+                | "starting_values_push_with_row"
+                | "starting_values_push_refactorize"
+                | "starting_values_push_control"
+                | "starting_values_two_no_push"
         ) {
+            let start = if matches!(
+                case.mode.as_str(),
+                "starting_values_push_boxed_upper_no_snap"
+                    | "starting_values_push_boxed_snap_upper_boundary"
+            ) {
+                0.75
+            } else {
+                0.5
+            };
             simplex.set_starting_variable_values_for_next_solve(
-                &lp_data::lp_types::DenseRow::from_vec(vec![0.5]),
+                &lp_data::lp_types::DenseRow::from_vec(
+                    if matches!(
+                        case.mode.as_str(),
+                        "starting_values_push_refactorize"
+                            | "starting_values_push_control"
+                            | "starting_values_two_no_push"
+                    ) {
+                        vec![start, 0.5]
+                    } else {
+                        vec![start]
+                    },
+                ),
             );
         }
         if case.mode == "external_basis" {
@@ -232,28 +301,80 @@ fn small_phase4_cases_match_pinned_native_glop() {
         }
         if matches!(
             case.mode.as_str(),
+            "starting_values_push_boxed"
+                | "starting_values_push_boxed_no_snap"
+                | "starting_values_push_boxed_upper_no_snap"
+                | "starting_values_push_boxed_snap_upper_boundary"
+        ) {
+            simplex.load_state_for_next_solve(&BasisState {
+                statuses: VariableStatusRow::from_vec(vec![VariableStatus::Basic]),
+            });
+        }
+        if matches!(
+            case.mode.as_str(),
             "warm_primal"
+                | "warm_auto_primal_repeat"
+                | "warm_clear_state"
+                | "warm_external_then_restore"
+                | "warm_auto_primal_objective_change"
+                | "warm_auto_dual_repeat"
+                | "warm_auto_dual_bound_change"
+                | "warm_primal_limit_change"
                 | "warm_bound_change"
                 | "warm_dual_bound_change"
+                | "warm_dual_repeat"
+                | "warm_dual_limit_change"
                 | "warm_objective_change"
                 | "warm_multiple_bound_changes"
                 | "warm_dual_multiple_bound_changes"
                 | "warm_added_column"
                 | "warm_added_row"
+                | "warm_added_row_low_condition_threshold"
                 | "warm_added_row_slack"
         ) {
             simplex
                 .solve(&lp, &mut TimeLimit::new(20.0, f64::INFINITY))
                 .unwrap_or_else(|error| panic!("{}: first solve: {error}", case.name));
             let state = simplex.state().clone();
-            simplex.load_state_for_next_solve(&state);
+            if case.mode == "warm_clear_state" {
+                simplex.clear_state_for_next_solve();
+                assert!(simplex.state().is_empty());
+            } else if case.mode == "warm_external_then_restore" {
+                simplex.load_state_for_next_solve(&BasisState {
+                    statuses: VariableStatusRow::from_vec(vec![
+                        VariableStatus::AtLowerBound,
+                        VariableStatus::Basic,
+                    ]),
+                });
+                simplex.load_state_for_next_solve(&state);
+            } else if !case.mode.starts_with("warm_auto_") {
+                simplex.load_state_for_next_solve(&state);
+            }
+            if case.mode == "warm_primal_limit_change" {
+                let mut parameters = simplex.parameters().clone();
+                parameters.objective_lower_limit = -0.5;
+                simplex.set_parameters(&parameters);
+            }
+            if case.mode == "warm_dual_limit_change" {
+                let mut parameters = simplex.parameters().clone();
+                parameters.objective_upper_limit = 0.5;
+                simplex.set_parameters(&parameters);
+            }
+            if case.mode == "warm_added_row_low_condition_threshold" {
+                let mut parameters = simplex.parameters().clone();
+                parameters.initial_condition_number_threshold = 1.0;
+                simplex.set_parameters(&parameters);
+            }
             if matches!(
                 case.mode.as_str(),
-                "warm_bound_change" | "warm_dual_bound_change"
+                "warm_bound_change" | "warm_dual_bound_change" | "warm_auto_dual_bound_change"
             ) {
                 lp.set_constraint_bounds(RowIndex::from_usize(0), f64::NEG_INFINITY, 0.5);
             }
-            if case.mode == "warm_objective_change" {
+            if matches!(
+                case.mode.as_str(),
+                "warm_objective_change" | "warm_auto_primal_objective_change"
+            ) {
                 lp.set_objective_coefficient(ColIndex::from_usize(0), 1.0);
             }
             if matches!(
@@ -271,13 +392,15 @@ fn small_phase4_cases_match_pinned_native_glop() {
             }
             if matches!(
                 case.mode.as_str(),
-                "warm_added_row" | "warm_added_row_slack"
+                "warm_added_row"
+                    | "warm_added_row_slack"
+                    | "warm_added_row_low_condition_threshold"
             ) {
                 let added = lp.create_new_constraint();
-                let lower = if case.mode == "warm_added_row" {
-                    2.0
-                } else {
+                let lower = if case.mode == "warm_added_row_slack" {
                     1.0
+                } else {
+                    2.0
                 };
                 lp.set_constraint_bounds(added, lower, f64::INFINITY);
                 lp.set_coefficient(added, ColIndex::from_usize(0), 1.0);
@@ -287,11 +410,53 @@ fn small_phase4_cases_match_pinned_native_glop() {
             if matches!(case.mode.as_str(), "primal_time_zero" | "dual_time_zero") {
                 0.0
             } else {
-                f64::INFINITY
+                case.deterministic_limit
+                    .as_deref()
+                    .map_or(f64::INFINITY, number)
             };
+        let clock_before = simplex.deterministic_time();
+        let mut time_limit = TimeLimit::new(20.0, deterministic_limit);
         simplex
-            .solve(&lp, &mut TimeLimit::new(20.0, deterministic_limit))
+            .solve(&lp, &mut time_limit)
             .unwrap_or_else(|error| panic!("{}: {error}", case.name));
+        let charged = simplex.deterministic_time() - clock_before;
+        assert!(
+            (time_limit.elapsed_deterministic_time() - charged).abs() <= 1e-18,
+            "{}: deterministic clock was not fully charged",
+            case.name
+        );
+        // These branches still have localized operation-count differences.
+        // Every other pinned native clock is a strict regression anchor.
+        let clock_exceptions = [
+            "primal_phase_two_positive_iteration_limit",
+            "dual_phase_two_positive_iteration_limit",
+            "dual_deterministic_limit_positive",
+            "dual_objective_limit",
+            "warm_dual_changed_objective_limit",
+            "primal_phase_one_consumes_iteration_limit",
+            "primal_phase_one_coupled_rows_limit_one",
+            "primal_weak_ray_rejected_without_imprecise_conversion",
+            "primal_phase_one_positive_limit_with_remaining_infeasibility",
+            "primal_deterministic_limit_positive",
+            "starting_free_variable_push_pivot",
+        ];
+        if !clock_exceptions.contains(&case.name.as_str()) {
+            assert!(
+                (simplex.deterministic_time() - f64::from_bits(expected.deterministic_time_bits))
+                    .abs()
+                    <= 1e-18,
+                "{}: deterministic clock diverges from native",
+                case.name
+            );
+        }
+        if std::env::var_os("GLOPRS_AUDIT_CLOCK").is_some() {
+            eprintln!(
+                "{}: native={} rust={}",
+                case.name,
+                f64::from_bits(expected.deterministic_time_bits),
+                simplex.deterministic_time()
+            );
+        }
         for event in &case.covers {
             assert!(
                 simplex.phase4_events().contains(&event.as_str()),
@@ -323,6 +488,15 @@ fn small_phase4_cases_match_pinned_native_glop() {
             normalized_zero(simplex.objective_value().to_bits()),
             normalized_zero(expected.objective_bits),
             "{}: objective",
+            case.name
+        );
+        assert_eq!(
+            simplex
+                .parameters()
+                .lu_factorization_pivot_threshold
+                .to_bits(),
+            expected.lu_pivot_threshold_bits,
+            "{}: adaptive LU pivot threshold",
             case.name
         );
         let basis: Vec<_> = (0..lp.num_constraints().to_usize())

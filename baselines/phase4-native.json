@@ -1,12 +1,14 @@
 {
   "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
-  "cases_sha256": "7b26717f5fa684373a565ee5e4e22f3b3b4c0050a08665b2c1a21acd09aa557d",
+  "cases_sha256": "2fdac15376b31b81c8594dbd585ddb1efc35837a28bd5b34704d52230e28b870",
   "results": [
     {
       "name": "primal_phase_one_two_pivots_incremental",
       "status": "OPTIMAL",
       "iterations": 2,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4505896235478457793,
       "basis": [
         0,
         1
@@ -31,6 +33,8 @@
       "status": "INIT",
       "iterations": 1,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4495226763221746686,
       "basis": [
         2,
         1
@@ -55,6 +59,8 @@
       "status": "INIT",
       "iterations": 1,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4498249077770783260,
       "basis": [
         0,
         3
@@ -79,6 +85,8 @@
       "status": "OPTIMAL",
       "iterations": 2,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4508284214921502689,
       "basis": [
         2,
         0
@@ -103,6 +111,8 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 4607182418800017408,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4507256277025524253,
       "basis": [
         1,
         0
@@ -125,6 +135,32 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 4611686018427387904,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4512750035617010228,
+      "basis": [
+        1,
+        0
+      ],
+      "value_bits": [
+        4611686018427387904,
+        13835058055282163712,
+        13835058055282163712
+      ],
+      "reduced_bits": [
+        0,
+        0,
+        13830554455654793216
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "warm_added_row_condition_fallback",
+      "status": "OPTIMAL",
+      "iterations": 1,
+      "objective_bits": 4611686018427387904,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4513732287845447113,
       "basis": [
         1,
         0
@@ -147,6 +183,8 @@
       "status": "PRIMAL_FEASIBLE",
       "iterations": 1,
       "objective_bits": 13823594347139766086,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4506274024797087366,
       "basis": [
         3,
         1
@@ -171,6 +209,8 @@
       "status": "DUAL_FEASIBLE",
       "iterations": 1,
       "objective_bits": 4609434218613702656,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4508624225308269303,
       "basis": [
         2,
         1
@@ -195,6 +235,8 @@
       "status": "OPTIMAL",
       "iterations": 2,
       "objective_bits": 13826761950705428588,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4508850898899447046,
       "basis": [
         1,
         0
@@ -215,10 +257,43 @@
       "dual_ray_bits": []
     },
     {
+      "name": "adaptive_lu_pivot_threshold",
+      "status": "OPTIMAL",
+      "iterations": 2,
+      "objective_bits": 13834495105328742400,
+      "lu_pivot_threshold_bits": 4579800533065604792,
+      "deterministic_time_bits": 4512806704014804664,
+      "basis": [
+        5,
+        2,
+        1
+      ],
+      "value_bits": [
+        0,
+        0,
+        4603804719079489536,
+        13830554455654793216,
+        13830554455654793216,
+        13826613805980844032
+      ],
+      "reduced_bits": [
+        4610672708511229544,
+        0,
+        0,
+        4598175219545276416,
+        4609997168567123968,
+        0
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
       "name": "primal_degenerate_pivot",
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4500939288668731811,
       "basis": [
         0
       ],
@@ -238,6 +313,8 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4506425140524539195,
       "basis": [
         1,
         0
@@ -260,6 +337,8 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4502148214488346441,
       "basis": [
         1
       ],
@@ -285,6 +364,8 @@
       "status": "DUAL_UNBOUNDED",
       "iterations": 0,
       "objective_bits": 9218868437227405312,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4488335184151331296,
       "basis": [
         1
       ],
@@ -306,6 +387,8 @@
       "status": "PRIMAL_UNBOUNDED",
       "iterations": 1,
       "objective_bits": 18442240474082181120,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4502450445943250098,
       "basis": [
         1
       ],
@@ -331,6 +414,8 @@
       "status": "DUAL_UNBOUNDED",
       "iterations": 0,
       "objective_bits": 9218868437227405312,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4488335184151331296,
       "basis": [
         1
       ],
@@ -352,6 +437,8 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4502450445943250098,
       "basis": [
         1
       ],
@@ -377,6 +464,8 @@
       "status": "IMPRECISE",
       "iterations": 0,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4488335184151331296,
       "basis": [
         1
       ],
@@ -398,6 +487,8 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4500939288668731811,
       "basis": [
         0
       ],
@@ -417,6 +508,8 @@
       "status": "PRIMAL_INFEASIBLE",
       "iterations": 0,
       "objective_bits": 4607182418800017408,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4485917332512102037,
       "basis": [
         1
       ],
@@ -436,6 +529,8 @@
       "status": "PRIMAL_UNBOUNDED",
       "iterations": 0,
       "objective_bits": 18442240474082181120,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 0,
       "basis": [],
       "value_bits": [
         0
@@ -453,6 +548,8 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 4607182418800017408,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4502148214488346440,
       "basis": [
         0
       ],
@@ -472,6 +569,8 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4503780615294132192,
       "basis": [
         0
       ],
@@ -491,6 +590,8 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4502752677398153754,
       "basis": [
         0
       ],
@@ -510,6 +611,8 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4503780615294132192,
       "basis": [
         0
       ],
@@ -529,6 +632,8 @@
       "status": "DUAL_FEASIBLE",
       "iterations": 0,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4517291414176243681,
       "basis": [
         1
       ],
@@ -548,6 +653,8 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 0,
       "basis": [],
       "value_bits": [
         4607182418800017408
@@ -563,6 +670,8 @@
       "status": "PRIMAL_FEASIBLE",
       "iterations": 1,
       "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4500032594304020840,
       "basis": [
         0
       ],
@@ -582,6 +691,8 @@
       "status": "DUAL_FEASIBLE",
       "iterations": 1,
       "objective_bits": 4607182418800017408,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4501845983033442784,
       "basis": [
         0
       ],
@@ -601,6 +712,113 @@
       "status": "OPTIMAL",
       "iterations": 0,
       "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4503629499566680363,
+      "basis": [
+        0
+      ],
+      "value_bits": [
+        4607182418800017408,
+        13830554455654793216
+      ],
+      "reduced_bits": [
+        0,
+        4607182418800017408
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "warm_auto_primal_repeat",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4503629499566680363,
+      "basis": [
+        0
+      ],
+      "value_bits": [
+        4607182418800017408,
+        13830554455654793216
+      ],
+      "reduced_bits": [
+        0,
+        4607182418800017408
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "warm_clear_state_restarts_from_scratch",
+      "status": "OPTIMAL",
+      "iterations": 1,
+      "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4505442888296102306,
+      "basis": [
+        0
+      ],
+      "value_bits": [
+        4607182418800017408,
+        13830554455654793216
+      ],
+      "reduced_bits": [
+        0,
+        4607182418800017408
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "warm_external_then_restore_saved_state",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4502148214488346441,
+      "basis": [
+        0
+      ],
+      "value_bits": [
+        4607182418800017408,
+        13830554455654793216
+      ],
+      "reduced_bits": [
+        0,
+        4607182418800017408
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "warm_auto_primal_objective_change",
+      "status": "OPTIMAL",
+      "iterations": 1,
+      "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4505896235478457794,
+      "basis": [
+        1
+      ],
+      "value_bits": [
+        0,
+        0
+      ],
+      "reduced_bits": [
+        4607182418800017408,
+        0
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "warm_primal_changed_objective_limit",
+      "status": "PRIMAL_FEASIBLE",
+      "iterations": 0,
+      "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4502752677398153754,
       "basis": [
         0
       ],
@@ -620,6 +838,8 @@
       "status": "OPTIMAL",
       "iterations": 0,
       "objective_bits": 13826050856027422720,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4502148214488346441,
       "basis": [
         0
       ],
@@ -639,6 +859,8 @@
       "status": "OPTIMAL",
       "iterations": 0,
       "objective_bits": 13826050856027422720,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4504989541113746821,
       "basis": [
         0
       ],
@@ -654,10 +876,96 @@
       "dual_ray_bits": []
     },
     {
+      "name": "warm_dual_repeat_reuses_factorization",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4504838425386294992,
+      "basis": [
+        0
+      ],
+      "value_bits": [
+        4607182418800017408,
+        13830554455654793216
+      ],
+      "reduced_bits": [
+        0,
+        4607182418800017408
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "warm_auto_dual_repeat",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4504838425386294992,
+      "basis": [
+        0
+      ],
+      "value_bits": [
+        4607182418800017408,
+        13830554455654793216
+      ],
+      "reduced_bits": [
+        0,
+        4607182418800017408
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "warm_auto_dual_bound_change",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "objective_bits": 13826050856027422720,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4504989541113746821,
+      "basis": [
+        0
+      ],
+      "value_bits": [
+        4602678819172646912,
+        13826050856027422720
+      ],
+      "reduced_bits": [
+        0,
+        4607182418800017408
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "warm_dual_changed_objective_limit",
+      "status": "DUAL_FEASIBLE",
+      "iterations": 0,
+      "objective_bits": 4607182418800017408,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4503780615294132192,
+      "basis": [
+        0
+      ],
+      "value_bits": [
+        4607182418800017408,
+        13830554455654793216
+      ],
+      "reduced_bits": [
+        0,
+        13830554455654793216
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
       "name": "dual_unbounded_ray",
       "status": "DUAL_UNBOUNDED",
       "iterations": 0,
       "objective_bits": 9218868437227405312,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4488335184151331296,
       "basis": [
         1
       ],
@@ -679,6 +987,8 @@
       "status": "DUAL_INFEASIBLE",
       "iterations": 0,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 0,
       "basis": [],
       "value_bits": [
         0
@@ -694,6 +1004,8 @@
       "status": "OPTIMAL",
       "iterations": 2,
       "objective_bits": 13826761950705428588,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4509115351422487746,
       "basis": [
         1,
         0
@@ -718,6 +1030,8 @@
       "status": "IMPRECISE",
       "iterations": 2,
       "objective_bits": 13826761950705428588,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4508888677831310003,
       "basis": [
         1,
         0
@@ -742,6 +1056,8 @@
       "status": "IMPRECISE",
       "iterations": 2,
       "objective_bits": 13826761950705428588,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4508888677831310003,
       "basis": [
         1,
         0
@@ -766,6 +1082,8 @@
       "status": "OPTIMAL",
       "iterations": 2,
       "objective_bits": 13826761950705428588,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4508888677831310003,
       "basis": [
         1,
         0
@@ -790,6 +1108,8 @@
       "status": "PRIMAL_FEASIBLE",
       "iterations": 0,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4505745119751005968,
       "basis": [
         1
       ],
@@ -809,6 +1129,8 @@
       "status": "INIT",
       "iterations": 0,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4488335184151331296,
       "basis": [
         1
       ],
@@ -828,6 +1150,8 @@
       "status": "PRIMAL_FEASIBLE",
       "iterations": 1,
       "objective_bits": 4607182418800017408,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4500032594304020840,
       "basis": [
         0
       ],
@@ -847,6 +1171,8 @@
       "status": "INIT",
       "iterations": 0,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4497342383406072287,
       "basis": [
         1
       ],
@@ -866,6 +1192,8 @@
       "status": "OPTIMAL",
       "iterations": 0,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4485917332512102037,
       "basis": [
         1
       ],
@@ -885,6 +1213,8 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4505896235478457794,
       "basis": [
         1
       ],
@@ -904,6 +1234,8 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4502148214488346440,
       "basis": [
         0
       ],
@@ -923,6 +1255,8 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 4607182418800017408,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4504007288885309936,
       "basis": [
         1
       ],
@@ -944,6 +1278,8 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 13835058055282163712,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4506500698388265110,
       "basis": [
         1
       ],
@@ -965,6 +1301,8 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 13835058055282163712,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4503054908853057413,
       "basis": [
         1
       ],
@@ -986,6 +1324,8 @@
       "status": "OPTIMAL",
       "iterations": 0,
       "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4490420932139472533,
       "basis": [
         0
       ],
@@ -1005,6 +1345,8 @@
       "status": "OPTIMAL",
       "iterations": 0,
       "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4506802929843168766,
       "basis": [
         0,
         1
@@ -1029,6 +1371,8 @@
       "status": "OPTIMAL",
       "iterations": 0,
       "objective_bits": 13830554455654793216,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4509606477536706188,
       "basis": [
         0,
         1
@@ -1053,6 +1397,8 @@
       "status": "PRIMAL_FEASIBLE",
       "iterations": 3,
       "objective_bits": 4621819117588971520,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4514280082357459993,
       "basis": [
         1,
         0
@@ -1077,6 +1423,8 @@
       "status": "OPTIMAL",
       "iterations": 3,
       "objective_bits": 4621819117588971520,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4523216446114957955,
       "basis": [
         1,
         0
@@ -1101,6 +1449,8 @@
       "status": "OPTIMAL",
       "iterations": 2,
       "objective_bits": 4621819117588971520,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4512825593480736142,
       "basis": [
         2,
         0
@@ -1125,6 +1475,8 @@
       "status": "OPTIMAL",
       "iterations": 3,
       "objective_bits": 13849694754071117824,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4516981275985661433,
       "basis": [
         4,
         5,
@@ -1154,6 +1506,8 @@
       "status": "OPTIMAL",
       "iterations": 2,
       "objective_bits": 13849694754071117823,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4512957819742256493,
       "basis": [
         4,
         0,
@@ -1183,6 +1537,8 @@
       "status": "INIT",
       "iterations": 0,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4481413732884731541,
       "basis": [
         1
       ],
@@ -1202,6 +1558,8 @@
       "status": "INIT",
       "iterations": 0,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4481413732884731541,
       "basis": [
         1
       ],
@@ -1217,10 +1575,64 @@
       "dual_ray_bits": []
     },
     {
+      "name": "primal_deterministic_limit_positive",
+      "status": "INIT",
+      "iterations": 1,
+      "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4494924531766843029,
+      "basis": [
+        2,
+        1
+      ],
+      "value_bits": [
+        0,
+        4607182418800017408,
+        0,
+        13830554455654793216
+      ],
+      "reduced_bits": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "dual_deterministic_limit_positive",
+      "status": "DUAL_FEASIBLE",
+      "iterations": 1,
+      "objective_bits": 4609434218613702656,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4506651814115716938,
+      "basis": [
+        2,
+        1
+      ],
+      "value_bits": [
+        0,
+        4609434218613702656,
+        13832806255468478464,
+        13837309855095848960
+      ],
+      "reduced_bits": [
+        4602678819172646912,
+        0,
+        0,
+        13826050856027422720
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
       "name": "starting_free_variable_value",
       "status": "OPTIMAL",
       "iterations": 0,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 0,
       "basis": [],
       "value_bits": [
         4602678819172646912
@@ -1236,9 +1648,79 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 0,
       "basis": [],
       "value_bits": [
         0
+      ],
+      "reduced_bits": [
+        0
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "starting_boxed_superbasic_snapped_to_lower_bound",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 0,
+      "basis": [],
+      "value_bits": [
+        0
+      ],
+      "reduced_bits": [
+        0
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "starting_boxed_superbasic_snapped_at_upper_distance_boundary",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 0,
+      "basis": [],
+      "value_bits": [
+        4607182418800017408
+      ],
+      "reduced_bits": [
+        0
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "starting_boxed_variable_pushed_to_lower_bound",
+      "status": "OPTIMAL",
+      "iterations": 1,
+      "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 0,
+      "basis": [],
+      "value_bits": [
+        0
+      ],
+      "reduced_bits": [
+        0
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "starting_boxed_variable_pushed_to_upper_bound",
+      "status": "OPTIMAL",
+      "iterations": 1,
+      "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 0,
+      "basis": [],
+      "value_bits": [
+        4607182418800017408
       ],
       "reduced_bits": [
         0
@@ -1251,6 +1733,8 @@
       "status": "OPTIMAL",
       "iterations": 1,
       "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4492234320868894477,
       "basis": [
         0
       ],
@@ -1259,6 +1743,143 @@
         9223372036854775808
       ],
       "reduced_bits": [
+        0,
+        0
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "starting_free_variable_push_interrupted",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4491629857959087162,
+      "basis": [
+        1
+      ],
+      "value_bits": [
+        4602678819172646912,
+        13826050856027422720
+      ],
+      "reduced_bits": [
+        0,
+        0
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "starting_free_variable_push_refactorization",
+      "status": "OPTIMAL",
+      "iterations": 2,
+      "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4508011855662783394,
+      "basis": [
+        0,
+        1,
+        4
+      ],
+      "value_bits": [
+        4600877379321698713,
+        4599976659396224615,
+        13749708429217623437,
+        13828302655841107968,
+        13824249416176474521
+      ],
+      "reduced_bits": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "starting_free_variable_push_control",
+      "status": "OPTIMAL",
+      "iterations": 2,
+      "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4500939288668731812,
+      "basis": [
+        0,
+        1,
+        4
+      ],
+      "value_bits": [
+        4600877379321698713,
+        4599976659396224615,
+        13749708429217623437,
+        13828302655841107968,
+        13824249416176474521
+      ],
+      "reduced_bits": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "two_free_variables_no_start_control",
+      "status": "OPTIMAL",
+      "iterations": 2,
+      "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4510022045787198719,
+      "basis": [
+        1,
+        4,
+        0
+      ],
+      "value_bits": [
+        4600877379321698713,
+        4599976659396224615,
+        13749708429217623437,
+        13828302655841107968,
+        13824249416176474521
+      ],
+      "reduced_bits": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "primal_ray_bits": [],
+      "dual_ray_bits": []
+    },
+    {
+      "name": "starting_free_variable_no_push_control",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "objective_bits": 0,
+      "lu_pivot_threshold_bits": 4576918229304087675,
+      "deterministic_time_bits": 4498551309225686917,
+      "basis": [
+        2,
+        3,
+        4
+      ],
+      "value_bits": [
+        4602678819172646912,
+        4602678819172646912,
+        13750889020838340849,
+        13830554455654793216,
+        13826050856027422720
+      ],
+      "reduced_bits": [
+        0,
+        0,
+        0,
         0,
         0
       ],

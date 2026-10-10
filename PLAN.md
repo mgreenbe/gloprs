@@ -803,7 +803,7 @@ The native adapter does not expose pivot events in this mode, so this artifact
 does not claim complete perturbed pivot-sequence coverage.
 
 A new small-LP native branch fixture (`baselines/phase4-cases.json` and
-`phase4-native.json`) now covers 60 targeted primal, dual, limit, ray, and
+`phase4-native.json`) now covers 82 targeted primal, dual, limit, ray, and
 warm-start cases. The Rust test requires each case's diagnostic branch tags
 to be visited and compares native status, iterations, objective, ordered basis,
 values, reduced costs, and rays; it also rejects newly instrumented tags with
@@ -835,12 +835,21 @@ added-column warm starts exercise both a structural and a slack basis from
 the previous solve. The slack-basis case exposed incorrect alignment of saved
 slack statuses after the new column shifted their indices; the status import
 now applies GLOP's `num_new_cols` remapping when the prior structural matrix
-is unchanged. This fixes the result/iteration discrepancy but does not yet
-port GLOP's quick incremental warm-start reuse: Rust still rebuilds its
-matrix and factorization on the second solve.
+is unchanged. The primal incremental path now retains the numerical
+factorization, rebinds its matrix view, and shifts saved slack indices. Both
+added-column fixtures match native status, trajectory, and operation clock.
 Two added-row warm starts now also match native GLOP, starting from both
-structural and slack bases. They validate saved-state alignment when the row
-count grows, but do not yet exercise upstream's quick incremental reuse path.
+structural and slack bases. The dual incremental path now extends the saved
+basis with new slacks and refactorizes it in the retained factorization object.
+Both fixtures match native status, trajectory, and deterministic operation
+time. The structural-basis case exposed an omitted condition-number check
+after refactorization, which accounted for exactly 10 ns.
+A third added-row fixture lowers the condition threshold between solves. The
+incremental basis is rejected and Rust falls back to a fresh basis, matching
+native status, iteration count, final state, and cumulative clock. The missing
+68 ns was GLOP's `ComputeInitialBasis(candidates)` Markowitz pass; Rust now
+executes that pass, uses its returned basis for the recovery attempt, and
+charges its actual operation count.
 Postsolve validation now follows GLOP's two unbounded-ray checks: the primal
 ray is tested for a nearby blocking bound and weak objective gain, while the
 dual ray's full row combination must prove infeasibility within the solution
@@ -860,9 +869,11 @@ native final status, iterations, basis, values, and reduced costs. Its shift
 does not force a shift-induced primal-to-dual cleanup switch, which remains uncovered.
 A two-pivot native fixture with zero reduced-cost recomputation threshold
 also reaches the precision retry and forced basis refactorization; its final
-state matches native GLOP. A separate zero pivot-refactorization threshold
-did not reach the early imprecise-pivot branch in this LP, so adaptive LU
-threshold escalation remains untested.
+state matches native GLOP. A zero pivot-refactorization threshold on that LP
+did not reach the early imprecise-pivot branch. A separate 3×3 pinned-native
+LP now does: the Rust branch visit and final LU pivot-threshold bits agree with
+native GLOP, along with status, iterations, ordered basis, values, reduced
+costs, and objective.
 
 The cleanup loop now also follows GLOP's residual-aware terminal classification:
 it checks primal equation residual and basic-column dual residual after removing
@@ -887,11 +898,88 @@ and objective.
 The post-optimal starting-value push now has a Rust counterpart to GLOP's
 `PrimalPush()`. Pinned native cases cover a free nonbasic variable moved to
 zero and a constrained push that pivots the basis; both agree in status,
-iteration count, ordered basis, values, and reduced costs. The solver also
-retains its existing basis factorization on a dual warm start when only bounds
-change and the saved state is its own. One- and two-row native cases exercise
+iteration count, ordered basis, values, and reduced costs. Warm-start
+initialization now matches GLOP's snapping before push: an unused BASIC
+candidate is made FREE, then snapped to its nearest finite bound when within
+`crossover_bound_snapping_distance` (infinite by default). A pinned bounded
+case checks that the push is skipped after snapping; with snapping disabled,
+the bounded `PrimalPush()` arm moves starting values 0.5 and 0.75 to the lower
+and upper bounds respectively, matching native state.
+The solver also retains its existing basis factorization on a dual warm start
+when only bounds change and the saved state is its own. One- and two-row native
+cases exercise
 that quick path, including the zero-pivot second solve. Added-row/column quick
-paths and the remaining push arms are still open in the coverage ledger.
+paths are now covered; remaining push arms are tracked in the coverage ledger.
+The unchanged-matrix quick path now also retains the ordered basis and LU for
+primal warm starts when bounds are unchanged, including a changed objective.
+It updates the objective and limit while keeping the primal edge-norm cache,
+as upstream does. The same path handles a repeated dual solve with unchanged
+bounds without rebuilding LU. Pinned-native cases for a repeated primal solve,
+a changed-objective primal solve, and a repeated dual solve assert the reuse
+branch and match status, iterations, ordered basis, values, reduced costs, and
+objective. The dimension-changing quick-start cases are covered separately.
+The quick path also refreshes both objective limits on every solve, like
+GLOP's `InitializeObjectiveLimit()`. Two more native cases change the primal
+and dual limits between solves and check their zero-pivot limit exits without
+rebuilding the basis.
+The saved basis state is now reused by default on a second `Solve()` call,
+as GLOP does. Four native cases omit any `LoadStateForNextSolve()` call and
+exercise repeated primal/dual solves, a changed primal objective, and changed
+dual bounds; all match GLOP's status, iterations, ordered basis, values,
+reduced costs, objective, and quick-path branch. An explicit state clear still
+forces a fresh solve, checked by a fifth native case. A bounded BASIC warm
+candidate at an upper-bound snapping-distance equality is also pinned.
+An additional deterministic-limit fixture stops inside `PrimalPush()` before
+its pending super-basic variable is moved. Native and Rust both return
+`OPTIMAL` with zero new pivots, the same value, and the same operation clock;
+the fixture requires the push-interruption branch and forbids a push pivot.
+The state API now also retains GLOP's external-state distinction across
+successive `LoadStateForNextSolve()` calls. Loading another basis and then
+restoring the previously saved statuses must still take the external-basis
+validation path, not the quick reuse path; a sixth native case verifies it.
+The revised-simplex driver now charges deterministic work at upstream's
+loop-entry and phase-exit boundaries, including basis factorization, update
+rows, pricing, reduced costs, edge norms, and dual Phase-I price updates.
+Two positive-limit native fixtures stop after finite work, and the fixture
+test checks that the time limit receives the entire clock increment. Native
+clock bits are pinned in the artifact for continued auditing. Exact operation
+counts are **not yet fully faithful**. The audit reconciled lazy reduced-cost
+recomputation, mandatory fresh dual solves, zero-iteration reoptimization,
+cached update-row lifetime, post-optimization cleanup before validating
+unbounded rays, PrimalPush's lazy reduced-cost invalidation, and the separate
+"cached" versus "precise" reduced-cost states needed after an adaptive LU
+rebuild. A pending full reduced-cost recomputation now also skips the
+incremental `UpdateRow` work, matching the precision-retry path. Common
+optimal primal/dual solves, zero-limit cases, repeated cleanup reoptimization,
+precision refactorization, and most ray branches now match native clock totals;
+the fixture asserts all exact totals. Seventy-one of 82 small branch fixtures
+match native clock totals. One weak-ray case and positive-limit
+branches still differ. The weak-ray fixture with `change_status_to_imprecise=false`
+now correctly skips native's guarded terminal residual check; its remaining
+clock gap is 4 ns low rather than 4 ns high, pointing to final reduced-cost
+snapshot lifecycle. Reconcile those
+component call paths before treating close deterministic thresholds as
+trajectory-equivalent.
+The first optimization call is now explicitly tracked: when Phase I has already
+reached a time or iteration limit, Rust skips the optimization cleanup that
+native GLOP never enters. This removes one excess solve in the Phase-I
+iteration-limit case, although its total clock still differs by 4 ns.
+The transformed dual Phase-I path now uses the basic values recomputed during
+`EndDualPhaseI()` rather than solving the same basis again during common dual
+Phase-II setup. Its native clock now matches exactly.
+The added-column and added-row quick warm starts now match native operation
+accounting exactly. The row case needed GLOP's post-factorization
+condition-number upper-bound check; both paths have explicit branch fixtures.
+The condition-threshold fallback also matches its native clock after porting
+the saved-basis Markowitz candidate pass. A two-super-basic-variable push
+fixture now reaches the small-pivot refactorization request; a matched control
+forbids that request. Both agree with native final states and two-pivot paths,
+and now match native operation clocks. The apparent 28 ns gaps were in the
+fixture adapter: it mistakenly enabled dual simplex for the new Rust cases
+while the pinned native adapter used primal simplex. A matched no-push control
+and an identical-LP no-start control make that configuration distinction
+explicit. A separate duplicate final-snapshot BTRAN was removed from the Rust
+solver, consistent with native's left-inverse reuse.
 Two strict-tolerance native cases exercise cleanup's dual-to-primal switch:
 one stops at the iteration limit after changing status, and the other enters
 primal reoptimization and confirms optimality without a new pivot. The latter
