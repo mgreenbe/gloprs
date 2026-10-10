@@ -87,6 +87,7 @@ int main() {
                                    mode != "primal_harris_wide" &&
                                    mode != "primal_eta" &&
                                    mode != "primal_eta_phase_one" &&
+                                   mode != "polish_cleanup" &&
                                    mode != "no_reopt_primal" &&
                                    mode != "tight_internal_primal" &&
                                    mode != "relaxed_internal_primal" &&
@@ -163,7 +164,8 @@ int main() {
     parameters.set_solution_feasibility_tolerance(1e-16);
   if (mode == "primal_no_imprecise" || mode == "dual_no_imprecise")
     parameters.set_change_status_to_imprecise(false);
-  if (mode == "tight_internal_dual" || mode == "tight_internal_primal") {
+  if (mode == "tight_internal_dual" || mode == "tight_internal_primal" ||
+      mode == "polish_cleanup") {
     parameters.set_primal_feasibility_tolerance(1e-16);
     parameters.set_dual_feasibility_tolerance(1e-16);
   }
@@ -180,12 +182,20 @@ int main() {
     parameters.set_push_to_vertex(false);
   glop::RevisedSimplex simplex;
   simplex.SetParameters(parameters);
-  if (mode == "external_basis") {
+  if (mode == "external_basis" || mode == "transposed_external_basis" ||
+      mode == "polish" || mode == "polish_clear" ||
+      mode == "polish_control") {
     glop::BasisState state;
     state.statuses.resize(glop::ColIndex(columns + rows), glop::VariableStatus::AT_LOWER_BOUND);
     state.statuses[glop::ColIndex(0)] = glop::VariableStatus::BASIC;
     state.statuses[glop::ColIndex(columns)] = glop::VariableStatus::AT_UPPER_BOUND;
     simplex.LoadStateForNextSolve(state);
+  }
+  if (mode == "polish" || mode == "polish_clear" ||
+      mode == "polish_cleanup") {
+    for (int column = 0; column < columns; ++column)
+      simplex.SetIntegralityScale(glop::ColIndex(column), 1.0);
+    if (mode == "polish_clear") simplex.ClearIntegralityScales();
   }
   if (mode == "starting_values_push_boxed" ||
       mode == "starting_values_push_boxed_no_snap" ||
@@ -352,7 +362,56 @@ int main() {
       --columns;
     }
   }
-  const auto result = simplex.Solve(lp, &limit);
+  const auto result = [&]() {
+    if (mode != "transposed" && mode != "transposed_external_basis" &&
+        mode != "transposed_slack_objective" &&
+        mode != "transposed_warm_bounds" && mode != "transposed_warm_objective" &&
+        mode != "transposed_changed_matrix")
+      return simplex.Solve(lp, &limit);
+    glop::CompactSparseMatrix with_slack;
+    with_slack.PopulateFromSparseMatrixAndAddSlacks(lp.GetSparseMatrix());
+    simplex.MutableTransposedMatrixWithSlack()->PopulateFromTranspose(with_slack);
+    auto* lower = simplex.MutableLowerBounds();
+    auto* upper = simplex.MutableUpperBounds();
+    lower->resize(glop::ColIndex(columns + rows), 0.0);
+    upper->resize(glop::ColIndex(columns + rows), 0.0);
+    glop::DenseRow objective;
+    objective.resize(glop::ColIndex(columns + rows), 0.0);
+    for (int column = 0; column < columns; ++column) {
+      const glop::ColIndex index(column);
+      (*lower)[index] = lp.variable_lower_bounds()[index];
+      (*upper)[index] = lp.variable_upper_bounds()[index];
+      objective[index] = lp.objective_coefficients()[index];
+    }
+    for (int row = 0; row < rows; ++row) {
+      const glop::ColIndex index(columns + row);
+      const glop::RowIndex row_index(row);
+      (*lower)[index] = -lp.constraint_upper_bounds()[row_index];
+      (*upper)[index] = -lp.constraint_lower_bounds()[row_index];
+    }
+    if (mode == "transposed_slack_objective")
+      objective[glop::ColIndex(columns)] = 1.0;
+    const double scaling = mode == "transposed_slack_objective" ? 2.0 : 1.0;
+    const double offset = mode == "transposed_slack_objective" ? 3.0 : 0.0;
+    const auto first = simplex.MinimizeFromTransposedMatrixWithSlack(
+        objective, scaling, offset, &limit);
+    if ((mode != "transposed_warm_bounds" &&
+         mode != "transposed_warm_objective" &&
+         mode != "transposed_changed_matrix") || !first.ok())
+      return first;
+    if (mode == "transposed_warm_bounds") {
+      (*upper)[glop::ColIndex(0)] = 0.5;
+    } else if (mode == "transposed_warm_objective") {
+      objective[glop::ColIndex(0)] = 1.0;
+    } else {
+      lp.SetCoefficient(glop::RowIndex(0), glop::ColIndex(0), 2.0);
+      lp.CleanUp();
+      with_slack.PopulateFromSparseMatrixAndAddSlacks(lp.GetSparseMatrix());
+      simplex.MutableTransposedMatrixWithSlack()->PopulateFromTranspose(with_slack);
+    }
+    return simplex.MinimizeFromTransposedMatrixWithSlack(objective, scaling, offset,
+                                                          &limit);
+  }();
   if (!result.ok()) {
     std::cout << "error " << result.error_message() << '\n';
     return 0;

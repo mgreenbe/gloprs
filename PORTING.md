@@ -30,10 +30,31 @@ component affects solver behavior.
 | `variable_values.{h,cc}` | `glop/src/variable_values.rs` | validated | Status-derived nonbasic values, sparse `-B^-1 A_N x_N` basic recomputation, residual and infeasibility summaries, pivot updates, sparse incremental nonbasic updates, primal phase-I costs, and dense/incremental dual infeasibility prices are ported. Mutable norm/price collaborators are explicit Rust method arguments rather than stored raw pointers. A 100-case native state trace agrees on every variable value and all three feasibility summaries; 20 controlled three-pivot native traces agree on final numerical state |
 | `variables_info.{h,cc}` | `glop/src/variables_info.rs` | validated | Equation-form and allocation-free incremental structural/slack bound loading, type derivation, warm/default statuses, all movement/basic/relevance bitsets, relevant-entry accounting, boxed relevance, snapping, and dual phase-I transformations are ported with direct invariant tests. The advanced zero-copy mutable-bound API and `InitializeFromMutatedState()` are included. An expanded 500-case native trace agrees on types, statuses, every bitset, relevant entry counts, bound transformations, mutated-state reconstruction, and the structural/slack unchanged fast path. Rust owns its compact matrix to avoid a self-referential solver object; this changes lifetime organization but not behavior or traversal |
 
-The `revised_simplex` row remains in progress. In particular, the opt-in
-`SetIntegralityScale()`/`Polish()` path and
-`MinimizeFromTransposedMatrixWithSlack()` entry point are not implemented or
-differentially tested; ordinary continuous-LP solves do not invoke them.
+The `revised_simplex` row remains in progress. The opt-in
+`SetIntegralityScale()`/`Polish()` path now follows upstream's candidate
+selection, integrality-gain test, bound flip, and basis-pivot updates. Nine
+small native-pinned cases cover an accepted bound flip, an accepted pivot, a
+randomized two-candidate rejection followed by a pivot, a deterministic limit
+before any polishing move, the no-scale control, and the set-then-clear control,
+including exact operation clocks. A further pair validates an accepted pivot
+followed by a rejected candidate or a deterministic-time stop before that
+candidate. Precision-request polishing remains untested. A primal-to-dual
+cleanup fixture also validates
+GLOP's second polishing call after reoptimization; the initial Rust port had
+called it only after the first optimization.
+`MinimizeFromTransposedMatrixWithSlack()` now has a functional Rust entry point
+and native-pinned first-solve, changed-bound warm-start, changed-matrix,
+transformed nonzero-slack-cost, zero-row, changed-objective, and external-basis
+cases with exact
+operation clocks. It still
+materializes a cached equation-form
+`LinearProgram` instead of operating directly on GLOP's compact matrix and
+`VariablesInfo` storage. A cached advanced call now skips the matrix equality
+scan, as upstream's unchanged-transpose path does. The remaining
+materialization is an
+explicit performance-architecture divergence, so the advanced path is not
+yet ported or validated despite agreeing small-case outcomes. The ordinary
+continuous-LP solve does not invoke either optional path.
 
 Trajectory evidence in the `revised_simplex` row predating the October 2026
 left-solve audit is superseded by `PLAN.md`. The audit found that the former
@@ -76,7 +97,12 @@ diagnostic is `tools/compare_netlib_prefix.py`.
 
 The opt-in `qap15_dual` fixture separately pins direct, unscaled dual
 snapshots at 0, 10,000, 20,000, 30,000, and 40,000 pivots. Status, ordered
-basis, reduced-cost bits, and dual-norm bits agree with native GLOP; the
+basis, reduced-cost bits, dual-norm bits, and deterministic-operation clock
+agree with native GLOP at all five caps. The separate 28,148/28,149 transition
+fixture pins the former clock split, now reconciled: after a dual-loop
+small-direction retry on an already refactorized LU, GLOP retains its cached
+unit-row inverse, while Rust previously invalidated it and paid for an extra
+BTRAN. Rust now invalidates only after an actual refactorization. The
 30,000-pivot cap returns `IMPRECISE` in both implementations and 40,000 returns
 `DUAL_FEASIBLE`. Primal-value differences through 20,000 are only signed
 zero. The native direct solve did not

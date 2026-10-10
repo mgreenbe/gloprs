@@ -36,6 +36,8 @@ int main(int argc, char** argv) {
       parameters.set_use_dual_simplex(false);
     } else if (flag == "transformed") {
       parameters.set_use_dedicated_dual_feasibility_algorithm(false);
+    } else if (flag == "noimprecise") {
+      parameters.set_change_status_to_imprecise(false);
     } else {
       return EXIT_FAILURE;
     }
@@ -54,11 +56,21 @@ int main(int argc, char** argv) {
   // system matches without changing GLOP's initialization path.
   lp.AddSlackVariablesWhereNecessary(false);
 
+
   std::cout << std::setprecision(17) << "iterations "
             << simplex.GetNumberOfIterations() << "\nstatus "
             << glop::GetProblemStatusString(simplex.GetProblemStatus())
             << "\nupdates "
-            << simplex.GetBasisFactorization().NumUpdates()
+            << simplex.GetBasisFactorization().NumUpdates();
+  const double deterministic_time = simplex.DeterministicTime();
+  uint64_t deterministic_time_bits;
+  std::memcpy(&deterministic_time_bits, &deterministic_time,
+              sizeof(deterministic_time_bits));
+  std::cout << "\ndeterministic_time_bits " << deterministic_time_bits
+            << "\nbasis_time "
+            << simplex.GetBasisFactorization().DeterministicTime()
+            << "\nlu_entries "
+            << simplex.GetBasisFactorization().NumberOfEntriesInLU().value()
             << "\nbasis";
   for (int row = 0; row < lp.num_constraints().value(); ++row) {
     std::cout << ' ' << simplex.GetBasis(glop::RowIndex(row)).value();

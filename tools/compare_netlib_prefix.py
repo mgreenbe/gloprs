@@ -19,8 +19,11 @@ RUST = ROOT / "target/release/examples/dual_netlib_trace"
 
 
 def snapshot(binary: Path, model: Path, iteration: int, mode: str) -> dict[str, list[str]]:
+    arguments = [binary, model, str(iteration)]
+    if mode != "dual":
+        arguments.append(mode)
     result = subprocess.run(
-        [binary, model, str(iteration), mode],
+        arguments,
         check=True,
         text=True,
         capture_output=True,
@@ -42,7 +45,7 @@ def compare(model: Path, iteration: int, mode: str) -> tuple[dict[str, list[str]
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("model", type=Path)
-    parser.add_argument("--mode", choices=("primal", "perturb", "transformed"), default="primal")
+    parser.add_argument("--mode", choices=("dual", "primal", "perturb", "transformed"), default="primal")
     parser.add_argument("--matching", type=int, required=True)
     parser.add_argument("--different", type=int, required=True)
     parser.add_argument("--basis-set", action="store_true", help="compare basic-column sets only")
@@ -68,6 +71,18 @@ def main() -> None:
     previous_native, previous_rust = compare(args.model, lower, args.mode)
     native, rust = compare(args.model, upper, args.mode)
     print(f"previous prefix {lower}: basis equal={previous_native['basis'] == previous_rust['basis']}")
+    print(
+        f"previous prefix {lower}: value-bit differences="
+        f"{sum(a != b for a, b in zip(previous_native['value_bits'], previous_rust['value_bits']))}"
+    )
+    for label, left, right in (
+        (f"previous prefix {lower}", previous_native, previous_rust),
+        (f"new prefix {upper}", native, rust),
+    ):
+        print(
+            f"{label}: numerically different values="
+            f"{sum(float(a) != float(b) for a, b in zip(left['values'], right['values']))}"
+        )
     for name, before, after in (
         ("native", previous_native, native),
         ("rust", previous_rust, rust),

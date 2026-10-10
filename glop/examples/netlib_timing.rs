@@ -16,8 +16,20 @@ fn main() {
             .expect("invalid repetitions")
     });
     let mode = arguments.next();
-    assert!(mode.as_ref().is_none_or(|value| value == "primal"));
-    let primal = mode.is_some();
+    assert!(
+        mode.as_ref()
+            .is_none_or(|value| value == "primal" || value == "dual")
+    );
+    let primal = mode.as_ref().is_some_and(|value| value == "primal");
+    let iteration_limit: i64 = arguments.next().map_or(1_000_000, |value| {
+        value
+            .to_string_lossy()
+            .parse()
+            .expect("invalid iteration limit")
+    });
+    let wall_limit: f64 = arguments.next().map_or(20.0, |value| {
+        value.to_string_lossy().parse().expect("invalid wall limit")
+    });
     assert!(arguments.next().is_none());
     assert!(repetitions > 0);
 
@@ -25,7 +37,7 @@ fn main() {
     let parameters = GlopParameters {
         use_scaling: false,
         use_dual_simplex: !primal,
-        max_number_of_iterations: 1_000_000,
+        max_number_of_iterations: iteration_limit,
         ..GlopParameters::default()
     };
     let start = Instant::now();
@@ -33,7 +45,7 @@ fn main() {
     for _ in 0..repetitions {
         simplex = RevisedSimplex::new();
         simplex.set_parameters(&parameters);
-        let mut limit = TimeLimit::new(20.0, f64::INFINITY);
+        let mut limit = TimeLimit::new(wall_limit, f64::INFINITY);
         simplex.solve(&model, &mut limit).expect("solve failed");
     }
     let elapsed = start.elapsed().as_secs_f64();

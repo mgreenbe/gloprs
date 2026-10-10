@@ -13,6 +13,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 const FIXTURE: &str = include_str!("../../baselines/qap15-dual.json");
+const CLOCK_TRANSITION_FIXTURE: &str = include_str!("../../baselines/qap15-clock-transition.json");
 const UPSTREAM_COMMIT: &str = "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5";
 
 #[derive(Deserialize)]
@@ -34,6 +35,7 @@ struct Snapshot {
     limit: i64,
     status: String,
     iterations: u64,
+    deterministic_time_bits: u64,
     basis_sha256: String,
     reduced_bits_sha256: String,
     norm_bits_sha256: String,
@@ -46,10 +48,8 @@ fn digest(values: impl IntoIterator<Item = String>) -> String {
     )
 }
 
-#[test]
-#[ignore = "requires ../datasets/netlib; opt-in qap15 direct-solve snapshots"]
-fn qap15_direct_dual_matches_native_snapshots() {
-    let fixture: Fixture = serde_json::from_str(FIXTURE).unwrap();
+fn check_snapshots(fixture_text: &str, filter: Option<i64>) {
+    let fixture: Fixture = serde_json::from_str(fixture_text).unwrap();
     assert_eq!(fixture.upstream_commit, UPSTREAM_COMMIT);
     assert!(fixture.parameters.use_dual_simplex);
     assert!(!fixture.parameters.use_scaling);
@@ -61,7 +61,12 @@ fn qap15_direct_dual_matches_native_snapshots() {
     let rows = model.num_constraints().to_usize();
     let columns = model.num_variables().to_usize() + rows;
 
+    let mut checked = 0;
     for expected in fixture.snapshots {
+        if filter.is_some_and(|limit| limit != expected.limit) {
+            continue;
+        }
+        checked += 1;
         let parameters = GlopParameters {
             use_dual_simplex: true,
             use_scaling: false,
@@ -73,8 +78,22 @@ fn qap15_direct_dual_matches_native_snapshots() {
         simplex
             .solve(&model, &mut TimeLimit::new(600.0, f64::INFINITY))
             .unwrap();
+        if std::env::var_os("GLOPRS_QAP15_DEBUG").is_some() {
+            eprintln!(
+                "limit {}: clock {}, basis {}",
+                expected.limit,
+                simplex.deterministic_time(),
+                simplex.basis_deterministic_time()
+            );
+        }
         assert_eq!(simplex.problem_status().to_string(), expected.status);
         assert_eq!(simplex.number_of_iterations(), expected.iterations);
+        assert_eq!(
+            simplex.deterministic_time().to_bits(),
+            expected.deterministic_time_bits,
+            "operation clock at limit {}",
+            expected.limit
+        );
         assert_eq!(
             digest((0..rows).map(|row| {
                 simplex
@@ -110,4 +129,52 @@ fn qap15_direct_dual_matches_native_snapshots() {
             expected.limit
         );
     }
+    assert!(checked > 0, "no qap15 snapshots selected");
+}
+
+#[test]
+#[ignore = "requires ../datasets/netlib; opt-in qap15 direct-solve snapshots"]
+fn qap15_direct_dual_matches_native_snapshots() {
+    let filter = std::env::var("GLOPRS_QAP15_LIMIT")
+        .ok()
+        .map(|value| value.parse::<i64>().expect("invalid GLOPRS_QAP15_LIMIT"));
+    check_snapshots(FIXTURE, filter);
+}
+
+#[test]
+#[ignore = "requires ../datasets/netlib; opt-in qap15 former-clock-split snapshots"]
+fn qap15_former_clock_split_matches_native_state() {
+    check_snapshots(CLOCK_TRANSITION_FIXTURE, None);
+}
+
+#[test]
+#[ignore = "diagnostic qap15 operation-clock probe; set GLOPRS_QAP15_PROBE_LIMIT"]
+fn qap15_operation_clock_probe() {
+    let limit: i64 = std::env::var("GLOPRS_QAP15_PROBE_LIMIT")
+        .expect("missing GLOPRS_QAP15_PROBE_LIMIT")
+        .parse()
+        .expect("invalid GLOPRS_QAP15_PROBE_LIMIT");
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../datasets/netlib/mps/qap15.mps");
+    let model = parse_mps_file(path).unwrap();
+    let parameters = GlopParameters {
+        use_dual_simplex: true,
+        use_scaling: false,
+        max_number_of_iterations: limit,
+        change_status_to_imprecise: std::env::var_os("GLOPRS_QAP15_NO_IMPRECISE").is_none(),
+        ..GlopParameters::default()
+    };
+    let mut simplex = RevisedSimplex::new();
+    simplex.set_parameters(&parameters);
+    simplex
+        .solve(&model, &mut TimeLimit::new(600.0, f64::INFINITY))
+        .unwrap();
+    eprintln!(
+        "limit {limit}: {} iterations, status {}, clock {:.17}, basis {:.17}, LU entries {}",
+        simplex.number_of_iterations(),
+        simplex.problem_status(),
+        simplex.deterministic_time(),
+        simplex.basis_deterministic_time(),
+        simplex.basis_num_entries_in_lu()
+    );
 }

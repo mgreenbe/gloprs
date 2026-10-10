@@ -1100,10 +1100,27 @@ Progress through dataset gates:
 4. Netlib 50-smallest;
 5. full Netlib without preprocessing;
 
-The optional upstream integrality-scale polishing path and
-`MinimizeFromTransposedMatrixWithSlack()` entry point remain unported; the
-ordinary continuous-LP solve does not invoke them without client opt-in.
-These are explicit Phase-4 fidelity gaps, not validated branches.
+The optional upstream integrality-scale polishing path now has a direct Rust
+implementation and nine native-pinned cases covering an improving bound flip,
+an improving basis pivot, a randomized two-candidate rejection, a deterministic
+limit before the first move, the no-scale control, and explicit scale clearing; terminal states and exact
+operation clocks agree. The seventh case checks that polishing runs again after
+primal-to-dual cleanup reoptimization; that call was missing from the first
+Rust draft. A further two-candidate pair validates a post-pivot rejection and
+a deterministic limit after that pivot. Its precision-request branch remains
+to validate. The advanced
+`MinimizeFromTransposedMatrixWithSlack()` entry point has seven native-pinned
+functional cases: an initial solve, a changed-bound dual warm solve, a
+changed-matrix rebuild, a nonzero slack cost with objective scale/offset, and
+a zero-row case, a changed-objective warm solve, and an externally supplied
+basis.
+Status, basis, numerical state, and exact operation
+clock agree. Its Rust implementation still caches a synthetic equation-form
+`LinearProgram` instead of directly owning the compact matrix and bounds.
+Unchanged advanced calls now skip the sparse-matrix equality scan, matching
+the shape of upstream's fast path. The remaining representation and
+performance divergence must be eliminated before the advanced path or Phase 4
+can be declared complete.
 
 Exit criteria:
 
@@ -1335,6 +1352,18 @@ without changing traversal or arithmetic order. The 40,000-pivot Rust solve
 then took 177.5 seconds (1.25× native); all five pinned snapshots, including
 the 40,000-pivot basis, reduced-cost bits, and norm bits, still agree. The
 remaining runtime gap is open.
+An October 2026 rerun on Apple arm64 with Rust 1.95.0 and Apple Clang 17,
+after the lower-solve improvement, measured the direct 20,000-pivot prefix
+serially at 16.09 and 16.15 seconds in Rust versus 14.32 and 14.00 seconds
+in native GLOP (approximately 1.15× by medians). The Rust command used the
+release `netlib_timing` example with `dual 20000 60`; the native command used
+the pinned `dual_netlib_trace_reference_adapter` with a 20,000-iteration cap.
+The Rust timer excludes model parsing; the native process wall includes parsing
+and a larger trace written to discarded stdout, so its actual solve is slightly
+faster still. A safe single-borrow rewrite of
+the profiled triangular sparse-update loop did not materially change time and
+was reverted. This narrows but does not explain the residual gap, and no
+performance-parity claim is made from this prefix.
 The opt-in `qap15_dual` regression checks these pinned snapshots. A native
 direct solve with a one-million-iteration cap did not terminate within a
 600-second wall bound, so this is not yet terminal validation. The public
@@ -1348,6 +1377,18 @@ this large-model performance discrepancy remains part of Phase 4.
 At 50,000 pivots, native took 171.8 seconds and Rust exceeded a 180-second
 bound before the safe sparse-solve iteration change; that depth has not been
 rerun since, so no trajectory comparison there is claimed.
+
+The qap15 fixture now also pins native deterministic-operation clock bits.
+Rust agrees bit-for-bit at 0, 10,000, 20,000, 30,000, and 40,000 pivots.
+The former first split at pivot 28,149 was a cache-lifecycle discrepancy:
+after a small-direction-pivot retry, `RefactorizeBasisIfNeeded()` leaves an
+already refactorized LU and its cached `UpdateRow` untouched in GLOP. Rust
+correctly skipped the LU rebuild but invalidated `UpdateRow` anyway, paying
+for one unnecessary unit-row BTRAN. Conditional invalidation now matches
+upstream. The `qap15-clock-transition.json` regression requires native clock,
+status, ordered basis, reduced-cost bits, and dual-norm bits at 28,148 and
+28,149; the five-cap regression requires the same exact native clock through
+40,000 pivots. Terminal behavior and deeper prefixes remain unvalidated.
 
 Benchmark entry point: `tools/benchmark_netlib_solve.py` with release-built
 `glop/examples/netlib_timing.rs` and the native

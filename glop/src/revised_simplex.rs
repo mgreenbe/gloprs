@@ -14,6 +14,7 @@
     clippy::too_many_lines
 )]
 
+use std::borrow::Cow;
 use std::rc::Rc;
 
 use lp_data::lp_data::LinearProgram;
@@ -102,6 +103,12 @@ pub struct RevisedSimplex {
     first_slack_col: ColIndex,
     matrix: Rc<SparseMatrix>,
     compact_matrix: CompactSparseMatrix,
+    transposed_matrix_with_slack: CompactSparseMatrix,
+    transpose_was_changed: bool,
+    advanced_lower_bounds: Vec<f64>,
+    advanced_upper_bounds: Vec<f64>,
+    advanced_lp: Option<LinearProgram>,
+    last_solve_was_advanced: bool,
     objective: DenseRow,
     objective_offset: f64,
     objective_scaling_factor: f64,
@@ -138,11 +145,13 @@ pub struct RevisedSimplex {
     state_for_next_solve: Option<BasisState>,
     external_state_for_next_solve: bool,
     starting_values: DenseRow,
+    integrality_scale: DenseRow,
     num_iterations: u64,
     num_update_price_operations: i64,
     reduced_costs_deterministic_time: f64,
     reduced_costs_dirty: bool,
     reduced_costs_precise: bool,
+    reduced_costs_need_basis_refactorization: bool,
     previous_component_deterministic_time: f64,
     last_deterministic_time_update: f64,
     trace_enabled: bool,
@@ -215,6 +224,12 @@ impl RevisedSimplex {
             first_slack_col: ColIndex::new(0),
             matrix: Rc::new(SparseMatrix::new()),
             compact_matrix: CompactSparseMatrix::default(),
+            transposed_matrix_with_slack: CompactSparseMatrix::default(),
+            transpose_was_changed: false,
+            advanced_lower_bounds: Vec::new(),
+            advanced_upper_bounds: Vec::new(),
+            advanced_lp: None,
+            last_solve_was_advanced: false,
             objective: DenseRow::new(),
             objective_offset: 0.0,
             objective_scaling_factor: 1.0,
@@ -251,11 +266,13 @@ impl RevisedSimplex {
             state_for_next_solve: None,
             external_state_for_next_solve: false,
             starting_values: DenseRow::new(),
+            integrality_scale: DenseRow::new(),
             num_iterations: 0,
             num_update_price_operations: 0,
             reduced_costs_deterministic_time: 0.0,
             reduced_costs_dirty: false,
             reduced_costs_precise: false,
+            reduced_costs_need_basis_refactorization: false,
             previous_component_deterministic_time: 0.0,
             last_deterministic_time_update: 0.0,
             trace_enabled: false,
@@ -317,6 +334,25 @@ impl RevisedSimplex {
     }
 
     #[must_use]
+    pub fn basis_deterministic_time(&self) -> f64 {
+        self.basis_factorization
+            .as_ref()
+            .map_or(0.0, BasisRepresentation::deterministic_time)
+    }
+
+    #[must_use]
+    pub fn basis_num_entries_in_lu(&self) -> usize {
+        self.basis_factorization
+            .as_ref()
+            .map_or(0, BasisRepresentation::number_of_entries_in_lu)
+    }
+
+    #[must_use]
+    pub const fn matrix_with_slack(&self) -> &CompactSparseMatrix {
+        &self.compact_matrix
+    }
+
+    #[must_use]
     pub fn initial_basis_before_permutation(&self) -> &RowToColMapping {
         &self.initial_basis_before_permutation
     }
@@ -360,12 +396,137 @@ impl RevisedSimplex {
         self.starting_values.clone_from(values);
     }
 
+    /// Clears the optional MIP polishing scales, as in GLOP.
+    pub fn clear_integrality_scales(&mut self) {
+        self.integrality_scale.clear();
+    }
+
+    /// Marks a column integral after multiplication by `scale` for polishing.
+    pub fn set_integrality_scale(&mut self, column: ColIndex, scale: f64) {
+        if column.to_usize() >= self.integrality_scale.len().to_usize() {
+            self.integrality_scale
+                .resize(ColIndex::from_usize(column.to_usize() + 1), 0.0);
+        }
+        self.integrality_scale[column] = scale;
+    }
+
+    /// Returns the mutable transposed equation-form matrix, including slack
+    /// columns. As in GLOP, requesting mutable access marks it changed.
+    pub fn mutable_transposed_matrix_with_slack(&mut self) -> &mut CompactSparseMatrix {
+        self.transpose_was_changed = true;
+        &mut self.transposed_matrix_with_slack
+    }
+
+    pub fn mutable_lower_bounds(&mut self) -> &mut Vec<f64> {
+        &mut self.advanced_lower_bounds
+    }
+
+    pub fn mutable_upper_bounds(&mut self) -> &mut Vec<f64> {
+        &mut self.advanced_upper_bounds
+    }
+
+    /// Advanced equation-form solve corresponding to GLOP's transposed-matrix
+    /// entry point. The cached model is rebuilt only after matrix mutation.
+    pub fn minimize_from_transposed_matrix_with_slack(
+        &mut self,
+        objective: &DenseRow,
+        objective_scaling_factor: f64,
+        objective_offset: f64,
+        time_limit: &mut TimeLimit,
+    ) -> Result<(), FactorizationError> {
+        let result = self.minimize_from_transposed_matrix_with_slack_internal(
+            objective,
+            objective_scaling_factor,
+            objective_offset,
+            time_limit,
+        );
+        self.advance_deterministic_time(time_limit);
+        result
+    }
+
+    fn minimize_from_transposed_matrix_with_slack_internal(
+        &mut self,
+        objective: &DenseRow,
+        objective_scaling_factor: f64,
+        objective_offset: f64,
+        time_limit: &mut TimeLimit,
+    ) -> Result<(), FactorizationError> {
+        let known_same_matrix = self.last_solve_was_advanced
+            && !self.transpose_was_changed
+            && self.advanced_lp.is_some();
+        if self.transpose_was_changed || self.advanced_lp.is_none() {
+            self.compact_matrix
+                .populate_from_transpose(&self.transposed_matrix_with_slack);
+            let rows = self.compact_matrix.num_rows().to_usize();
+            let columns = self.compact_matrix.num_cols().to_usize();
+            if columns < rows {
+                return Err(FactorizationError::DimensionMismatch);
+            }
+            let first_slack = columns - rows;
+            for row in 0..rows {
+                let column = self
+                    .compact_matrix
+                    .column(ColIndex::from_usize(first_slack + row));
+                if column.len() != 1
+                    || column.entry_row(0) != RowIndex::from_usize(row)
+                    || column.entry_coefficient(0) != 1.0
+                {
+                    return Err(FactorizationError::DimensionMismatch);
+                }
+            }
+            let mut model = LinearProgram::default();
+            for _ in 0..first_slack {
+                model.create_new_variable();
+            }
+            for _ in 0..rows {
+                model.create_new_constraint();
+            }
+            for column in 0..first_slack {
+                for (row, value) in self
+                    .compact_matrix
+                    .column(ColIndex::from_usize(column))
+                    .iter()
+                {
+                    model.set_coefficient(row, ColIndex::from_usize(column), value);
+                }
+            }
+            model.add_slack_variables_where_necessary(false);
+            self.advanced_lp = Some(model);
+            self.transpose_was_changed = false;
+        }
+        let mut model = self.advanced_lp.take().expect("advanced model initialized");
+        if objective.len().to_usize() != model.num_variables().to_usize()
+            || self.advanced_lower_bounds.len() != model.num_variables().to_usize()
+            || self.advanced_upper_bounds.len() != model.num_variables().to_usize()
+        {
+            self.advanced_lp = Some(model);
+            return Err(FactorizationError::DimensionMismatch);
+        }
+        for column in 0..model.num_variables().to_usize() {
+            let index = ColIndex::from_usize(column);
+            model.set_variable_bounds(
+                index,
+                self.advanced_lower_bounds[column],
+                self.advanced_upper_bounds[column],
+            );
+            model.set_objective_coefficient(index, objective[index]);
+        }
+        model.set_objective_scaling_factor(objective_scaling_factor);
+        model.set_objective_offset(objective_offset);
+        let result = self.solve_internal(&model, time_limit, known_same_matrix);
+        self.phase4_event("transposed_matrix_entry");
+        self.last_solve_was_advanced = result.is_ok();
+        self.advanced_lp = Some(model);
+        result
+    }
+
     pub fn solve(
         &mut self,
         linear_program: &LinearProgram,
         time_limit: &mut TimeLimit,
     ) -> Result<(), FactorizationError> {
-        let result = self.solve_internal(linear_program, time_limit);
+        self.last_solve_was_advanced = false;
+        let result = self.solve_internal(linear_program, time_limit, false);
         self.advance_deterministic_time(time_limit);
         result
     }
@@ -374,6 +535,7 @@ impl RevisedSimplex {
         &mut self,
         linear_program: &LinearProgram,
         time_limit: &mut TimeLimit,
+        matrix_known_unchanged: bool,
     ) -> Result<(), FactorizationError> {
         self.phase4_events.clear();
         // GLOP retains SaveState() for the next Solve() by default. An
@@ -385,7 +547,7 @@ impl RevisedSimplex {
         if !self.starting_values.is_empty() {
             self.phase4_event("starting_variable_values");
         }
-        self.initialize(linear_program)?;
+        self.initialize(linear_program, matrix_known_unchanged)?;
         self.trace.clear();
         self.num_iterations = 0;
 
@@ -423,6 +585,9 @@ impl RevisedSimplex {
             }
         }
         if optimization_started {
+            if !self.integrality_scale.is_empty() && self.problem_status == ProblemStatus::Optimal {
+                self.polish(time_limit)?;
+            }
             self.reoptimize_after_cleanup(time_limit)?;
         }
         self.validate_terminal_precision()?;
@@ -558,6 +723,280 @@ impl RevisedSimplex {
                 self.phase4_event("cleanup_dual_reoptimization");
                 self.run_dual_phase_two(time_limit)?;
             }
+            // Upstream invokes Polish() after every optimization call in its
+            // reoptimization loop, not only after the first one.
+            if !self.integrality_scale.is_empty() && self.problem_status == ProblemStatus::Optimal {
+                self.phase4_event("polish_after_reoptimization");
+                self.polish(time_limit)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn polish(&mut self, time_limit: &mut TimeLimit) -> Result<(), FactorizationError> {
+        let result = self.polish_internal(time_limit);
+        self.advance_deterministic_time(time_limit);
+        result
+    }
+
+    /// GLOP's optional post-optimal MIP polishing pass. Candidate order,
+    /// random removal, thresholds, and update order follow `Polish()`.
+    fn polish_internal(&mut self, time_limit: &mut TimeLimit) -> Result<(), FactorizationError> {
+        self.phase4_event("polish");
+        // PrimalMinimize()/DualMinimize() refactorize before reporting OPTIMAL.
+        // GetReducedCosts() then clears GLOP's pending refactorization request.
+        debug_assert!(self.basis_factorization.as_ref().unwrap().is_refactorized());
+        if self.basis_factorization.as_ref().unwrap().is_refactorized() {
+            self.reduced_costs_need_basis_refactorization = false;
+        }
+        if self.reduced_costs_dirty {
+            let objective = self.objective.clone();
+            self.compute_reduced_costs(&objective)?;
+        }
+        let info = self.variables_info.as_ref().unwrap();
+        let mut candidates = Vec::new();
+        for column in info.not_basic().iter_ones() {
+            if info.relevance().contains(column) && self.reduced_costs[column].abs() < 1e-9 {
+                candidates.push(column);
+            }
+        }
+        let mut refactorize = false;
+        let mut num_pivots = 0;
+        let mut direction = ScatteredColumn::new(self.num_rows);
+        for _ in 0..10 {
+            self.advance_deterministic_time(time_limit);
+            if time_limit.limit_reached() {
+                self.phase4_event("polish_time_limit");
+                break;
+            }
+            if num_pivots >= 5 || candidates.is_empty() {
+                break;
+            }
+            let choice = self.random.uniform_index(candidates.len());
+            let entering = candidates.swap_remove(choice);
+            let fake_reduced_cost = if self
+                .variables_info
+                .as_ref()
+                .unwrap()
+                .can_decrease()
+                .contains(entering)
+            {
+                1.0
+            } else {
+                debug_assert!(
+                    self.variables_info
+                        .as_ref()
+                        .unwrap()
+                        .can_increase()
+                        .contains(entering)
+                );
+                -1.0
+            };
+            // GLOP's `ReducedCosts::NeedsBasisRefactorization()` is distinct
+            // from the primal edge-norm precision request.
+            if self.reduced_costs_need_basis_refactorization {
+                refactorize = true;
+            }
+            if refactorize && !self.basis_factorization.as_ref().unwrap().is_refactorized() {
+                self.basis_factorization.as_mut().unwrap().refactorize()?;
+                self.incorporate_basis_permutation();
+                self.update_row.as_mut().unwrap().invalidate();
+            }
+            refactorize = false;
+            self.direction(entering, &mut direction)?;
+            let direction_norm = direction
+                .values()
+                .as_slice()
+                .iter()
+                .fold(0.0_f64, |max, value| max.max(value.abs()));
+            let info = self.variables_info.as_ref().unwrap();
+            let leaving = choose_leaving_variable_row(
+                entering,
+                fake_reduced_cost,
+                &direction,
+                direction_norm,
+                self.variable_values.as_slice(),
+                info.lower_bounds(),
+                info.upper_bounds(),
+                &self.basis,
+                self.basis_factorization.as_ref().unwrap().is_refactorized(),
+                &self.parameters,
+                &self.random,
+            );
+            let (leaving_row, step_length, target_bound) = match leaving {
+                LeavingChoice::Refactorize => continue,
+                LeavingChoice::BoundFlip { step } => (None, step, 0.0),
+                LeavingChoice::Pivot {
+                    row,
+                    step,
+                    target_bound,
+                    ..
+                } => (Some(row), step, target_bound),
+            };
+            if !step_length.is_finite() || step_length.abs() <= 1e-6 {
+                continue;
+            }
+            if leaving_row.is_some_and(|row| direction.value(row).abs() < 0.1) {
+                continue;
+            }
+            let step = if fake_reduced_cost > 0.0 {
+                -step_length
+            } else {
+                step_length
+            };
+            let integrality_diff = |column: ColIndex, old: f64, new: f64| {
+                let scale = self
+                    .integrality_scale
+                    .as_slice()
+                    .get(column.to_usize())
+                    .copied()
+                    .unwrap_or(0.0);
+                if scale == 0.0 {
+                    0.0
+                } else {
+                    (new * scale - (new * scale).round()).abs()
+                        - (old * scale - (old * scale).round()).abs()
+                }
+            };
+            let old = self.variable_values[entering];
+            let mut difference = integrality_diff(entering, old, old + step);
+            for entry in &direction {
+                let column = self.basis[entry.row()];
+                let old = self.variable_values[column];
+                difference += integrality_diff(column, old, old - entry.coefficient() * step);
+            }
+            if difference > -1e-2 {
+                self.phase4_event("polish_rejected_move");
+                continue;
+            }
+            num_pivots += 1;
+            self.phase4_event("polish_accepted_move");
+            for entry in &direction {
+                let column = self.basis[entry.row()];
+                self.variable_values[column] =
+                    (-entry.coefficient()).mul_add(step, self.variable_values[column]);
+            }
+            self.variable_values[entering] += step;
+            let Some(row) = leaving_row else {
+                self.phase4_event("polish_bound_flip");
+                if step > 0.0 {
+                    self.variables_info
+                        .as_mut()
+                        .unwrap()
+                        .update_to_nonbasic_status(entering, VariableStatus::AtUpperBound);
+                    self.variable_values[entering] =
+                        self.variables_info.as_ref().unwrap().upper_bounds()[entering.to_usize()];
+                } else if step < 0.0 {
+                    self.variables_info
+                        .as_mut()
+                        .unwrap()
+                        .update_to_nonbasic_status(entering, VariableStatus::AtLowerBound);
+                    self.variable_values[entering] =
+                        self.variables_info.as_ref().unwrap().lower_bounds()[entering.to_usize()];
+                }
+                continue;
+            };
+            let leaving_column = self.basis[row];
+            self.phase4_event("polish_pivot");
+            self.update_row
+                .as_mut()
+                .unwrap()
+                .compute_unit_row_left_inverse(
+                    self.basis_factorization.as_ref().unwrap(),
+                    row.to_usize(),
+                )?;
+            let relevant = self.variables_info.as_ref().unwrap().relevance();
+            let relevant_entries = self
+                .variables_info
+                .as_ref()
+                .unwrap()
+                .num_entries_in_relevant_columns()
+                .value()
+                .try_into()
+                .expect("negative relevant entry count");
+            self.primal_edge_norms
+                .as_mut()
+                .unwrap()
+                .update_before_basis_pivot(
+                    self.basis_factorization.as_ref().unwrap(),
+                    relevant,
+                    relevant_entries,
+                    entering.to_usize(),
+                    leaving_column.to_usize(),
+                    row.to_usize(),
+                    direction.values().as_slice(),
+                    self.update_row.as_mut().unwrap(),
+                )?;
+            self.dual_edge_norms.update_before_basis_pivot(
+                self.basis_factorization.as_ref().unwrap(),
+                row.to_usize(),
+                direction.values().as_slice(),
+                self.update_row
+                    .as_ref()
+                    .unwrap()
+                    .unit_row_left_inverse_scattered(),
+            )?;
+            self.update_row.as_mut().unwrap().compute_update_row(
+                self.basis_factorization.as_ref().unwrap(),
+                &self.matrix,
+                relevant,
+                relevant_entries,
+                row.to_usize(),
+            )?;
+            update_reduced_cost_values_before_basis_pivot(
+                self.reduced_costs.as_mut_slice(),
+                entering,
+                leaving_column,
+                direction.value(row),
+                self.update_row.as_ref().unwrap(),
+            );
+            self.reduced_costs_precise = false;
+            let movement = -direction.value(row) * step;
+            let degenerate = movement == 0.0
+                || (movement > 0.0 && self.variable_values[leaving_column] >= target_bound)
+                || (movement < 0.0 && self.variable_values[leaving_column] <= target_bound);
+            if !degenerate {
+                self.variable_values[leaving_column] = target_bound;
+            }
+            let status = self.status_at_bound(leaving_column, target_bound);
+            self.variables_info
+                .as_mut()
+                .unwrap()
+                .update_to_nonbasic_status(leaving_column, status);
+            self.variables_info
+                .as_mut()
+                .unwrap()
+                .update_to_basic_status(entering);
+            self.basis[row] = entering;
+            let pivot_from_update_row = self
+                .matrix
+                .column(entering)
+                .iter()
+                .map(|entry| {
+                    self.update_row.as_ref().unwrap().unit_row_left_inverse()
+                        [entry.index().to_usize()]
+                        * entry.coefficient()
+                })
+                .sum::<f64>();
+            let pivot_from_direction = direction.value(row);
+            let pivot_difference = (pivot_from_update_row - pivot_from_direction).abs();
+            let imprecise_pivot = pivot_difference
+                > self.parameters.refactorization_threshold
+                    * (1.0 + pivot_from_update_row.abs().min(pivot_from_direction.abs()));
+            if imprecise_pivot {
+                self.strengthen_lu_pivoting_after_early_imprecision()?;
+                self.basis_factorization
+                    .as_mut()
+                    .unwrap()
+                    .update_and_refactorize(row.to_usize(), entering)?;
+            } else {
+                self.basis_factorization
+                    .as_mut()
+                    .unwrap()
+                    .update_after_solve(entering, row.to_usize(), &direction)?;
+            }
+            self.incorporate_basis_permutation();
+            self.update_row.as_mut().unwrap().invalidate();
         }
         Ok(())
     }
@@ -1344,14 +1783,23 @@ impl RevisedSimplex {
         Ok(())
     }
 
-    fn initialize(&mut self, lp: &LinearProgram) -> Result<(), FactorizationError> {
+    fn initialize(
+        &mut self,
+        lp: &LinearProgram,
+        matrix_known_unchanged: bool,
+    ) -> Result<(), FactorizationError> {
         self.recovered_warm_basis = None;
-        let mut equation_lp = LinearProgram::default();
-        equation_lp.populate_from_linear_program(lp);
-        if !equation_lp.is_in_equation_form() {
-            equation_lp.add_slack_variables_where_necessary(false);
-        }
-        if self.try_reuse_unchanged_matrix(&equation_lp)? {
+        // An already equation-form model can be viewed directly, as GLOP
+        // does. Only a structural LP needs a local slack-augmented copy.
+        let equation_lp = if lp.is_in_equation_form() {
+            Cow::Borrowed(lp)
+        } else {
+            let mut converted = LinearProgram::default();
+            converted.populate_from_linear_program(lp);
+            converted.add_slack_variables_where_necessary(false);
+            Cow::Owned(converted)
+        };
+        if self.try_reuse_unchanged_matrix(&equation_lp, matrix_known_unchanged)? {
             return Ok(());
         }
         if self.try_reuse_with_added_columns(&equation_lp) {
@@ -2057,6 +2505,7 @@ impl RevisedSimplex {
     fn try_reuse_unchanged_matrix(
         &mut self,
         equation_lp: &LinearProgram,
+        matrix_known_unchanged: bool,
     ) -> Result<bool, FactorizationError> {
         if self.basis_factorization.is_none()
             || self.num_rows != equation_lp.num_constraints()
@@ -2090,14 +2539,16 @@ impl RevisedSimplex {
             {
                 return Ok(false);
             }
-            let old = self.matrix.column(index);
-            let new = equation_lp.matrix().column(index);
-            if old.num_entries() != new.num_entries()
-                || !old.iter().zip(new.iter()).all(|(left, right)| {
-                    left.row() == right.row() && left.coefficient() == right.coefficient()
-                })
-            {
-                return Ok(false);
+            if !matrix_known_unchanged {
+                let old = self.matrix.column(index);
+                let new = equation_lp.matrix().column(index);
+                if old.num_entries() != new.num_entries()
+                    || !old.iter().zip(new.iter()).all(|(left, right)| {
+                        left.row() == right.row() && left.coefficient() == right.coefficient()
+                    })
+                {
+                    return Ok(false);
+                }
             }
         }
         let info = self.variables_info.as_mut().unwrap();
@@ -2328,6 +2779,9 @@ impl RevisedSimplex {
             );
         self.reduced_costs_dirty = false;
         self.reduced_costs_precise = self.basis_factorization.as_ref().unwrap().is_refactorized();
+        if self.reduced_costs_precise {
+            self.reduced_costs_need_basis_refactorization = false;
+        }
     }
 
     // ReducedCosts::GetDualValues() always performs a fresh BTRAN, even when
@@ -2698,6 +3152,9 @@ impl RevisedSimplex {
                 // recomputation. A pivot can still proceed in this
                 // iteration, but its incremental row update is then skipped.
                 self.reduced_costs_dirty = true;
+                if !self.reduced_costs_precise {
+                    self.reduced_costs_need_basis_refactorization = true;
+                }
                 self.primal_prices.force_recomputation();
             }
             refactorize_for_precision |= reduced_cost_imprecise;
@@ -2714,6 +3171,7 @@ impl RevisedSimplex {
                     // by the exact BTRAN/FTRAN check above.
                     if !self.basis_factorization.as_ref().unwrap().is_refactorized() {
                         refactorize_for_precision = true;
+                        self.reduced_costs_need_basis_refactorization = true;
                     }
                     continue;
                 }
@@ -3025,8 +3483,10 @@ impl RevisedSimplex {
         &mut self,
         time_limit: &mut TimeLimit,
     ) -> Result<(), FactorizationError> {
-        let mut reduced_costs_precise =
-            self.basis_factorization.as_ref().unwrap().is_refactorized();
+        // Reduced-cost precision is its own state in GLOP. A freshly
+        // refactorized basis does not make an incrementally maintained row
+        // precise until ReducedCosts actually recomputes that row.
+        let mut reduced_costs_precise = self.reduced_costs_precise;
         let mut reduced_costs_recomputed = true;
         let mut prices_initialized = false;
         let mut direction = ScatteredColumn::new(self.num_rows);
@@ -3335,8 +3795,7 @@ impl RevisedSimplex {
             let objective = self.objective.clone();
             self.compute_reduced_costs(&objective)?;
         }
-        let mut reduced_costs_precise =
-            self.basis_factorization.as_ref().unwrap().is_refactorized();
+        let mut reduced_costs_precise = self.reduced_costs_precise;
         let mut recompute_reduced_costs_after_refactorization = false;
         self.recompute_dual_prices()?;
         let mut pending_price_rows = Vec::new();
@@ -3367,8 +3826,13 @@ impl RevisedSimplex {
                 // only makes them precise when refactorization was explicitly
                 // requested by the iteration loop (old_refactorize_value).
                 if !reduced_costs_precise && recompute_reduced_costs_after_refactorization {
-                    let objective = self.objective.clone();
-                    self.compute_reduced_costs(&objective)?;
+                    // MakeReducedCostsPrecise() leaves an already precise row
+                    // untouched, including when a pivot retry requested a
+                    // refactorization after that precise pass.
+                    if !self.reduced_costs_precise {
+                        let objective = self.objective.clone();
+                        self.compute_reduced_costs(&objective)?;
+                    }
                     reduced_costs_precise = true;
                     recompute_reduced_costs_after_refactorization = false;
                 }
@@ -3416,9 +3880,11 @@ impl RevisedSimplex {
                     || self.has_cost_shift
                 {
                     self.remove_cost_shifts();
-                    self.basis_factorization.as_mut().unwrap().refactorize()?;
-                    self.incorporate_basis_permutation();
-                    self.update_row.as_mut().unwrap().invalidate();
+                    if !self.basis_factorization.as_ref().unwrap().is_refactorized() {
+                        self.basis_factorization.as_mut().unwrap().refactorize()?;
+                        self.incorporate_basis_permutation();
+                        self.update_row.as_mut().unwrap().invalidate();
+                    }
                     reduced_costs_precise = false;
                     recompute_reduced_costs_after_refactorization = true;
                     continue;
@@ -3487,9 +3953,11 @@ impl RevisedSimplex {
                 );
             let Some(entering) = entering else {
                 if !reduced_costs_precise {
-                    self.basis_factorization.as_mut().unwrap().refactorize()?;
-                    self.incorporate_basis_permutation();
-                    self.update_row.as_mut().unwrap().invalidate();
+                    if !self.basis_factorization.as_ref().unwrap().is_refactorized() {
+                        self.basis_factorization.as_mut().unwrap().refactorize()?;
+                        self.incorporate_basis_permutation();
+                        self.update_row.as_mut().unwrap().invalidate();
+                    }
                     recompute_reduced_costs_after_refactorization = true;
                     continue;
                 }
@@ -3538,9 +4006,11 @@ impl RevisedSimplex {
             if entering_coefficient.abs() < self.parameters.dual_small_pivot_threshold
                 && !reduced_costs_precise
             {
-                self.basis_factorization.as_mut().unwrap().refactorize()?;
-                self.incorporate_basis_permutation();
-                self.update_row.as_mut().unwrap().invalidate();
+                if !self.basis_factorization.as_ref().unwrap().is_refactorized() {
+                    self.basis_factorization.as_mut().unwrap().refactorize()?;
+                    self.incorporate_basis_permutation();
+                    self.update_row.as_mut().unwrap().invalidate();
+                }
                 recompute_reduced_costs_after_refactorization = true;
                 continue;
             }
@@ -3555,9 +4025,11 @@ impl RevisedSimplex {
             if pivot.abs() < self.parameters.small_pivot_threshold * direction_norm
                 && !reduced_costs_precise
             {
-                self.basis_factorization.as_mut().unwrap().refactorize()?;
-                self.incorporate_basis_permutation();
-                self.update_row.as_mut().unwrap().invalidate();
+                if !self.basis_factorization.as_ref().unwrap().is_refactorized() {
+                    self.basis_factorization.as_mut().unwrap().refactorize()?;
+                    self.incorporate_basis_permutation();
+                    self.update_row.as_mut().unwrap().invalidate();
+                }
                 recompute_reduced_costs_after_refactorization = true;
                 continue;
             }
@@ -3586,6 +4058,9 @@ impl RevisedSimplex {
                 pivot,
                 self.update_row.as_ref().unwrap(),
             );
+            // ReducedCosts::UpdateReducedCosts() invalidates its precise-row
+            // flag even for a dual-degenerate pivot with zero entering cost.
+            self.reduced_costs_precise = false;
             self.dual_edge_norms.update_before_basis_pivot(
                 self.basis_factorization.as_ref().unwrap(),
                 leaving_position,

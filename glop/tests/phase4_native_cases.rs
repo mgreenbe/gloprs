@@ -10,6 +10,7 @@ use lp_data::lp_types::{
     ColIndex, DenseBooleanColumn, DenseBooleanRow, RowIndex, VariableStatus, VariableStatusRow,
     VectorIndex,
 };
+use lp_data::sparse::CompactSparseMatrix;
 use serde::Deserialize;
 use sha2::Digest;
 use std::collections::BTreeSet;
@@ -197,6 +198,7 @@ fn small_phase4_cases_match_pinned_native_glop() {
                     | "primal_harris_wide"
                     | "primal_eta"
                     | "primal_eta_phase_one"
+                    | "polish_cleanup"
                     | "no_reopt_primal"
                     | "tight_internal_primal"
                     | "relaxed_internal_primal"
@@ -327,6 +329,7 @@ fn small_phase4_cases_match_pinned_native_glop() {
                 case.mode.as_str(),
                 "tight_internal_dual"
                     | "tight_internal_primal"
+                    | "polish_cleanup"
                     | "no_reopt_primal"
                     | "no_reopt_dual"
             ) {
@@ -343,6 +346,7 @@ fn small_phase4_cases_match_pinned_native_glop() {
                 case.mode.as_str(),
                 "tight_internal_dual"
                     | "tight_internal_primal"
+                    | "polish_cleanup"
                     | "no_reopt_primal"
                     | "no_reopt_dual"
             ) {
@@ -399,13 +403,40 @@ fn small_phase4_cases_match_pinned_native_glop() {
                 ),
             );
         }
-        if case.mode == "external_basis" {
+        if matches!(
+            case.mode.as_str(),
+            "external_basis"
+                | "transposed_external_basis"
+                | "polish"
+                | "polish_clear"
+                | "polish_control"
+        ) {
             simplex.load_state_for_next_solve(&BasisState {
-                statuses: VariableStatusRow::from_vec(vec![
-                    VariableStatus::Basic,
-                    VariableStatus::AtUpperBound,
-                ]),
+                statuses: VariableStatusRow::from_vec(
+                    (0..case.variables.len() + case.constraints.len())
+                        .map(|column| {
+                            if column == 0 {
+                                VariableStatus::Basic
+                            } else if column == case.variables.len() {
+                                VariableStatus::AtUpperBound
+                            } else {
+                                VariableStatus::AtLowerBound
+                            }
+                        })
+                        .collect(),
+                ),
             });
+        }
+        if matches!(
+            case.mode.as_str(),
+            "polish" | "polish_clear" | "polish_cleanup"
+        ) {
+            for column in 0..case.variables.len() {
+                simplex.set_integrality_scale(ColIndex::from_usize(column), 1.0);
+            }
+            if case.mode == "polish_clear" {
+                simplex.clear_integrality_scales();
+            }
         }
         if matches!(
             case.mode.as_str(),
@@ -595,7 +626,95 @@ fn small_phase4_cases_match_pinned_native_glop() {
             20.0
         };
         let mut time_limit = TimeLimit::new(wall_limit, deterministic_limit);
-        let result = simplex.solve(&lp, &mut time_limit);
+        let result = if matches!(
+            case.mode.as_str(),
+            "transposed"
+                | "transposed_slack_objective"
+                | "transposed_external_basis"
+                | "transposed_warm_bounds"
+                | "transposed_warm_objective"
+                | "transposed_changed_matrix"
+        ) {
+            let mut with_slack = CompactSparseMatrix::default();
+            with_slack.populate_from_sparse_and_add_slacks(lp.matrix());
+            simplex
+                .mutable_transposed_matrix_with_slack()
+                .populate_from_transpose(&with_slack);
+            let rows = lp.num_constraints().to_usize();
+            let columns = lp.num_variables().to_usize();
+            let mut lower = vec![0.0; columns + rows];
+            let mut upper = vec![0.0; columns + rows];
+            let mut objective = vec![0.0; columns + rows];
+            for column in 0..columns {
+                let index = ColIndex::from_usize(column);
+                lower[column] = lp.variable_lower_bounds()[index];
+                upper[column] = lp.variable_upper_bounds()[index];
+                objective[column] = lp.objective_coefficients()[index];
+            }
+            for row in 0..rows {
+                let index = RowIndex::from_usize(row);
+                lower[columns + row] = -lp.constraint_upper_bounds()[index];
+                upper[columns + row] = -lp.constraint_lower_bounds()[index];
+            }
+            if case.mode == "transposed_slack_objective" {
+                objective[columns] = 1.0;
+            }
+            let scaling = if case.mode == "transposed_slack_objective" {
+                2.0
+            } else {
+                1.0
+            };
+            let offset = if case.mode == "transposed_slack_objective" {
+                3.0
+            } else {
+                0.0
+            };
+            *simplex.mutable_lower_bounds() = lower;
+            *simplex.mutable_upper_bounds() = upper;
+            let first = simplex.minimize_from_transposed_matrix_with_slack(
+                &lp_data::lp_types::DenseRow::from_vec(objective),
+                scaling,
+                offset,
+                &mut time_limit,
+            );
+            if matches!(
+                case.mode.as_str(),
+                "transposed_warm_bounds"
+                    | "transposed_warm_objective"
+                    | "transposed_changed_matrix"
+            ) {
+                first.unwrap();
+                if case.mode == "transposed_warm_bounds" {
+                    simplex.mutable_upper_bounds()[0] = 0.5;
+                } else if case.mode == "transposed_warm_objective" {
+                    lp.set_objective_coefficient(ColIndex::new(0), 1.0);
+                } else {
+                    lp.set_coefficient(RowIndex::new(0), ColIndex::new(0), 2.0);
+                    lp.clean_up();
+                    with_slack.populate_from_sparse_and_add_slacks(lp.matrix());
+                    simplex
+                        .mutable_transposed_matrix_with_slack()
+                        .populate_from_transpose(&with_slack);
+                }
+                simplex.minimize_from_transposed_matrix_with_slack(
+                    &lp_data::lp_types::DenseRow::from_vec(
+                        lp.objective_coefficients()
+                            .as_slice()
+                            .iter()
+                            .copied()
+                            .chain(std::iter::repeat_n(0.0, rows))
+                            .collect(),
+                    ),
+                    scaling,
+                    offset,
+                    &mut time_limit,
+                )
+            } else {
+                first
+            }
+        } else {
+            simplex.solve(&lp, &mut time_limit)
+        };
         if let Some(expected_error) = &expected.error {
             assert_eq!(
                 result.unwrap_err().to_string(),
@@ -613,6 +732,28 @@ fn small_phase4_cases_match_pinned_native_glop() {
             continue;
         }
         result.unwrap_or_else(|error| panic!("{}: {error}", case.name));
+        assert_eq!(
+            simplex.problem_num_rows(),
+            lp.num_constraints(),
+            "{}",
+            case.name
+        );
+        assert_eq!(
+            simplex.problem_num_cols().to_usize(),
+            lp.num_variables().to_usize(),
+            "{}",
+            case.name
+        );
+        assert_eq!(
+            simplex.matrix_with_slack().num_rows(),
+            simplex.problem_num_rows()
+        );
+        assert_eq!(
+            simplex.matrix_with_slack().num_cols(),
+            ColIndex::from_usize(
+                simplex.problem_num_cols().to_usize() + simplex.problem_num_rows().to_usize()
+            )
+        );
         let charged = simplex.deterministic_time() - clock_before;
         assert!(
             (time_limit.elapsed_deterministic_time() - charged).abs() <= 1e-18,

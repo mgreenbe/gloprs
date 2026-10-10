@@ -35,6 +35,7 @@ def main() -> None:
         action="store_true",
         help="also solve qap15 without an effective iteration cap",
     )
+    parser.add_argument("--output", type=Path, default=OUTPUT)
     options = parser.parse_args()
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"],
@@ -67,6 +68,7 @@ def main() -> None:
             "limit": limit,
             "status": fields["status"][0],
             "iterations": int(fields["iterations"][0]),
+            "deterministic_time_bits": int(fields["deterministic_time_bits"][0]),
             "basis_sha256": digest(fields["basis"]),
             "reduced_bits_sha256": digest(fields["reduced_bits"]),
             "norm_bits_sha256": digest(fields["norm_bits"]),
@@ -80,8 +82,8 @@ def main() -> None:
         "parameters": {"use_dual_simplex": True, "use_scaling": False},
         "snapshots": snapshots,
     }
-    OUTPUT.write_text(json.dumps(fixture, indent=2) + "\n", encoding="utf-8")
-    print(f"wrote {OUTPUT}")
+    options.output.write_text(json.dumps(fixture, indent=2) + "\n", encoding="utf-8")
+    print(f"wrote {options.output}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,28 @@
+{
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "mps_sha256": "872a7cfa2ea3d11b67d932c34ffa90a2ada9dc400558151a2b719889c0c595b2",
+  "parameters": {
+    "use_dual_simplex": true,
+    "use_scaling": false
+  },
+  "snapshots": [
+    {
+      "limit": 28148,
+      "status": "IMPRECISE",
+      "iterations": 28148,
+      "deterministic_time_bits": 4633943681797288472,
+      "basis_sha256": "32f7136d80321a3c555dcef212123b980dcfefc1d7beaa18fefb3297cb37c84f",
+      "reduced_bits_sha256": "ccf3276b52b21da905907ac46653bab0c2c5943e560833cc3818347fc07ce58a",
+      "norm_bits_sha256": "899325890e6e04706464b1175c30ef5dc69357a06727f1c4448cfd0b97008851"
+    },
+    {
+      "limit": 28149,
+      "status": "IMPRECISE",
+      "iterations": 28149,
+      "deterministic_time_bits": 4633944755191697588,
+      "basis_sha256": "adf0efeed4d5c414b0cf07839594e402db5ddacc9e6c6fd0918a4a49d8dabfa7",
+      "reduced_bits_sha256": "4fdde7ac6daf5fd3486a9b4939507baa6e5f6ddb06dfe9acb6696e8a75eda62e",
+      "norm_bits_sha256": "d83fc0bd125eb10b2eca1f5f97f9c1caa886f61b9bf2797527c424be525a235f"
+    }
+  ]
+}

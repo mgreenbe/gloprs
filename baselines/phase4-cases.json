@@ -1271,6 +1271,158 @@
       "constraints": [["4e-6", "inf"], ["0.75", "inf"], ["-10", "10"]],
       "covers": ["starting_variable_values", "optimal_cleanup"],
       "forbids": ["primal_push"]
+    },
+    {
+      "name": "post_optimal_integrality_polish",
+      "mode": "polish",
+      "iterations": 100,
+      "matrix": [[0, 0, "2"], [0, 1, "1"]],
+      "variables": [["0", "0", "1"], ["0", "0", "1"]],
+      "constraints": [["1", "1"]],
+      "covers": ["warm_start_basis", "polish", "polish_accepted_move", "polish_bound_flip", "optimal_cleanup"]
+    },
+    {
+      "name": "post_optimal_integrality_polish_control",
+      "mode": "polish_control",
+      "iterations": 100,
+      "matrix": [[0, 0, "2"], [0, 1, "1"]],
+      "variables": [["0", "0", "1"], ["0", "0", "1"]],
+      "constraints": [["1", "1"]],
+      "covers": ["warm_start_basis", "optimal_cleanup"],
+      "forbids": ["polish", "polish_accepted_move", "polish_bound_flip"]
+    },
+    {
+      "name": "post_optimal_integrality_polish_pivot",
+      "mode": "polish",
+      "iterations": 100,
+      "matrix": [[0, 0, "2"], [0, 1, "1"]],
+      "variables": [["0", "0", "1"], ["0", "0", "inf"]],
+      "constraints": [["1", "1"]],
+      "covers": ["warm_start_basis", "polish", "polish_accepted_move", "polish_pivot", "optimal_cleanup"],
+      "forbids": ["polish_bound_flip"]
+    },
+    {
+      "name": "post_optimal_integrality_polish_multiple_candidates",
+      "mode": "polish",
+      "iterations": 100,
+      "matrix": [[0, 0, "2"], [0, 1, "1"], [0, 2, "2"]],
+      "variables": [["0", "0", "1"], ["0", "0", "inf"], ["0", "0", "inf"]],
+      "constraints": [["1", "1"]],
+      "covers": ["warm_start_basis", "polish", "polish_rejected_move", "polish_accepted_move", "polish_pivot", "optimal_cleanup"]
+    },
+    {
+      "name": "post_optimal_integrality_polish_time_limit",
+      "mode": "polish",
+      "iterations": 100,
+      "deterministic_limit": "7e-8",
+      "matrix": [[0, 0, "2"], [0, 1, "1"]],
+      "variables": [["0", "0", "1"], ["0", "0", "1"]],
+      "constraints": [["1", "1"]],
+      "covers": ["warm_start_basis", "polish", "polish_time_limit", "optimal_cleanup"],
+      "forbids": ["polish_accepted_move"]
+    },
+    {
+      "name": "post_optimal_integrality_scales_cleared",
+      "mode": "polish_clear",
+      "iterations": 100,
+      "matrix": [[0, 0, "2"], [0, 1, "1"]],
+      "variables": [["0", "0", "1"], ["0", "0", "1"]],
+      "constraints": [["1", "1"]],
+      "covers": ["warm_start_basis", "optimal_cleanup"],
+      "forbids": ["polish", "polish_accepted_move", "polish_bound_flip"]
+    },
+    {
+      "name": "transposed_matrix_with_slack_entry",
+      "mode": "transposed",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "2"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["transposed_matrix_entry", "dual_phase_two", "optimal_cleanup"]
+    },
+    {
+      "name": "transposed_matrix_with_slack_warm_bound_change",
+      "mode": "transposed_warm_bounds",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "2"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["transposed_matrix_entry", "warm_reuse_factorization", "dual_phase_two", "optimal_cleanup"]
+    },
+    {
+      "name": "transposed_matrix_with_slack_changed_matrix",
+      "mode": "transposed_changed_matrix",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "2"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["transposed_matrix_entry", "warm_start_basis", "dual_phase_two", "optimal_cleanup"]
+    },
+    {
+      "name": "transposed_matrix_with_slack_nonzero_slack_cost_and_objective_transform",
+      "mode": "transposed_slack_objective",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "2"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["transposed_matrix_entry", "dual_phase_two", "optimal_cleanup"]
+    },
+    {
+      "name": "transposed_matrix_with_slack_zero_rows",
+      "mode": "transposed",
+      "iterations": 100,
+      "matrix": [],
+      "variables": [["-1", "0", "1"]],
+      "constraints": [],
+      "covers": ["transposed_matrix_entry"]
+    },
+    {
+      "name": "transposed_matrix_with_slack_warm_objective_change",
+      "mode": "transposed_warm_objective",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "2"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["transposed_matrix_entry", "warm_start_basis", "dual_phase_two", "optimal_cleanup"],
+      "forbids": ["warm_reuse_factorization"]
+    },
+    {
+      "name": "transposed_matrix_with_slack_external_basis",
+      "mode": "transposed_external_basis",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["-1", "0", "2"]],
+      "constraints": [["-inf", "1"]],
+      "covers": ["transposed_matrix_entry", "warm_start_basis", "dual_phase_two", "optimal_cleanup"]
+    },
+    {
+      "name": "post_optimal_integrality_polish_after_cleanup_reoptimization",
+      "mode": "polish_cleanup",
+      "iterations": 100,
+      "matrix": [[0, 0, "-0.1"], [0, 1, "0.1"], [0, 2, "0.7"], [1, 0, "2"], [1, 1, "1"], [1, 2, "0.1"], [2, 0, "-1"], [2, 1, "0.1"], [2, 2, "0.7"]],
+      "variables": [["2", "0", "inf"], ["-2", "0", "inf"], ["2", "0", "1"]],
+      "constraints": [["-inf", "1"], ["0", "inf"], ["-inf", "1"]],
+      "covers": ["primal_phase_two", "polish", "cleanup_primal_to_dual", "cleanup_dual_reoptimization", "polish_after_reoptimization", "optimal_cleanup"]
+    },
+    {
+      "name": "post_optimal_integrality_polish_accept_then_reject",
+      "mode": "polish",
+      "iterations": 100,
+      "matrix": [[0, 0, "2"], [0, 1, "1"], [0, 2, "1"]],
+      "variables": [["0", "0", "1"], ["0", "0", "inf"], ["0", "0", "inf"]],
+      "constraints": [["1", "1"]],
+      "covers": ["warm_start_basis", "polish", "polish_accepted_move", "polish_pivot", "polish_rejected_move", "optimal_cleanup"]
+    },
+    {
+      "name": "post_optimal_integrality_polish_time_limit_after_pivot",
+      "mode": "polish",
+      "iterations": 100,
+      "deterministic_limit": "8e-8",
+      "matrix": [[0, 0, "2"], [0, 1, "1"], [0, 2, "1"]],
+      "variables": [["0", "0", "1"], ["0", "0", "inf"], ["0", "0", "inf"]],
+      "constraints": [["1", "1"]],
+      "covers": ["warm_start_basis", "polish", "polish_accepted_move", "polish_pivot", "polish_time_limit", "optimal_cleanup"],
+      "forbids": ["polish_rejected_move"]
     }
   ]
 }
