@@ -1,0 +1,2358 @@
+{
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "cases_sha256": "94e08c90a67590a2270100b0fcf0dd44c9c80b19ed9a6fd7c600ae048fe0a677",
+  "results": [
+    {
+      "name": "fixed_variable",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          4626322717216342016
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          4621819117588971520
+        ],
+        "constraint_lower": [
+          4622945017495814144
+        ],
+        "constraint_upper": [
+          4626885667169763328
+        ],
+        "matrix": [
+          0,
+          0,
+          4613937818241073152
+        ],
+        "recovered_primal": [
+          4616189618054758400,
+          4611686018427387904
+        ],
+        "recovered_dual": [
+          4602678819172646912
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "FIXED_VALUE",
+          "BASIC"
+        ],
+        "constraint_status": [
+          "AT_LOWER_BOUND"
+        ]
+      }
+    },
+    {
+      "name": "free_constraint",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          4621819117588971520
+        ],
+        "constraint_lower": [
+          4607182418800017408
+        ],
+        "constraint_upper": [
+          4617315517961601024
+        ],
+        "matrix": [
+          0,
+          0,
+          4613937818241073152
+        ],
+        "recovered_primal": [
+          4611686018427387904
+        ],
+        "recovered_dual": [
+          0,
+          4598175219545276416
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC"
+        ],
+        "constraint_status": [
+          "BASIC",
+          "AT_LOWER_BOUND"
+        ]
+      }
+    },
+    {
+      "name": "empty_constraint",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          4621819117588971520
+        ],
+        "constraint_lower": [
+          4607182418800017408
+        ],
+        "constraint_upper": [
+          4617315517961601024
+        ],
+        "matrix": [
+          0,
+          0,
+          4611686018427387904
+        ],
+        "recovered_primal": [
+          4607182418800017408
+        ],
+        "recovered_dual": [
+          4593671619917905920,
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC"
+        ],
+        "constraint_status": [
+          "AT_UPPER_BOUND",
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "empty_column",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          13845191154443747328
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          4621819117588971520
+        ],
+        "constraint_lower": [
+          4607182418800017408
+        ],
+        "constraint_upper": [
+          4617315517961601024
+        ],
+        "matrix": [
+          0,
+          0,
+          4611686018427387904
+        ],
+        "recovered_primal": [
+          4607182418800017408,
+          4617315517961601024
+        ],
+        "recovered_dual": [
+          4593671619917905920
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC",
+          "AT_UPPER_BOUND"
+        ],
+        "constraint_status": [
+          "AT_UPPER_BOUND"
+        ]
+      }
+    },
+    {
+      "name": "singleton_column_sign",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          13837309855095848960
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          13845191154443747328
+        ],
+        "variable_upper": [
+          9223372036854775808
+        ],
+        "constraint_lower": [
+          13845191154443747328
+        ],
+        "constraint_upper": [
+          0
+        ],
+        "matrix": [
+          0,
+          0,
+          4611686018427387904
+        ],
+        "recovered_primal": [
+          4621819117588971520
+        ],
+        "recovered_dual": [
+          4602678819172646912
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "AT_UPPER_BOUND"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "empty_constraint_infeasible",
+      "trace": {
+        "changed": [
+          0
+        ],
+        "status": [
+          "PRIMAL_INFEASIBLE"
+        ],
+        "objective": [],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [],
+        "variable_upper": [],
+        "constraint_lower": [
+          4607182418800017408
+        ],
+        "constraint_upper": [
+          4611686018427387904
+        ],
+        "matrix": [],
+        "recovered_primal": [],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [],
+        "constraint_status": [
+          "FREE"
+        ]
+      }
+    },
+    {
+      "name": "empty_column_unbounded",
+      "trace": {
+        "changed": [
+          0
+        ],
+        "status": [
+          "INFEASIBLE_OR_UNBOUNDED"
+        ],
+        "objective": [
+          13830554455654793216
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          9218868437227405312
+        ],
+        "constraint_lower": [],
+        "constraint_upper": [],
+        "matrix": [],
+        "recovered_primal": [
+          0
+        ],
+        "recovered_dual": [],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "FREE"
+        ],
+        "constraint_status": []
+      }
+    },
+    {
+      "name": "forcing_down_dual_recovery",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [],
+        "objective_offset": [
+          4616189618054758400
+        ],
+        "variable_lower": [],
+        "variable_upper": [],
+        "constraint_lower": [],
+        "constraint_upper": [],
+        "matrix": [],
+        "recovered_primal": [
+          4611686018427387904,
+          4607182418800017408
+        ],
+        "recovered_dual": [
+          4611686018427387904
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "AT_UPPER_BOUND",
+          "BASIC"
+        ],
+        "constraint_status": [
+          "AT_LOWER_BOUND"
+        ]
+      }
+    },
+    {
+      "name": "forcing_up_dual_recovery",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [],
+        "variable_upper": [],
+        "constraint_lower": [],
+        "constraint_upper": [],
+        "matrix": [],
+        "recovered_primal": [
+          0
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "AT_LOWER_BOUND"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "forcing_conflict_infeasible",
+      "trace": {
+        "changed": [
+          0
+        ],
+        "status": [
+          "PRIMAL_INFEASIBLE"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          4607182418800017408
+        ],
+        "constraint_lower": [
+          4607182418800017408,
+          0
+        ],
+        "constraint_upper": [
+          4607182418800017408,
+          0
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408,
+          0,
+          1,
+          4607182418800017408
+        ],
+        "recovered_primal": [
+          0
+        ],
+        "recovered_dual": [
+          0,
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "FREE"
+        ],
+        "constraint_status": [
+          "FREE",
+          "FREE"
+        ]
+      }
+    },
+    {
+      "name": "implied_free_relaxes_without_postsolve",
+      "trace": {
+        "changed": [
+          0
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          4621819117588971520
+        ],
+        "constraint_lower": [
+          18442240474082181120
+        ],
+        "constraint_upper": [
+          9218868437227405312
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408
+        ],
+        "recovered_primal": [
+          0
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "AT_LOWER_BOUND"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "implied_free_positive_coefficient",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4611686018427387904
+        ],
+        "objective_offset": [
+          4611686018427387904
+        ],
+        "variable_lower": [
+          18442240474082181120
+        ],
+        "variable_upper": [
+          9218868437227405312
+        ],
+        "constraint_lower": [
+          0
+        ],
+        "constraint_upper": [
+          4613937818241073152
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408
+        ],
+        "recovered_primal": [
+          4607182418800017408
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "AT_LOWER_BOUND"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "implied_free_negative_coefficient_basic",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4611686018427387904
+        ],
+        "objective_offset": [
+          4611686018427387904
+        ],
+        "variable_lower": [
+          18442240474082181120
+        ],
+        "variable_upper": [
+          9218868437227405312
+        ],
+        "constraint_lower": [
+          13837309855095848960
+        ],
+        "constraint_upper": [
+          0
+        ],
+        "matrix": [
+          0,
+          0,
+          13830554455654793216
+        ],
+        "recovered_primal": [
+          4613937818241073152
+        ],
+        "recovered_dual": [
+          4602678819172646912
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC"
+        ],
+        "constraint_status": [
+          "AT_LOWER_BOUND"
+        ]
+      }
+    },
+    {
+      "name": "implied_free_detects_infeasibility",
+      "trace": {
+        "changed": [
+          0
+        ],
+        "status": [
+          "PRIMAL_INFEASIBLE"
+        ],
+        "objective": [
+          0
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          4607182418800017408
+        ],
+        "constraint_lower": [
+          4611686018427387904
+        ],
+        "constraint_upper": [
+          4613937818241073152
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408
+        ],
+        "recovered_primal": [
+          0
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "AT_LOWER_BOUND"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "fixed_objective_offset_contraction",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [],
+        "objective_offset": [
+          13537820479875710976
+        ],
+        "variable_lower": [],
+        "variable_upper": [],
+        "constraint_lower": [],
+        "constraint_upper": [],
+        "matrix": [],
+        "recovered_primal": [
+          4607182418800017408,
+          13755392620465711345
+        ],
+        "recovered_dual": [],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "FIXED_VALUE",
+          "FIXED_VALUE"
+        ],
+        "constraint_status": []
+      }
+    },
+    {
+      "name": "fixed_row_bound_keeps_rounded_delta",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [],
+        "variable_upper": [],
+        "constraint_lower": [
+          0
+        ],
+        "constraint_upper": [
+          0
+        ],
+        "matrix": [],
+        "recovered_primal": [
+          13755392620465711345
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "FIXED_VALUE"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "forcing_implied_activity_contraction",
+      "trace": {
+        "changed": [
+          0
+        ],
+        "status": [
+          "PRIMAL_INFEASIBLE"
+        ],
+        "objective": [
+          0,
+          0
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          4607182418800017408,
+          13755392620465711345
+        ],
+        "variable_upper": [
+          4607182418800017408,
+          13755392620465711345
+        ],
+        "constraint_lower": [
+          0
+        ],
+        "constraint_upper": [
+          0
+        ],
+        "matrix": [
+          0,
+          0,
+          13780862097654357354,
+          1,
+          0,
+          13855324253605330944
+        ],
+        "recovered_primal": [
+          4607182418800017408,
+          13755392620465711345
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "FIXED_VALUE",
+          "FIXED_VALUE"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "empty_column_objective_offset_contraction",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [],
+        "objective_offset": [
+          13537820479875710976
+        ],
+        "variable_lower": [],
+        "variable_upper": [],
+        "constraint_lower": [],
+        "constraint_upper": [],
+        "matrix": [],
+        "recovered_primal": [
+          4607182418800017408,
+          13755392620465711345
+        ],
+        "recovered_dual": [],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "AT_UPPER_BOUND",
+          "AT_UPPER_BOUND"
+        ],
+        "constraint_status": []
+      }
+    },
+    {
+      "name": "doubleton_free_positive_pivot",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4618441417868443648,
+          13835058055282163712
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          4611686018427387904,
+          0
+        ],
+        "variable_upper": [
+          4616189618054758400,
+          4621819117588971520
+        ],
+        "constraint_lower": [
+          4607182418800017408
+        ],
+        "constraint_upper": [
+          4621819117588971520
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408,
+          1,
+          0,
+          4612811918334230528
+        ],
+        "recovered_primal": [
+          4602678819172646912,
+          4607182418800017408
+        ],
+        "recovered_dual": [
+          4613656343264362496,
+          4598175219545276416
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC",
+          "BASIC"
+        ],
+        "constraint_status": [
+          "AT_LOWER_BOUND",
+          "AT_UPPER_BOUND"
+        ]
+      }
+    },
+    {
+      "name": "doubleton_free_negative_pivot",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4613937818241073152,
+          4611686018427387904
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          4607182418800017408,
+          0
+        ],
+        "variable_upper": [
+          4611686018427387904,
+          4621819117588971520
+        ],
+        "constraint_lower": [
+          0
+        ],
+        "constraint_upper": [
+          4621819117588971520
+        ],
+        "matrix": [
+          0,
+          0,
+          4611686018427387904,
+          1,
+          0,
+          4618066117899496107
+        ],
+        "recovered_primal": [
+          4612436618365282987,
+          4607182418800017408
+        ],
+        "recovered_dual": [
+          13832055655530583381,
+          13826050856027422720
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC",
+          "BASIC"
+        ],
+        "constraint_status": [
+          "AT_LOWER_BOUND",
+          "AT_LOWER_BOUND"
+        ]
+      }
+    },
+    {
+      "name": "doubleton_free_skips_original_deleted_row",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4611686018427387904,
+          13835058055282163712
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          4607182418800017408,
+          18442240474082181120
+        ],
+        "variable_upper": [
+          4611686018427387904,
+          9218868437227405312
+        ],
+        "constraint_lower": [
+          13845191154443747328,
+          13845191154443747328
+        ],
+        "constraint_upper": [
+          4621819117588971520,
+          4621819117588971520
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408,
+          1,
+          0,
+          13832806255468478464,
+          1,
+          1,
+          4607182418800017408
+        ],
+        "recovered_primal": [
+          4607182418800017408,
+          0
+        ],
+        "recovered_dual": [
+          4607182418800017408,
+          0,
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC",
+          "BASIC"
+        ],
+        "constraint_status": [
+          "AT_LOWER_BOUND",
+          "BASIC",
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "doubleton_free_no_change_preserves_transpose",
+      "trace": {
+        "changed": [
+          0
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          18442240474082181120
+        ],
+        "variable_upper": [
+          9218868437227405312
+        ],
+        "constraint_lower": [
+          0
+        ],
+        "constraint_upper": [
+          4611686018427387904
+        ],
+        "matrix": [
+          0,
+          0,
+          4611686018427387904
+        ],
+        "recovered_primal": [
+          4607182418800017408
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC"
+        ],
+        "constraint_status": [
+          "AT_UPPER_BOUND"
+        ]
+      }
+    },
+    {
+      "name": "doubleton_equality_induced_upper_bound",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          4621819117588971520
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          4617315517961601024
+        ],
+        "constraint_lower": [
+          13845191154443747328
+        ],
+        "constraint_upper": [
+          4626322717216342016
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408
+        ],
+        "recovered_primal": [
+          0,
+          4617315517961601024
+        ],
+        "recovered_dual": [
+          4609434218613702656,
+          4602678819172646912
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "AT_LOWER_BOUND",
+          "BASIC"
+        ],
+        "constraint_status": [
+          "FIXED_VALUE",
+          "AT_LOWER_BOUND"
+        ]
+      }
+    },
+    {
+      "name": "doubleton_equality_keeps_modified_bound",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          4621819117588971520
+        ],
+        "variable_lower": [
+          4607182418800017408
+        ],
+        "variable_upper": [
+          4611686018427387904
+        ],
+        "constraint_lower": [],
+        "constraint_upper": [],
+        "matrix": [],
+        "recovered_primal": [
+          4616189618054758400,
+          4607182418800017408
+        ],
+        "recovered_dual": [
+          4611686018427387904
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC",
+          "AT_LOWER_BOUND"
+        ],
+        "constraint_status": [
+          "FIXED_VALUE"
+        ]
+      }
+    },
+    {
+      "name": "doubleton_equality_chained_dual_recovery",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4613937818241073152
+        ],
+        "objective_offset": [
+          4625478292286210048
+        ],
+        "variable_lower": [
+          4611686018427387904
+        ],
+        "variable_upper": [
+          4619567317775286272
+        ],
+        "constraint_lower": [],
+        "constraint_upper": [],
+        "matrix": [],
+        "recovered_primal": [
+          0,
+          4617315517961601024,
+          4611686018427387904
+        ],
+        "recovered_dual": [
+          13830554455654793216,
+          4616189618054758400
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "AT_LOWER_BOUND",
+          "BASIC",
+          "BASIC"
+        ],
+        "constraint_status": [
+          "FIXED_VALUE",
+          "FIXED_VALUE"
+        ]
+      }
+    },
+    {
+      "name": "proportional_row_one_tightest_source",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          4621819117588971520
+        ],
+        "constraint_lower": [
+          4616189618054758400
+        ],
+        "constraint_upper": [
+          4622945017495814144
+        ],
+        "matrix": [
+          0,
+          0,
+          4611686018427387904
+        ],
+        "recovered_primal": [
+          4613937818241073152
+        ],
+        "recovered_dual": [
+          0,
+          4602678819172646912
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC"
+        ],
+        "constraint_status": [
+          "BASIC",
+          "AT_LOWER_BOUND"
+        ]
+      }
+    },
+    {
+      "name": "proportional_row_split_sources_dual_transfer",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          4621819117588971520
+        ],
+        "constraint_lower": [
+          4616189618054758400
+        ],
+        "constraint_upper": [
+          4622945017495814144
+        ],
+        "matrix": [
+          0,
+          0,
+          4611686018427387904
+        ],
+        "recovered_primal": [
+          4613937818241073152
+        ],
+        "recovered_dual": [
+          4607182418800017408,
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC"
+        ],
+        "constraint_status": [
+          "AT_LOWER_BOUND",
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "proportional_row_negative_factor",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          4621819117588971520
+        ],
+        "constraint_lower": [
+          13844065254536904704
+        ],
+        "constraint_upper": [
+          13835058055282163712
+        ],
+        "matrix": [
+          0,
+          0,
+          13835058055282163712
+        ],
+        "recovered_primal": [
+          4613937818241073152
+        ],
+        "recovered_dual": [
+          0,
+          13826050856027422720
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC"
+        ],
+        "constraint_status": [
+          "BASIC",
+          "AT_UPPER_BOUND"
+        ]
+      }
+    },
+    {
+      "name": "proportional_row_infeasible",
+      "trace": {
+        "changed": [
+          0
+        ],
+        "status": [
+          "PRIMAL_INFEASIBLE"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          4621819117588971520
+        ],
+        "constraint_lower": [
+          0,
+          4616189618054758400
+        ],
+        "constraint_upper": [
+          4607182418800017408,
+          4621819117588971520
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408,
+          0,
+          1,
+          4611686018427387904
+        ],
+        "recovered_primal": [
+          0
+        ],
+        "recovered_dual": [
+          0,
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "AT_LOWER_BOUND"
+        ],
+        "constraint_status": [
+          "BASIC",
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "proportional_column_merge_basic",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          4617315517961601024
+        ],
+        "constraint_lower": [
+          0
+        ],
+        "constraint_upper": [
+          4621819117588971520
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408
+        ],
+        "recovered_primal": [
+          4607182418800017408,
+          4613937818241073152
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC",
+          "AT_UPPER_BOUND"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "proportional_column_opposite_factors",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          4617315517961601024
+        ],
+        "constraint_lower": [
+          13845191154443747328
+        ],
+        "constraint_upper": [
+          4621819117588971520
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408
+        ],
+        "recovered_primal": [
+          4607182418800017408,
+          13837309855095848960
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC",
+          "AT_LOWER_BOUND"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "proportional_column_slope_fixes_bound",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          9218868437227405312
+        ],
+        "constraint_lower": [
+          0
+        ],
+        "constraint_upper": [
+          4621819117588971520
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408
+        ],
+        "recovered_primal": [
+          4607182418800017408,
+          0
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC",
+          "AT_LOWER_BOUND"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "proportional_column_slope_conflict",
+      "trace": {
+        "changed": [
+          0
+        ],
+        "status": [
+          "INFEASIBLE_OR_UNBOUNDED"
+        ],
+        "objective": [
+          4607182418800017408,
+          4611686018427387904
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0,
+          18442240474082181120
+        ],
+        "variable_upper": [
+          9218868437227405312,
+          0
+        ],
+        "constraint_lower": [
+          13845191154443747328
+        ],
+        "constraint_upper": [
+          4621819117588971520
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408,
+          1,
+          0,
+          4607182418800017408
+        ],
+        "recovered_primal": [
+          4607182418800017408,
+          0
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC",
+          "AT_UPPER_BOUND"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "proportional_column_infinite_distance_postsolve",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          18442240474082181120
+        ],
+        "variable_upper": [
+          9218868437227405312
+        ],
+        "constraint_lower": [
+          13845191154443747328
+        ],
+        "constraint_upper": [
+          4621819117588971520
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408
+        ],
+        "recovered_primal": [
+          4616189618054758400,
+          0
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC",
+          "FREE"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "dualizer_ranged_row_and_shifted_bounds",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4613937818241073152,
+          0,
+          4613937818241073152,
+          4607182418800017408
+        ],
+        "objective_offset": [
+          4618441417868443648
+        ],
+        "variable_lower": [
+          18442240474082181120,
+          0,
+          18442240474082181120,
+          0
+        ],
+        "variable_upper": [
+          0,
+          9218868437227405312,
+          0,
+          9218868437227405312
+        ],
+        "constraint_lower": [
+          4618441417868443648
+        ],
+        "constraint_upper": [
+          4618441417868443648
+        ],
+        "matrix": [
+          0,
+          0,
+          4611686018427387904,
+          1,
+          0,
+          4607182418800017408,
+          2,
+          0,
+          4607182418800017408,
+          3,
+          0,
+          4611686018427387904
+        ],
+        "recovered_primal": [
+          4607182418800017408
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "PRIMAL_FEASIBLE"
+        ],
+        "variable_status": [
+          "AT_LOWER_BOUND"
+        ],
+        "constraint_status": [
+          "AT_UPPER_BOUND"
+        ]
+      }
+    },
+    {
+      "name": "dualizer_one_sided_row_free_column",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4613937818241073152
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          9218868437227405312
+        ],
+        "constraint_lower": [
+          4611686018427387904
+        ],
+        "constraint_upper": [
+          4611686018427387904
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408
+        ],
+        "recovered_primal": [
+          0
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "DUAL_INFEASIBLE"
+        ],
+        "variable_status": [
+          "FREE"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "unconstrained_finite_bound_dominance",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [],
+        "variable_upper": [],
+        "constraint_lower": [
+          18442240474082181120
+        ],
+        "constraint_upper": [
+          4621819117588971520
+        ],
+        "matrix": [],
+        "recovered_primal": [
+          0
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "AT_LOWER_BOUND"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "unconstrained_detects_unbounded_cost",
+      "trace": {
+        "changed": [
+          0
+        ],
+        "status": [
+          "INFEASIBLE_OR_UNBOUNDED"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          18442240474082181120
+        ],
+        "variable_upper": [
+          4621819117588971520
+        ],
+        "constraint_lower": [
+          18442240474082181120
+        ],
+        "constraint_upper": [
+          4621819117588971520
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408
+        ],
+        "recovered_primal": [
+          0
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "AT_LOWER_BOUND"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "unconstrained_zero_cost_unbounded_postsolve",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [],
+        "variable_upper": [],
+        "constraint_lower": [],
+        "constraint_upper": [],
+        "matrix": [],
+        "recovered_primal": [
+          4607182418800017408
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC"
+        ],
+        "constraint_status": [
+          "AT_LOWER_BOUND"
+        ]
+      }
+    },
+    {
+      "name": "unconstrained_zero_cost_two_row_maximum_shift",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [],
+        "variable_upper": [],
+        "constraint_lower": [],
+        "constraint_upper": [],
+        "matrix": [],
+        "recovered_primal": [
+          4613937818241073152
+        ],
+        "recovered_dual": [
+          0,
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC"
+        ],
+        "constraint_status": [
+          "BASIC",
+          "AT_LOWER_BOUND"
+        ]
+      }
+    },
+    {
+      "name": "singleton_zero_cost_column",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [],
+        "variable_upper": [],
+        "constraint_lower": [
+          13837309855095848960
+        ],
+        "constraint_upper": [
+          4617315517961601024
+        ],
+        "matrix": [],
+        "recovered_primal": [
+          4616189618054758400
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "AT_UPPER_BOUND"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "singleton_nonzero_cost_equality",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4612811918334230528
+        ],
+        "objective_offset": [
+          4611686018427387904
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          4616189618054758400
+        ],
+        "constraint_lower": [],
+        "constraint_upper": [],
+        "matrix": [],
+        "recovered_primal": [
+          0,
+          4611686018427387904
+        ],
+        "recovered_dual": [
+          4602678819172646912
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC",
+          "BASIC"
+        ],
+        "constraint_status": [
+          "FIXED_VALUE"
+        ]
+      }
+    },
+    {
+      "name": "singleton_none_in_cycle",
+      "trace": {
+        "changed": [
+          0
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408,
+          4611686018427387904
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0,
+          0
+        ],
+        "variable_upper": [
+          4617315517961601024,
+          4617315517961601024
+        ],
+        "constraint_lower": [
+          0,
+          4607182418800017408
+        ],
+        "constraint_upper": [
+          4617315517961601024,
+          4618441417868443648
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408,
+          0,
+          1,
+          4611686018427387904,
+          1,
+          0,
+          4613937818241073152,
+          1,
+          1,
+          4616189618054758400
+        ],
+        "recovered_primal": [
+          4607182418800017408,
+          0
+        ],
+        "recovered_dual": [
+          0,
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC",
+          "AT_LOWER_BOUND"
+        ],
+        "constraint_status": [
+          "BASIC",
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "singleton_rows_tighten_same_variable",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          4607182418800017408
+        ],
+        "variable_upper": [
+          4617315517961601024
+        ],
+        "constraint_lower": [],
+        "constraint_upper": [],
+        "matrix": [],
+        "recovered_primal": [
+          4607182418800017408
+        ],
+        "recovered_dual": [
+          4607182418800017408,
+          0,
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC"
+        ],
+        "constraint_status": [
+          "AT_LOWER_BOUND",
+          "BASIC",
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "singleton_column_induces_row_chain",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          4617315517961601024
+        ],
+        "constraint_lower": [],
+        "constraint_upper": [],
+        "matrix": [],
+        "recovered_primal": [
+          0,
+          4607182418800017408
+        ],
+        "recovered_dual": [
+          0,
+          0,
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "AT_LOWER_BOUND",
+          "AT_LOWER_BOUND"
+        ],
+        "constraint_status": [
+          "BASIC",
+          "BASIC",
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "main_singleton_to_fixed_point",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "OPTIMAL"
+        ],
+        "objective": [],
+        "objective_offset": [
+          4617315517961601024
+        ],
+        "variable_lower": [],
+        "variable_upper": [],
+        "constraint_lower": [],
+        "constraint_upper": [],
+        "matrix": [],
+        "recovered_primal": [
+          4617315517961601024
+        ],
+        "recovered_dual": [
+          4607182418800017408
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC"
+        ],
+        "constraint_status": [
+          "AT_LOWER_BOUND"
+        ]
+      }
+    },
+    {
+      "name": "main_dense_two_by_two",
+      "trace": {
+        "changed": [
+          0
+        ],
+        "status": [
+          "INIT"
+        ],
+        "objective": [
+          4607182418800017408,
+          4611686018427387904
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0,
+          0
+        ],
+        "variable_upper": [
+          4617315517961601024,
+          4617315517961601024
+        ],
+        "constraint_lower": [
+          0,
+          4607182418800017408
+        ],
+        "constraint_upper": [
+          4617315517961601024,
+          4618441417868443648
+        ],
+        "matrix": [
+          0,
+          0,
+          4607182418800017408,
+          0,
+          1,
+          4611686018427387904,
+          1,
+          0,
+          4613937818241073152,
+          1,
+          1,
+          4616189618054758400
+        ],
+        "recovered_primal": [
+          0,
+          0
+        ],
+        "recovered_dual": [
+          0,
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC",
+          "BASIC"
+        ],
+        "constraint_status": [
+          "BASIC",
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "main_empty_row_infeasible",
+      "trace": {
+        "changed": [
+          1
+        ],
+        "status": [
+          "PRIMAL_INFEASIBLE"
+        ],
+        "objective": [],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [],
+        "variable_upper": [],
+        "constraint_lower": [
+          4607182418800017408
+        ],
+        "constraint_upper": [
+          4611686018427387904
+        ],
+        "matrix": [],
+        "recovered_primal": [
+          4607182418800017408
+        ],
+        "recovered_dual": [
+          0
+        ],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "AT_UPPER_BOUND"
+        ],
+        "constraint_status": [
+          "BASIC"
+        ]
+      }
+    },
+    {
+      "name": "main_empty_column_unbounded",
+      "trace": {
+        "changed": [
+          0
+        ],
+        "status": [
+          "INFEASIBLE_OR_UNBOUNDED"
+        ],
+        "objective": [
+          13830554455654793216
+        ],
+        "objective_offset": [
+          0
+        ],
+        "variable_lower": [
+          0
+        ],
+        "variable_upper": [
+          9218868437227405312
+        ],
+        "constraint_lower": [],
+        "constraint_upper": [],
+        "matrix": [],
+        "recovered_primal": [
+          0
+        ],
+        "recovered_dual": [],
+        "recovered_status": [
+          "INIT"
+        ],
+        "variable_status": [
+          "BASIC"
+        ],
+        "constraint_status": []
+      }
+    }
+  ]
+}

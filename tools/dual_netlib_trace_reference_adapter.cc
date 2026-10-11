@@ -19,11 +19,12 @@
 
 int main(int argc, char** argv) {
   namespace glop = operations_research::glop;
-  if (argc < 3 || argc > 5) return EXIT_FAILURE;
+  if (argc < 3 || argc > 8) return EXIT_FAILURE;
   const auto model = glop::MpsFileToMPModelProto(argv[1]);
   if (!model.ok()) return EXIT_FAILURE;
   glop::LinearProgram lp;
   glop::MPModelProtoToLinearProgram(*model, &lp);
+  bool prepared = false;
 
   glop::GlopParameters parameters;
   parameters.set_use_scaling(false);
@@ -38,11 +39,24 @@ int main(int argc, char** argv) {
       parameters.set_use_dedicated_dual_feasibility_algorithm(false);
     } else if (flag == "noimprecise") {
       parameters.set_change_status_to_imprecise(false);
+    } else if (flag == "prepared") {
+      prepared = true;
+    } else if (flag == "none") {
+      parameters.set_initial_basis(glop::GlopParameters::NONE);
+    } else if (flag == "no_singleton") {
+      parameters.set_exploit_singleton_column_in_initial_basis(false);
     } else {
       return EXIT_FAILURE;
     }
   }
   parameters.set_max_number_of_iterations(std::stoll(argv[2]));
+  glop::LinearProgram prepared_lp;
+  if (prepared) {
+    prepared_lp.PopulateFromLinearProgram(lp);
+    prepared_lp.RemoveNearZeroEntries(parameters.drop_magnitude());
+    prepared_lp.ClearTransposeMatrix();
+    lp.PopulateFromLinearProgram(prepared_lp);
+  }
   glop::RevisedSimplex simplex;
   simplex.SetParameters(parameters);
   operations_research::TimeLimit limit;

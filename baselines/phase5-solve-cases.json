@@ -1,0 +1,126 @@
+{
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "scope": "Uncapped solves use native MainLpPreprocessor; capped states retain the isolated bound-shift/scaling pipeline for their existing trajectory gate",
+  "trajectory_capture": "Independent native solves at iteration limits 0 through the full iteration count; capped basis/status/recovered values are compared in order, not interpreted as individual pivot events",
+  "matched_solver_parameters": {"initial_basis_is_per_case": true, "singleton_shortcut_is_per_case": true},
+  "cases": [
+    {
+      "name": "unscaled_control",
+      "mode": "none",
+      "matrix": [[0, 0, "1"]],
+      "variables": [["1", "0", "10"]],
+      "constraints": [["5", "inf"]]
+    },
+    {
+      "name": "bound_shift_only",
+      "mode": "shift",
+      "matrix": [[0, 0, "1"]],
+      "variables": [["1", "2", "10"]],
+      "constraints": [["5", "inf"]]
+    },
+    {
+      "name": "scaling_only",
+      "mode": "scale",
+      "matrix": [[0, 0, "1000"]],
+      "variables": [["5", "0", "10"]],
+      "constraints": [["2000", "inf"]]
+    },
+    {
+      "name": "bound_shift_and_scaling",
+      "mode": "both",
+      "matrix": [[0, 0, "1000"]],
+      "variables": [["5", "2", "10"]],
+      "constraints": [["5000", "inf"]]
+    },
+    {
+      "name": "two_variable_combined",
+      "mode": "both",
+      "matrix": [[0, 0, "1000"], [0, 1, "2"], [1, 0, "1"], [1, 1, "3"]],
+      "variables": [["5", "2", "10"], ["1", "0", "20"]],
+      "constraints": [["5000", "inf"], ["6", "inf"]]
+    },
+    {
+      "name": "singleton_unscaled_control",
+      "mode": "none",
+      "singleton_shortcut": true,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["1", "0", "10"]],
+      "constraints": [["5", "inf"]]
+    },
+    {
+      "name": "singleton_bound_shift_only",
+      "mode": "shift",
+      "singleton_shortcut": true,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["1", "2", "10"]],
+      "constraints": [["5", "inf"]]
+    },
+    {
+      "name": "singleton_scaling_only",
+      "mode": "scale",
+      "singleton_shortcut": true,
+      "matrix": [[0, 0, "1000"]],
+      "variables": [["5", "0", "10"]],
+      "constraints": [["2000", "inf"]]
+    },
+    {
+      "name": "singleton_bound_shift_and_scaling",
+      "mode": "both",
+      "singleton_shortcut": true,
+      "matrix": [[0, 0, "1000"]],
+      "variables": [["5", "2", "10"]],
+      "constraints": [["5000", "inf"]]
+    },
+    {
+      "name": "singleton_cost_order",
+      "mode": "none",
+      "singleton_shortcut": true,
+      "matrix": [[0, 0, "1"], [0, 1, "1"]],
+      "variables": [["1", "0", "10"], ["2", "0", "10"]],
+      "constraints": [["5", "inf"]]
+    },
+    {
+      "name": "singleton_boxed_cost_flip",
+      "mode": "none",
+      "singleton_shortcut": true,
+      "matrix": [[0, 0, "1"], [0, 1, "1"]],
+      "variables": [["-1", "0", "2"], ["1", "0", "10"]],
+      "constraints": [["5", "inf"]]
+    },
+    {
+      "name": "auxiliary_lp_scaled_solve",
+      "mode": "scale",
+      "scaling_method": 1,
+      "singleton_shortcut": true,
+      "matrix": [[0, 0, "2"], [0, 1, "16"], [1, 0, "0.25"], [1, 1, "4"]],
+      "variables": [["3", "0", "10"], ["1", "0", "20"]],
+      "constraints": [["1", "100"], ["0", "50"]]
+    },
+    {
+      "name": "dense_three_row_shift_and_scale_path",
+      "mode": "both",
+      "singleton_shortcut": false,
+      "matrix": [[0, 0, "200"], [0, 1, "1"], [0, 2, "0.1"], [1, 0, "1"], [1, 1, "30"], [1, 2, "1"], [2, 0, "0.5"], [2, 1, "1"], [2, 2, "4"]],
+      "variables": [["1", "1", "10"], ["2", "0", "10"], ["3", "0", "10"]],
+      "constraints": [["300", "inf"], ["4", "inf"], ["5", "inf"]]
+    },
+    {
+      "name": "default_basis_singleton_unscaled",
+      "mode": "none",
+      "initial_basis": "triangular",
+      "singleton_shortcut": true,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["1", "0", "10"]],
+      "constraints": [["5", "inf"]]
+    },
+    {
+      "name": "default_basis_singleton_shift_scale",
+      "mode": "both",
+      "initial_basis": "triangular",
+      "singleton_shortcut": true,
+      "matrix": [[0, 0, "1000"]],
+      "variables": [["5", "2", "10"]],
+      "constraints": [["5000", "inf"]]
+    }
+  ]
+}

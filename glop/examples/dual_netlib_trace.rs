@@ -19,6 +19,9 @@ fn main() {
     let mut perturb = false;
     let mut transformed = false;
     let mut primal = false;
+    let mut prepared = false;
+    let mut no_crash = false;
+    let mut no_singleton = false;
     for flag in arguments {
         if flag == "perturb" {
             perturb = true;
@@ -26,18 +29,38 @@ fn main() {
             transformed = true;
         } else if flag == "primal" {
             primal = true;
+        } else if flag == "prepared" {
+            prepared = true;
+        } else if flag == "none" {
+            no_crash = true;
+        } else if flag == "no_singleton" {
+            no_singleton = true;
         } else {
             panic!("unknown option");
         }
     }
 
-    let model = parse_mps_file(path).expect("failed to parse MPS");
+    let input = parse_mps_file(path).expect("failed to parse MPS");
+    let mut model = lp_data::lp_data::LinearProgram::new();
+    if prepared {
+        model.populate_from_linear_program(&input);
+        model.remove_near_zero_entries(1e-30);
+        model.clear_transpose_matrix();
+    } else {
+        model = input;
+    }
     let parameters = GlopParameters {
         use_scaling: false,
         use_dual_simplex: !primal,
         perturb_costs_in_dual_simplex: perturb,
         use_dedicated_dual_feasibility_algorithm: !transformed,
         max_number_of_iterations: iterations,
+        initial_basis: if no_crash {
+            glop::parameters::InitialBasisHeuristic::None
+        } else {
+            GlopParameters::default().initial_basis
+        },
+        exploit_singleton_column_in_initial_basis: !no_singleton,
         ..GlopParameters::default()
     };
     let mut simplex = RevisedSimplex::new();

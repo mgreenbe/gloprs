@@ -53,9 +53,60 @@ pub enum SimplexPhase {
 /// The equation-form data actually consumed by simplex initialization. The
 /// ordinary entry borrows these fields from `LinearProgram`; the advanced
 /// transposed entry supplies them without constructing a second LP model.
+#[derive(Clone, Copy)]
+enum EquationMatrix<'a> {
+    Sparse(&'a SparseMatrix),
+    Compact(&'a Rc<CompactSparseMatrix>),
+}
+
+impl EquationMatrix<'_> {
+    fn num_rows(self) -> RowIndex {
+        match self {
+            Self::Sparse(matrix) => matrix.num_rows(),
+            Self::Compact(matrix) => matrix.num_rows(),
+        }
+    }
+
+    fn num_cols(self) -> ColIndex {
+        match self {
+            Self::Sparse(matrix) => matrix.num_cols(),
+            Self::Compact(matrix) => matrix.num_cols(),
+        }
+    }
+
+    fn column_len(self, column: ColIndex) -> usize {
+        match self {
+            Self::Sparse(matrix) => matrix.column(column).num_entries(),
+            Self::Compact(matrix) => matrix.column(column).len(),
+        }
+    }
+
+    fn entry(self, column: ColIndex, position: usize) -> (RowIndex, f64) {
+        match self {
+            Self::Sparse(matrix) => {
+                let entry = matrix.column(column).entry(position);
+                (entry.index(), entry.coefficient())
+            }
+            Self::Compact(matrix) => {
+                let column = matrix.column(column);
+                (
+                    column.entry_row(position),
+                    column.entry_coefficient(position),
+                )
+            }
+        }
+    }
+
+    fn to_compact_shared(self) -> Rc<CompactSparseMatrix> {
+        match self {
+            Self::Sparse(matrix) => Rc::new(CompactSparseMatrix::from_sparse(matrix)),
+            Self::Compact(matrix) => Rc::clone(matrix),
+        }
+    }
+}
+
 struct EquationFormView<'a> {
-    matrix: &'a SparseMatrix,
-    shared_matrix: Option<&'a Rc<SparseMatrix>>,
+    matrix: EquationMatrix<'a>,
     lower_bounds: &'a [f64],
     upper_bounds: &'a [f64],
     objective: &'a DenseRow,
@@ -68,8 +119,7 @@ struct EquationFormView<'a> {
 impl<'a> EquationFormView<'a> {
     fn from_lp(lp: &'a LinearProgram) -> Self {
         Self {
-            matrix: lp.matrix(),
-            shared_matrix: None,
+            matrix: EquationMatrix::Sparse(lp.matrix()),
             lower_bounds: lp.variable_lower_bounds().as_slice(),
             upper_bounds: lp.variable_upper_bounds().as_slice(),
             objective: lp.objective_coefficients(),
@@ -80,8 +130,38 @@ impl<'a> EquationFormView<'a> {
         }
     }
 
-    fn matrix(&self) -> &SparseMatrix {
-        self.matrix
+    fn column_matches(&self, old: &CompactSparseMatrix, column: ColIndex) -> bool {
+        let old = old.column(column);
+        if old.len() != self.matrix.column_len(column) {
+            return false;
+        }
+        (0..old.len()).all(|position| {
+            self.matrix.entry(column, position)
+                == (old.entry_row(position), old.entry_coefficient(position))
+        })
+    }
+
+    fn column_matches_old_rows(
+        &self,
+        old: &CompactSparseMatrix,
+        column: ColIndex,
+        old_rows: usize,
+    ) -> bool {
+        let old = old.column(column);
+        let mut position = 0;
+        for index in 0..self.matrix.column_len(column) {
+            let (row, value) = self.matrix.entry(column, index);
+            if row.to_usize() >= old_rows {
+                continue;
+            }
+            if position >= old.len()
+                || (row, value) != (old.entry_row(position), old.entry_coefficient(position))
+            {
+                return false;
+            }
+            position += 1;
+        }
+        position == old.len()
     }
 
     fn num_constraints(&self) -> RowIndex {
@@ -133,8 +213,25 @@ fn basic_objective_direction_scalar_product(
 ) -> f64 {
     if !direction.should_use_dense_iteration(0.8) {
         let mut sum = 0.0;
-        for entry in direction {
-            sum += objective[basis[entry.index()]] * entry.coefficient();
+        let rows = direction.non_zeros();
+        let mut i = 0;
+        // Clang unrolls upstream's sparse ScalarProduct four terms at a time:
+        // rounded products are added in order, with fused tail terms. Preserve
+        // that arithmetic on arm64 so reduced-cost precision decisions agree.
+        while i + 4 <= rows.len() {
+            let p0 = objective[basis[rows[i]]] * direction.value(rows[i]);
+            let p1 = objective[basis[rows[i + 1]]] * direction.value(rows[i + 1]);
+            let p2 = objective[basis[rows[i + 2]]] * direction.value(rows[i + 2]);
+            let p3 = objective[basis[rows[i + 3]]] * direction.value(rows[i + 3]);
+            sum += p0;
+            sum += p1;
+            sum += p2;
+            sum += p3;
+            i += 4;
+        }
+        while i < rows.len() {
+            sum = objective[basis[rows[i]]].mul_add(direction.value(rows[i]), sum);
+            i += 1;
         }
         return sum;
     }
@@ -173,13 +270,11 @@ pub struct RevisedSimplex {
     num_rows: RowIndex,
     num_cols: ColIndex,
     first_slack_col: ColIndex,
-    matrix: Rc<SparseMatrix>,
     compact_matrix: Rc<CompactSparseMatrix>,
     transposed_matrix_with_slack: Rc<CompactSparseMatrix>,
     transpose_was_changed: bool,
     advanced_lower_bounds: Vec<f64>,
     advanced_upper_bounds: Vec<f64>,
-    advanced_matrix: Option<Rc<SparseMatrix>>,
     last_solve_was_advanced: bool,
     objective: DenseRow,
     objective_offset: f64,
@@ -294,13 +389,11 @@ impl RevisedSimplex {
             num_rows: RowIndex::new(0),
             num_cols: ColIndex::new(0),
             first_slack_col: ColIndex::new(0),
-            matrix: Rc::new(SparseMatrix::new()),
             compact_matrix: Rc::new(CompactSparseMatrix::default()),
             transposed_matrix_with_slack: Rc::new(CompactSparseMatrix::default()),
             transpose_was_changed: false,
             advanced_lower_bounds: Vec::new(),
             advanced_upper_bounds: Vec::new(),
-            advanced_matrix: None,
             last_solve_was_advanced: false,
             objective: DenseRow::new(),
             objective_offset: 0.0,
@@ -523,23 +616,20 @@ impl RevisedSimplex {
         objective_offset: f64,
         time_limit: &mut TimeLimit,
     ) -> Result<(), FactorizationError> {
-        let known_same_matrix = self.last_solve_was_advanced
-            && !self.transpose_was_changed
-            && self.advanced_matrix.is_some();
-        if self.transpose_was_changed || self.advanced_matrix.is_none() {
+        let known_same_matrix = self.last_solve_was_advanced && !self.transpose_was_changed;
+        let matrix = if known_same_matrix {
+            Rc::clone(&self.compact_matrix)
+        } else {
             let mut compact = CompactSparseMatrix::default();
             compact.populate_from_transpose(&self.transposed_matrix_with_slack);
-            self.compact_matrix = Rc::new(compact);
-            let rows = self.compact_matrix.num_rows().to_usize();
-            let columns = self.compact_matrix.num_cols().to_usize();
+            let rows = compact.num_rows().to_usize();
+            let columns = compact.num_cols().to_usize();
             if columns < rows {
                 return Err(FactorizationError::DimensionMismatch);
             }
             let first_slack = columns - rows;
             for row in 0..rows {
-                let column = self
-                    .compact_matrix
-                    .column(ColIndex::from_usize(first_slack + row));
+                let column = compact.column(ColIndex::from_usize(first_slack + row));
                 if column.len() != 1
                     || column.entry_row(0) != RowIndex::from_usize(row)
                     || column.entry_coefficient(0) != 1.0
@@ -547,22 +637,8 @@ impl RevisedSimplex {
                     return Err(FactorizationError::DimensionMismatch);
                 }
             }
-            // Other solver collaborators still need sparse columns. Retain
-            // the caller's compact matrix as the numerical and basis source;
-            // no equation-form LP is materialized.
-            let mut matrix = SparseMatrix::new();
-            matrix.set_num_rows(RowIndex::from_usize(rows));
-            for column in 0..columns {
-                let index = ColIndex::from_usize(column);
-                matrix.append_empty_column();
-                for (row, value) in self.compact_matrix.column(index).iter() {
-                    matrix.mutable_column(index).set_coefficient(row, value);
-                }
-            }
-            self.advanced_matrix = Some(Rc::new(matrix));
-            self.transpose_was_changed = false;
-        }
-        let matrix = Rc::clone(self.advanced_matrix.as_ref().unwrap());
+            Rc::new(compact)
+        };
         let columns = matrix.num_cols().to_usize();
         if objective.len().to_usize() != columns
             || self.advanced_lower_bounds.len() != columns
@@ -573,8 +649,7 @@ impl RevisedSimplex {
         let lower = std::mem::take(&mut self.advanced_lower_bounds);
         let upper = std::mem::take(&mut self.advanced_upper_bounds);
         let input = EquationFormView {
-            matrix: &matrix,
-            shared_matrix: Some(&matrix),
+            matrix: EquationMatrix::Compact(&matrix),
             lower_bounds: &lower,
             upper_bounds: &upper,
             objective,
@@ -588,6 +663,9 @@ impl RevisedSimplex {
         self.advanced_upper_bounds = upper;
         self.phase4_event("transposed_matrix_entry");
         self.last_solve_was_advanced = result.is_ok();
+        if result.is_ok() {
+            self.transpose_was_changed = false;
+        }
         result
     }
 
@@ -1009,7 +1087,7 @@ impl RevisedSimplex {
                     entering.to_usize(),
                     leaving_column.to_usize(),
                     row.to_usize(),
-                    direction.values().as_slice(),
+                    &direction,
                     self.update_row.as_mut().unwrap(),
                 )?;
             self.dual_edge_norms.update_before_basis_pivot(
@@ -1229,13 +1307,12 @@ impl RevisedSimplex {
                         row.to_usize(),
                     )?;
                 let pivot_from_update_row = self
-                    .matrix
+                    .compact_matrix
                     .column(entering)
                     .iter()
-                    .map(|entry| {
-                        self.update_row.as_ref().unwrap().unit_row_left_inverse()
-                            [entry.index().to_usize()]
-                            * entry.coefficient()
+                    .map(|(row, value)| {
+                        self.update_row.as_ref().unwrap().unit_row_left_inverse()[row.to_usize()]
+                            * value
                     })
                     .sum::<f64>();
                 let pivot_from_direction = direction.value(row);
@@ -1947,12 +2024,7 @@ impl RevisedSimplex {
             && self.solution_state.statuses.len() == self.num_cols
             && (0..self.first_slack_col.to_usize()).all(|column| {
                 let column = ColIndex::from_usize(column);
-                let old = self.matrix.column(column);
-                let new = equation_lp.matrix().column(column);
-                old.num_entries() == new.num_entries()
-                    && old.iter().zip(new.iter()).all(|(left, right)| {
-                        left.row() == right.row() && left.coefficient() == right.coefficient()
-                    })
+                equation_lp.column_matches(&self.compact_matrix, column)
             }) {
             new_first_slack.to_usize() - self.first_slack_col.to_usize()
         } else {
@@ -1962,16 +2034,11 @@ impl RevisedSimplex {
         self.num_cols = equation_lp.num_variables();
         self.first_slack_col = equation_lp.first_slack_variable();
         self.is_maximization_problem = equation_lp.is_maximization_problem();
-        self.matrix = equation_lp
-            .shared_matrix
-            .map_or_else(|| Rc::new(equation_lp.matrix().clone()), Rc::clone);
         // The advanced entry has already transposed the caller's compact
         // matrix. Keep that representation (and its entry order) as the
         // numerical source instead of reconstructing it from the temporary
         // equation-form model.
-        if !compact_matrix_prepopulated {
-            self.compact_matrix = Rc::new(CompactSparseMatrix::from_sparse(&self.matrix));
-        }
+        self.compact_matrix = equation_lp.matrix.to_compact_shared();
         self.objective = DenseRow::from_vec(
             (0..self.num_cols.to_usize())
                 .map(|column| {
@@ -2046,6 +2113,13 @@ impl RevisedSimplex {
         for (row, basis_column) in basis.iter_mut().enumerate().skip(next_row) {
             let slack = ColIndex::new(self.first_slack_col.value() + i32::try_from(row).unwrap());
             *basis_column = slack;
+        }
+        if !has_external_basis
+            && !self.parameters.use_dual_simplex
+            && self.parameters.initial_basis != InitialBasisHeuristic::Maros
+            && self.parameters.exploit_singleton_column_in_initial_basis
+        {
+            basis = self.singleton_initial_basis(&mut info);
         }
         if !has_external_basis && self.parameters.initial_basis != InitialBasisHeuristic::None {
             let mut crashed = RowToColMapping::from_vec(basis.clone());
@@ -2345,14 +2419,7 @@ impl RevisedSimplex {
         }
         for col in 0..old_first_slack {
             let index = ColIndex::from_usize(col);
-            let old = self.matrix.column(index);
-            let new = equation_lp.matrix().column(index);
-            if old.num_entries() != new.num_entries()
-                || !old
-                    .iter()
-                    .zip(new.iter())
-                    .all(|(a, b)| a.row() == b.row() && a.coefficient() == b.coefficient())
-            {
+            if !equation_lp.column_matches(&self.compact_matrix, index) {
                 return false;
             }
         }
@@ -2365,8 +2432,7 @@ impl RevisedSimplex {
         self.dual_phase_one_pricing_vector.clear();
         self.num_cols = equation_lp.num_variables();
         self.first_slack_col = ColIndex::from_usize(new_first_slack);
-        self.matrix = Rc::new(equation_lp.matrix().clone());
-        self.compact_matrix = Rc::new(CompactSparseMatrix::from_sparse(&self.matrix));
+        self.compact_matrix = equation_lp.matrix.to_compact_shared();
         self.objective = DenseRow::from_vec(
             (0..self.num_cols.to_usize())
                 .map(|col| {
@@ -2476,18 +2542,7 @@ impl RevisedSimplex {
             if self.objective[index] != equation_lp.objective_coefficient_for_minimization(index) {
                 return Ok(false);
             }
-            let old = self.matrix.column(index);
-            let new = equation_lp.matrix().column(index);
-            let mut new_old_rows = new.iter().filter(|entry| entry.row().to_usize() < old_rows);
-            for entry in old {
-                let Some(other) = new_old_rows.next() else {
-                    return Ok(false);
-                };
-                if entry.row() != other.row() || entry.coefficient() != other.coefficient() {
-                    return Ok(false);
-                }
-            }
-            if new_old_rows.next().is_some() {
+            if !equation_lp.column_matches_old_rows(&self.compact_matrix, index, old_rows) {
                 return Ok(false);
             }
         }
@@ -2496,8 +2551,7 @@ impl RevisedSimplex {
         let state = self.state_for_next_solve.take().unwrap();
         self.num_rows = equation_lp.num_constraints();
         self.num_cols = equation_lp.num_variables();
-        self.matrix = Rc::new(equation_lp.matrix().clone());
-        self.compact_matrix = Rc::new(CompactSparseMatrix::from_sparse(&self.matrix));
+        self.compact_matrix = equation_lp.matrix.to_compact_shared();
         self.objective = DenseRow::from_vec(
             (0..self.num_cols.to_usize())
                 .map(|col| {
@@ -2648,16 +2702,8 @@ impl RevisedSimplex {
             {
                 return Ok(false);
             }
-            if !matrix_known_unchanged {
-                let old = self.matrix.column(index);
-                let new = equation_lp.matrix().column(index);
-                if old.num_entries() != new.num_entries()
-                    || !old.iter().zip(new.iter()).all(|(left, right)| {
-                        left.row() == right.row() && left.coefficient() == right.coefficient()
-                    })
-                {
-                    return Ok(false);
-                }
+            if !matrix_known_unchanged && !equation_lp.column_matches(&self.compact_matrix, index) {
+                return Ok(false);
             }
         }
         let info = self.variables_info.as_mut().unwrap();
@@ -2749,6 +2795,120 @@ impl RevisedSimplex {
         self.variable_values =
             self.compute_initial_values(info, self.basis_factorization.as_ref().unwrap())?;
         Ok(())
+    }
+
+    /// `UseSingletonColumnInInitialBasis()` starts from the default nonbasic
+    /// values and picks cheap singleton columns that absorb each row's error.
+    /// The selected columns are made BASIC by `change_unused_basic_variables_to_free()`
+    /// after the candidate basis has been factorized.
+    fn singleton_initial_basis(&self, info: &mut VariablesInfo) -> Vec<ColIndex> {
+        let mut basis = vec![INVALID_COL; self.num_rows.to_usize()];
+        let mut values = vec![0.0; self.num_cols.to_usize()];
+
+        // Boxed singleton variables with nonzero cost start at the cheaper
+        // bound. This precedes the row-error computation in native GLOP.
+        for position in 0..self.num_cols.to_usize() {
+            let col = ColIndex::from_usize(position);
+            if self.compact_matrix.column_num_entries(col).value() != 1 {
+                continue;
+            }
+            let status = info.variable_statuses()[col];
+            let cost = self.objective[col];
+            let lower = info.lower_bounds()[position];
+            let upper = info.upper_bounds()[position];
+            if cost > 0.0 && lower.is_finite() && status == VariableStatus::AtUpperBound {
+                info.update_to_nonbasic_status(col, VariableStatus::AtLowerBound);
+            } else if cost < 0.0 && upper.is_finite() && status == VariableStatus::AtLowerBound {
+                info.update_to_nonbasic_status(col, VariableStatus::AtUpperBound);
+            }
+        }
+
+        let mut error = vec![0.0; self.num_rows.to_usize()];
+        for (position, stored_value) in values.iter_mut().enumerate() {
+            let col = ColIndex::from_usize(position);
+            let value = match info.variable_statuses()[col] {
+                VariableStatus::AtLowerBound | VariableStatus::FixedValue => {
+                    info.lower_bounds()[position]
+                }
+                VariableStatus::AtUpperBound => info.upper_bounds()[position],
+                VariableStatus::Free => self
+                    .starting_values
+                    .as_slice()
+                    .get(position)
+                    .copied()
+                    .unwrap_or(0.0),
+                VariableStatus::Basic => 0.0,
+            };
+            *stored_value = value;
+            for (row, coefficient) in self.compact_matrix.column(col).iter() {
+                let index = row.to_usize();
+                error[index] = coefficient.mul_add(-value, error[index]);
+            }
+        }
+
+        let mut candidates = Vec::new();
+        let mut cost_variation = vec![0.0; self.num_cols.to_usize()];
+        for position in 0..self.num_cols.to_usize() {
+            let col = ColIndex::from_usize(position);
+            let column = self.compact_matrix.column(col);
+            let lower = info.lower_bounds()[position];
+            let upper = info.upper_bounds()[position];
+            if column.len() != 1 || lower == upper {
+                continue;
+            }
+            let slope = column.entry_coefficient(0);
+            cost_variation[position] = if values[position] == lower {
+                self.objective[col] / slope.abs()
+            } else {
+                -self.objective[col] / slope.abs()
+            };
+            candidates.push(col);
+        }
+        // Equal penalties have no index tie-breaker upstream. Preserve its
+        // libc++ std::sort visitation order because it determines the crash.
+        crate::libcpp_sort::sort_by(&mut candidates, |a, b| {
+            cost_variation[a.to_usize()]
+                .partial_cmp(&cost_variation[b.to_usize()])
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        for col in candidates {
+            let column = self.compact_matrix.column(col);
+            let row = column.entry_row(0).to_usize();
+            if basis[row] == INVALID_COL {
+                basis[row] = col;
+            }
+            if error[row] == 0.0 {
+                continue;
+            }
+            let position = col.to_usize();
+            let coefficient = column.entry_coefficient(0);
+            let new_value = values[position] + error[row] / coefficient;
+            let lower = info.lower_bounds()[position];
+            let upper = info.upper_bounds()[position];
+            if new_value >= lower && new_value <= upper {
+                error[row] = 0.0;
+                basis[row] = col;
+                continue;
+            }
+            let width = upper - lower;
+            let error_sign = error[row] / coefficient;
+            if values[position] == lower && error_sign > 0.0 && width.is_finite() {
+                error[row] -= coefficient * width;
+                info.update_to_nonbasic_status(col, VariableStatus::AtUpperBound);
+                values[position] = upper;
+            } else if values[position] == upper && error_sign < 0.0 && width.is_finite() {
+                error[row] += coefficient * width;
+                info.update_to_nonbasic_status(col, VariableStatus::AtLowerBound);
+                values[position] = lower;
+            }
+        }
+        for (row, chosen) in basis.iter_mut().enumerate() {
+            if *chosen == INVALID_COL {
+                *chosen = ColIndex::from_usize(self.first_slack_col.to_usize() + row);
+            }
+        }
+        basis
     }
 
     fn compute_initial_values(
@@ -3127,8 +3287,7 @@ impl RevisedSimplex {
                     self.incorporate_basis_permutation();
                     self.update_row.as_mut().unwrap().invalidate();
                 }
-                self.primal_prices.force_recomputation();
-                recompute_reduced_costs = true;
+                recompute_reduced_costs |= self.reduced_costs_dirty;
                 refactorize_for_precision = false;
             }
             if self
@@ -3222,10 +3381,7 @@ impl RevisedSimplex {
                 .primal_edge_norms
                 .as_mut()
                 .unwrap()
-                .test_entering_edge_norm_precision(
-                    entering.to_usize(),
-                    direction.values().as_slice(),
-                );
+                .test_entering_edge_norm_precision(entering.to_usize(), &direction);
             if self
                 .primal_edge_norms
                 .as_ref()
@@ -3336,8 +3492,6 @@ impl RevisedSimplex {
                     .force_refactorization()?;
                 self.incorporate_basis_permutation();
                 self.update_row.as_mut().unwrap().invalidate();
-                self.primal_prices.force_recomputation();
-                recompute_reduced_costs = true;
                 continue;
             }
             let (leaving_row, step_length, target_bound) = match choice {
@@ -3443,7 +3597,7 @@ impl RevisedSimplex {
                         entering.to_usize(),
                         leaving.to_usize(),
                         row.to_usize(),
-                        direction.values().as_slice(),
+                        &direction,
                         self.update_row.as_mut().unwrap(),
                     )?;
                 if !self.reduced_costs_dirty {
@@ -3502,13 +3656,12 @@ impl RevisedSimplex {
                 }
                 self.basis[row] = entering;
                 let pivot_from_update_row = self
-                    .matrix
+                    .compact_matrix
                     .column(entering)
                     .iter()
-                    .map(|entry| {
-                        self.update_row.as_ref().unwrap().unit_row_left_inverse()
-                            [entry.index().to_usize()]
-                            * entry.coefficient()
+                    .map(|(row, value)| {
+                        self.update_row.as_ref().unwrap().unit_row_left_inverse()[row.to_usize()]
+                            * value
                     })
                     .sum::<f64>();
                 let pivot_from_direction = direction.value(row);
@@ -3533,13 +3686,6 @@ impl RevisedSimplex {
                 }
                 self.incorporate_basis_permutation();
                 self.update_row.as_mut().unwrap().invalidate();
-                if self.basis_factorization.as_ref().unwrap().is_refactorized() {
-                    // GLOP retains the incremental reduced costs after an
-                    // ordinary UpdateAndPivot() refactorization. Recomputing
-                    // them here erases the error estimate that can request a
-                    // separate reduced-cost precision refactorization later.
-                    self.primal_prices.force_recomputation();
-                }
                 if phase == SimplexPhase::Feasibility {
                     self.phase4_event("primal_phase_one_leaving_cost_cleared");
                     // PrimalMinimize() puts the leaving nonbasic variable at
@@ -4583,6 +4729,87 @@ impl RevisedSimplex {
     #[must_use]
     pub fn reduced_cost(&self, column: ColIndex) -> f64 {
         self.solution_reduced_costs[column]
+    }
+    /// Diagnostic snapshot of the norms used by primal pricing after a solve.
+    pub fn diagnostic_primal_pricing_norms(&mut self) -> Result<Vec<f64>, FactorizationError> {
+        let relevance = self.variables_info.as_ref().unwrap().relevance();
+        Ok(self
+            .primal_edge_norms
+            .as_mut()
+            .unwrap()
+            .squared_norms(self.basis_factorization.as_ref().unwrap(), relevance)?
+            .to_vec())
+    }
+    pub fn diagnostic_primal_direction_left_inverse(&self) -> (Vec<f64>, Vec<usize>) {
+        self.primal_edge_norms
+            .as_ref()
+            .unwrap()
+            .diagnostic_direction_left_inverse()
+    }
+    #[must_use]
+    pub fn diagnostic_cached_reduced_costs(&self) -> Vec<f64> {
+        self.reduced_costs.as_slice().to_vec()
+    }
+    pub fn diagnostic_update_row(&self) -> Vec<(usize, f64)> {
+        let update = self.update_row.as_ref().unwrap();
+        update
+            .non_zero_positions()
+            .iter()
+            .map(|&col| (col, update.coefficient(col)))
+            .collect()
+    }
+    /// Diagnostic right solve for an already preprocessed problem column.
+    pub fn diagnostic_basis_solve_for_column(
+        &self,
+        lp: &LinearProgram,
+        column: ColIndex,
+    ) -> Result<Vec<f64>, FactorizationError> {
+        let mut rhs = vec![0.0; lp.num_constraints().to_usize()];
+        if column.to_usize() < lp.num_variables().to_usize() {
+            for entry in lp.sparse_column(column) {
+                rhs[entry.index().to_usize()] = entry.coefficient();
+            }
+        } else {
+            rhs[column.to_usize() - lp.num_variables().to_usize()] = 1.0;
+        }
+        self.basis_factorization.as_ref().unwrap().solve(&rhs)
+    }
+    pub fn diagnostic_sparse_basis_solve_order(
+        &self,
+        column: ColIndex,
+    ) -> Result<Vec<usize>, FactorizationError> {
+        let mut direction = ScatteredColumn::new(self.num_rows);
+        self.basis_factorization
+            .as_ref()
+            .unwrap()
+            .right_solve_for_compact_problem_column(
+                column.to_usize(),
+                self.compact_matrix.column(column),
+                &mut direction,
+            )?;
+        Ok(direction
+            .non_zeros()
+            .iter()
+            .map(|row| row.to_usize())
+            .collect())
+    }
+    /// Diagnostic specialized norm and its retained sparse traversal.
+    pub fn diagnostic_primal_column_norm_and_order(
+        &self,
+        lp: &LinearProgram,
+        column: ColIndex,
+    ) -> Result<(f64, Vec<usize>), FactorizationError> {
+        let basis = self.basis_factorization.as_ref().unwrap();
+        let compact = lp_data::sparse::CompactSparseMatrix::from_sparse(lp.matrix());
+        let norm = basis.right_solve_compact_squared_norm(compact.column(column))?;
+        Ok((norm, basis.diagnostic_last_norm_nonzeros()))
+    }
+    /// Diagnostic exact refresh of the post-solve primal pricing norms.
+    pub fn diagnostic_recompute_primal_pricing_norms(
+        &mut self,
+    ) -> Result<Vec<f64>, FactorizationError> {
+        self.primal_edge_norms.as_mut().unwrap().clear();
+        self.diagnostic_primal_pricing_norms()
     }
     #[must_use]
     #[allow(clippy::misnamed_getters)] // Mirrors GLOP's final-solution getter.

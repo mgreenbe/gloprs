@@ -1,5 +1,6 @@
 use glop::lp_solver::LPSolver;
-use glop::parameters::GlopParameters;
+use glop::parameters::{GlopParameters, ScalingAlgorithm};
+use glop::time_limit::TimeLimit;
 use lp_data::lp_data::{LinearProgram, ProblemSolution};
 use lp_data::lp_types::{ConstraintStatus, ProblemStatus, VariableStatus, VectorIndex};
 
@@ -74,6 +75,64 @@ fn rejects_solution_states_that_violate_basis_status_contracts() {
 }
 
 #[test]
+fn strong_optimal_guarantee_snaps_primal_and_one_sided_dual_values() {
+    let mut lp = LinearProgram::new();
+    let col = lp.create_new_variable();
+    let row = lp.create_new_constraint();
+    lp.set_variable_bounds(col, 0.0, f64::INFINITY);
+    lp.set_constraint_bounds(row, f64::NEG_INFINITY, 0.0);
+    lp.set_coefficient(row, col, 1.0);
+    lp.clean_up();
+
+    let mut solution = ProblemSolution::new(lp.num_constraints(), lp.num_variables());
+    solution.status = ProblemStatus::Optimal;
+    solution.primal_values[col] = -1e-12;
+    solution.variable_statuses[col] = VariableStatus::Basic;
+    solution.dual_values[row] = 1e-12;
+    solution.constraint_statuses[row] = ConstraintStatus::AtUpperBound;
+
+    let mut solver = LPSolver::new();
+    assert_eq!(
+        solver.load_and_verify_solution(&lp, &solution),
+        ProblemStatus::Optimal
+    );
+    assert_eq!(solver.variable_values()[col].to_bits(), 0.0_f64.to_bits());
+    assert_eq!(solver.dual_values()[row].to_bits(), 0.0_f64.to_bits());
+}
+
+#[test]
+fn strong_optimal_guarantee_checks_cost_perturbation() {
+    let mut lp = LinearProgram::new();
+    let col = lp.create_new_variable();
+    let row = lp.create_new_constraint();
+    lp.set_variable_bounds(col, -1.0, 1.0);
+    lp.set_constraint_bounds(row, 0.0, 0.0);
+    lp.set_coefficient(row, col, 1.0);
+    lp.set_objective_coefficient(col, 1.0);
+    lp.clean_up();
+
+    let mut solution = ProblemSolution::new(lp.num_constraints(), lp.num_variables());
+    solution.status = ProblemStatus::Optimal;
+    solution.variable_statuses[col] = VariableStatus::Basic;
+    solution.constraint_statuses[row] = ConstraintStatus::FixedValue;
+
+    let mut solver = LPSolver::new();
+    assert_eq!(
+        solver.load_and_verify_solution(&lp, &solution),
+        ProblemStatus::Imprecise
+    );
+    let parameters = GlopParameters {
+        provide_strong_optimal_guarantee: false,
+        ..GlopParameters::default()
+    };
+    solver.set_parameters(&parameters);
+    assert_eq!(
+        solver.load_and_verify_solution(&lp, &solution),
+        ProblemStatus::Optimal
+    );
+}
+
+#[test]
 fn detects_an_optimal_constraint_facet() {
     let mut lp = LinearProgram::default();
     let x = lp.create_new_variable();
@@ -130,6 +189,11 @@ fn primal_unbounded_ray_is_exposed_only_for_the_current_solve() {
     unbounded.clean_up();
 
     let mut solver = LPSolver::new();
+    solver.set_parameters(&GlopParameters {
+        use_preprocessing: false,
+        use_scaling: false,
+        ..GlopParameters::default()
+    });
     assert_eq!(solver.solve(&unbounded), ProblemStatus::PrimalUnbounded);
     assert_eq!(solver.primal_ray().len().to_usize(), 1);
     assert!((solver.primal_ray()[x] - 1.0).abs() < 1e-15);
@@ -161,6 +225,8 @@ fn dual_unbounded_ray_has_public_certificate_signs() {
     let mut solver = LPSolver::new();
     solver.set_parameters(&GlopParameters {
         use_dual_simplex: true,
+        use_preprocessing: false,
+        use_scaling: false,
         ..GlopParameters::default()
     });
     assert_eq!(solver.solve(&lp), ProblemStatus::DualUnbounded);
@@ -168,4 +234,44 @@ fn dual_unbounded_ray_has_public_certificate_signs() {
     assert_eq!(solver.variable_bounds_dual_ray().len().to_usize(), 1);
     assert!((solver.constraints_dual_ray()[row] - 1.0).abs() < 1e-15);
     assert!((solver.variable_bounds_dual_ray()[x] + 1.0).abs() < 1e-15);
+}
+
+#[test]
+fn auxiliary_lp_scaling_is_available_through_public_solver() {
+    let mut lp = LinearProgram::default();
+    let x = lp.create_new_variable();
+    lp.set_variable_bounds(x, 0.0, 1.0);
+    lp.clean_up();
+    let mut solver = LPSolver::new();
+    solver.set_parameters(&GlopParameters {
+        scaling_method: ScalingAlgorithm::LinearProgram,
+        ..GlopParameters::default()
+    });
+    assert_eq!(solver.solve(&lp), ProblemStatus::Optimal);
+    assert_eq!(solver.last_error(), None);
+}
+
+#[test]
+fn empty_and_expired_controls_match_native_public_solver() {
+    // Pinned native `phase5_control_reference_adapter`: OPTIMAL, then INIT.
+    let mut solver = LPSolver::new();
+    solver.set_parameters(&GlopParameters {
+        use_preprocessing: false,
+        use_scaling: false,
+        ..GlopParameters::default()
+    });
+    assert_eq!(solver.solve(&LinearProgram::new()), ProblemStatus::Optimal);
+
+    let mut lp = LinearProgram::new();
+    let x = lp.create_new_variable();
+    let row = lp.create_new_constraint();
+    lp.set_variable_bounds(x, 0.0, 10.0);
+    lp.set_constraint_bounds(row, 5.0, f64::INFINITY);
+    lp.set_coefficient(row, x, 1.0);
+    lp.clean_up();
+    let mut limit = TimeLimit::new(f64::INFINITY, 0.0);
+    assert_eq!(
+        solver.solve_with_time_limit(&lp, &mut limit),
+        ProblemStatus::Init
+    );
 }

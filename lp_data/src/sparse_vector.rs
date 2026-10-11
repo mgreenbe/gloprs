@@ -386,9 +386,11 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
 
     #[must_use]
     pub fn scalar_product(&self, dense: &TypedVec<I, Fractional>) -> Fractional {
-        self.iter()
-            .map(|entry| entry.coefficient * dense[entry.index])
-            .sum()
+        let mut sum = 0.0;
+        for entry in self {
+            sum = dense[entry.index].mul_add(entry.coefficient, sum);
+        }
+        sum
     }
 
     #[must_use]
@@ -1080,5 +1082,18 @@ mod tests {
             ignored.look_up_coefficient(RowIndex::new(1)).to_bits(),
             7.0_f64.to_bits()
         );
+    }
+
+    #[test]
+    fn sparse_column_scalar_product_contracts_native_multiply_add() {
+        let first = f64::from_bits(0xbf3f_7510_4d55_1d6a);
+        let third = f64::from_bits(0xbee4_f8b5_88e3_68f1);
+        let mut column = SparseColumn::new();
+        column.add_entry(RowIndex::new(0), 1.0);
+        column.add_entry(RowIndex::new(2), -48.0);
+        let dense = DenseColumn::from_vec(vec![first, 0.0, third]);
+        let expected = (-48.0_f64).mul_add(third, first);
+        assert_ne!(expected.to_bits(), (first + -48.0 * third).to_bits());
+        assert_eq!(column.scalar_product(&dense).to_bits(), expected.to_bits());
     }
 }

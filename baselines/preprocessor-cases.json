@@ -1,0 +1,113 @@
+{
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "cases": [
+    {
+      "name": "mixed_shift",
+      "mode": "shift",
+      "cost_scaling": 1,
+      "matrix": [[0, 0, "2"], [0, 1, "-3"]],
+      "variables": [["5", "2", "10", "lower", "0"], ["7", "-10", "-3", "basic", "-2"]],
+      "constraints": [["20", "20", "3"]]
+    },
+    {
+      "name": "scaled_mixed_magnitudes",
+      "mode": "scale",
+      "cost_scaling": 1,
+      "matrix": [[0, 0, "1000"], [0, 1, "0.01"]],
+      "variables": [["5", "0", "10", "basic", "0.7"], ["0.2", "1.1", "7.3", "lower", "1.1"]],
+      "constraints": [["2000", "2000", "3"]]
+    },
+    {
+      "name": "shift_then_scale",
+      "mode": "both",
+      "cost_scaling": 1,
+      "matrix": [[0, 0, "2"], [0, 1, "-3"]],
+      "variables": [["5", "2", "10", "lower", "0"], ["7", "-10", "-3", "basic", "-2"]],
+      "constraints": [["20", "20", "3"]]
+    },
+    {
+      "name": "shift_noop",
+      "mode": "shift",
+      "cost_scaling": 1,
+      "matrix": [],
+      "variables": [["2", "-2", "3", "free", "1.5"]],
+      "constraints": []
+    },
+    {
+      "name": "fixed_and_upper_recovery",
+      "mode": "shift",
+      "cost_scaling": 1,
+      "matrix": [[0, 0, "1"], [0, 1, "1"]],
+      "variables": [["2", "4", "4", "fixed", "0"], ["-3", "-10", "-3", "upper", "0"]],
+      "constraints": [["0", "20", "-2"]]
+    },
+    {
+      "name": "mean_cost_scaling",
+      "mode": "scale",
+      "cost_scaling": 2,
+      "matrix": [[0, 0, "0.001"], [0, 1, "100"]],
+      "variables": [["0.5", "0", "12", "upper", "12"], ["40", "-3", "8", "basic", "0.25"]],
+      "constraints": [["-7", "13", "0.125"]]
+    },
+    {
+      "name": "no_cost_scaling",
+      "mode": "scale",
+      "cost_scaling": 0,
+      "matrix": [[0, 0, "7"], [0, 1, "-0.5"]],
+      "variables": [["0.25", "-2", "8", "free", "0.125"], ["12", "0", "9", "upper", "9"]],
+      "constraints": [["-10", "100", "-0.25"]]
+    },
+    {
+      "name": "median_cost_scaling",
+      "mode": "scale",
+      "cost_scaling": 3,
+      "matrix": [[0, 0, "200"], [0, 1, "0.002"], [0, 2, "-4"]],
+      "variables": [["0.01", "0", "10", "lower", "0"], ["4", "-3", "5", "basic", "0.4"], ["100", "-8", "1", "fixed", "-8"]],
+      "constraints": [["-25", "50", "1.25"]]
+    },
+    {
+      "name": "auxiliary_lp_scaling",
+      "mode": "scale",
+      "cost_scaling": 1,
+      "scaling_method": 1,
+      "matrix": [[0, 0, "2"], [0, 1, "16"], [1, 0, "0.25"], [1, 1, "4"]],
+      "variables": [["3", "0", "10", "basic", "2"], ["1", "0", "20", "lower", "0"]],
+      "constraints": [["1", "100", "0.5"], ["0", "50", "-0.25"]]
+    },
+    {
+      "name": "auxiliary_lp_with_empty_column",
+      "mode": "scale",
+      "cost_scaling": 0,
+      "scaling_method": 1,
+      "matrix": [[0, 0, "8"]],
+      "variables": [["2", "0", "10", "basic", "1"], ["0", "-5", "5", "free", "0"]],
+      "constraints": [["0", "20", "0.125"]]
+    },
+    {
+      "name": "auxiliary_lp_after_shift",
+      "mode": "both",
+      "cost_scaling": 2,
+      "scaling_method": 1,
+      "matrix": [[0, 0, "2"], [0, 1, "32"]],
+      "variables": [["5", "2", "10", "lower", "0"], ["1", "-8", "-1", "upper", "0"]],
+      "constraints": [["0", "50", "0.25"]]
+    },
+    {
+      "name": "auxiliary_lp_with_empty_row",
+      "mode": "scale",
+      "cost_scaling": 1,
+      "scaling_method": 1,
+      "matrix": [[0, 0, "8"]],
+      "variables": [["2", "0", "10", "basic", "1"]],
+      "constraints": [["0", "20", "0"], ["0", "20", "0"]]
+    },
+    {
+      "name": "overflowing_row_shift",
+      "mode": "shift",
+      "cost_scaling": 1,
+      "matrix": [[0, 0, "1e200"]],
+      "variables": [["1", "1e200", "2e200", "lower", "0"]],
+      "constraints": [["0", "inf", "0"]]
+    }
+  ]
+}

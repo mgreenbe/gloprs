@@ -2,7 +2,46 @@ use glop::parameters::{GlopParameters, PricingRule};
 use glop::revised_simplex::RevisedSimplex;
 use glop::time_limit::TimeLimit;
 use lp_data::lp_data::LinearProgram;
-use lp_data::lp_types::{ProblemStatus, VectorIndex};
+use lp_data::lp_types::{DenseRow, ProblemStatus, VectorIndex};
+use lp_data::sparse::CompactSparseMatrix;
+
+#[test]
+fn advanced_matrix_is_restored_after_an_ordinary_solve() {
+    let mut lp = LinearProgram::default();
+    let x = lp.create_new_variable();
+    let row = lp.create_new_constraint();
+    lp.set_variable_bounds(x, 0.0, 2.0);
+    lp.set_constraint_bounds(row, f64::NEG_INFINITY, 1.0);
+    lp.set_coefficient(row, x, 1.0);
+    lp.set_objective_coefficient(x, -1.0);
+    lp.clean_up();
+
+    let mut with_slack = CompactSparseMatrix::default();
+    with_slack.populate_from_sparse_and_add_slacks(lp.matrix());
+    let mut simplex = RevisedSimplex::new();
+    simplex
+        .mutable_transposed_matrix_with_slack()
+        .populate_from_transpose(&with_slack);
+    *simplex.mutable_lower_bounds() = vec![0.0, -1.0];
+    *simplex.mutable_upper_bounds() = vec![2.0, f64::INFINITY];
+    let objective = DenseRow::from_vec(vec![-1.0, 0.0]);
+    let mut limit = TimeLimit::new(f64::INFINITY, f64::INFINITY);
+    simplex
+        .minimize_from_transposed_matrix_with_slack(&objective, 1.0, 0.0, &mut limit)
+        .unwrap();
+    assert_eq!(simplex.problem_status(), ProblemStatus::Optimal);
+    assert!((simplex.objective_value() + 1.0).abs() < 1e-9);
+
+    let mut other = lp.clone();
+    other.set_coefficient(row, x, 2.0);
+    other.clean_up();
+    simplex.solve(&other, &mut limit).unwrap();
+    simplex
+        .minimize_from_transposed_matrix_with_slack(&objective, 1.0, 0.0, &mut limit)
+        .unwrap();
+    assert_eq!(simplex.problem_status(), ProblemStatus::Optimal);
+    assert!((simplex.objective_value() + 1.0).abs() < 1e-9);
+}
 
 #[test]
 fn solves_a_bounded_problem_through_phase_one_and_two() {
@@ -21,6 +60,12 @@ fn solves_a_bounded_problem_through_phase_one_and_two() {
     lp.clean_up();
 
     let mut simplex = RevisedSimplex::new();
+    // Keep this test on the pivoting path; the default singleton shortcut
+    // can solve this one-row LP directly from its initial basis.
+    simplex.set_parameters(&GlopParameters {
+        exploit_singleton_column_in_initial_basis: false,
+        ..GlopParameters::default()
+    });
     simplex.set_trace_enabled(true);
     simplex
         .solve(&lp, &mut TimeLimit::new(f64::INFINITY, f64::INFINITY))

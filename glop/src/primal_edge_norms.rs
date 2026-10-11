@@ -4,7 +4,8 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use lp_data::lp_types::{ColBitVec, ColIndex, VectorIndex, deterministic_time_for_fp_operations};
-use lp_data::lp_utils::{precise_squared_norm, squared_norm};
+use lp_data::lp_utils::{precise_squared_norm, scattered_squared_norm};
+use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow};
 use lp_data::sparse::{CompactSparseMatrix, SparseMatrix};
 
 use crate::basis_representation::BasisRepresentation;
@@ -31,7 +32,7 @@ pub struct PrimalEdgeNorms {
     matrix_column_norms: Vec<f64>,
     devex_weights: Vec<f64>,
     num_devex_updates_since_reset: i32,
-    direction_left_inverse: Vec<f64>,
+    direction_left_inverse: ScatteredRow,
     recompute_edges_norm_threshold: f64,
     devex_weights_reset_period: i32,
     initialize_devex_with_column_norms: bool,
@@ -49,6 +50,7 @@ impl PrimalEdgeNorms {
 
     #[must_use]
     pub fn new_shared(matrix: Rc<CompactSparseMatrix>) -> Self {
+        let num_rows = matrix.num_rows().to_usize();
         Self {
             matrix,
             pricing_rule: PricingRule::Dantzig,
@@ -58,7 +60,7 @@ impl PrimalEdgeNorms {
             matrix_column_norms: Vec::new(),
             devex_weights: Vec::new(),
             num_devex_updates_since_reset: 0,
-            direction_left_inverse: Vec::new(),
+            direction_left_inverse: ScatteredRow::new(ColIndex::from_usize(num_rows)),
             recompute_edges_norm_threshold: 100.0,
             devex_weights_reset_period: 150,
             initialize_devex_with_column_norms: true,
@@ -190,13 +192,13 @@ impl PrimalEdgeNorms {
     pub fn test_entering_edge_norm_precision(
         &mut self,
         entering_column: usize,
-        direction: &[f64],
+        direction: &ScatteredColumn,
     ) -> bool {
         if self.recompute_edge_squared_norms {
             return true;
         }
         let old_squared_norm = self.edge_squared_norms[entering_column];
-        let precise_squared_norm = 1.0 + squared_norm(direction);
+        let precise_squared_norm = 1.0 + scattered_squared_norm(direction);
         self.edge_squared_norms[entering_column] = precise_squared_norm;
         let precise_norm = precise_squared_norm.sqrt();
         let accuracy = (precise_norm - old_squared_norm.sqrt()) / precise_norm;
@@ -217,6 +219,7 @@ impl PrimalEdgeNorms {
     ///
     /// Returns a dimension error or propagates update-row/basis solve failures.
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::cast_precision_loss)]
     pub fn update_before_basis_pivot(
         &mut self,
         basis: &BasisRepresentation,
@@ -225,10 +228,10 @@ impl PrimalEdgeNorms {
         entering_column: usize,
         leaving_column: usize,
         leaving_row: usize,
-        direction: &[f64],
+        direction: &ScatteredColumn,
         update_row: &mut UpdateRow,
     ) -> Result<(), FactorizationError> {
-        if direction.len() != basis.dimension()
+        if direction.len().to_usize() != basis.dimension()
             || entering_column >= self.matrix.num_cols().to_usize()
             || leaving_column >= self.matrix.num_cols().to_usize()
         {
@@ -242,12 +245,40 @@ impl PrimalEdgeNorms {
                 num_entries_in_relevant_columns,
                 leaving_row,
             )?;
-            self.direction_left_inverse = basis.transpose_solve(direction)?;
+            let size = direction.len().to_usize();
+            let threshold = 0.05 * size as f64;
+            if !self.direction_left_inverse.non_zeros().is_empty()
+                && ((self.direction_left_inverse.non_zeros().len() + direction.non_zeros().len())
+                    as f64)
+                    < 2.0 * threshold
+            {
+                self.direction_left_inverse.clear();
+                for entry in direction {
+                    self.direction_left_inverse.set(
+                        ColIndex::from_usize(entry.row().to_usize()),
+                        entry.coefficient(),
+                    );
+                }
+            } else {
+                self.direction_left_inverse
+                    .values_mut()
+                    .as_mut_slice()
+                    .copy_from_slice(direction.values().as_slice());
+                self.direction_left_inverse.non_zeros_mut().clear();
+            }
+            if (direction.non_zeros().len() as f64) < threshold {
+                *self.direction_left_inverse.non_zeros_mut() = direction
+                    .non_zeros()
+                    .iter()
+                    .map(|row| ColIndex::from_usize(row.to_usize()))
+                    .collect();
+            }
+            basis.transpose_solve_with_nonzeros(&mut self.direction_left_inverse)?;
             self.update_edge_squared_norms(
                 entering_column,
                 leaving_column,
                 leaving_row,
-                direction,
+                direction.values().as_slice(),
                 update_row,
             );
         }
@@ -263,7 +294,12 @@ impl PrimalEdgeNorms {
                     num_entries_in_relevant_columns,
                     leaving_row,
                 )?;
-                self.update_devex_weights(leaving_column, leaving_row, direction, update_row);
+                self.update_devex_weights(
+                    leaving_column,
+                    leaving_row,
+                    direction.values().as_slice(),
+                    update_row,
+                );
             }
         }
         Ok(())
@@ -277,6 +313,18 @@ impl PrimalEdgeNorms {
     #[must_use]
     pub fn deterministic_time(&self) -> f64 {
         deterministic_time_for_fp_operations(self.num_operations)
+    }
+
+    #[must_use]
+    pub fn diagnostic_direction_left_inverse(&self) -> (Vec<f64>, Vec<usize>) {
+        (
+            self.direction_left_inverse.values().as_slice().to_vec(),
+            self.direction_left_inverse
+                .non_zeros()
+                .iter()
+                .map(|col| col.to_usize())
+                .collect(),
+        )
     }
 
     #[must_use]
@@ -332,14 +380,13 @@ impl PrimalEdgeNorms {
         for &column in update_row.non_zero_positions() {
             let coefficient = update_row.coefficient(column);
             let scalar_product = if column >= first_slack {
-                self.direction_left_inverse[column - first_slack]
+                self.direction_left_inverse
+                    .value(ColIndex::from_usize(column - first_slack))
             } else {
-                self.matrix
-                    .column(ColIndex::from_usize(column))
-                    .iter()
-                    .fold(0.0, |sum, (row, value)| {
-                        self.direction_left_inverse[row.to_usize()].mul_add(value, sum)
-                    })
+                self.matrix.column_scalar_product_slice(
+                    ColIndex::from_usize(column),
+                    self.direction_left_inverse.values().as_slice(),
+                )
             };
             self.num_operations +=
                 i64::try_from(self.matrix.column(ColIndex::from_usize(column)).len())

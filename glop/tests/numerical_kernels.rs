@@ -5,7 +5,7 @@ use glop::numerical::relative_residual;
 use glop::primal_edge_norms::{PrimalEdgeNorms, compute_primal_edge_squared_norms};
 use glop::update_row::{UpdateRow, UpdateRowAlgorithm, compute_update_row};
 use lp_data::lp_types::{ColBitVec, ColIndex, RowIndex, VectorIndex};
-use lp_data::scattered_vector::ScatteredRow;
+use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow};
 use lp_data::sparse::SparseMatrix;
 use lp_data::sparse_vector::SparseColumn;
 
@@ -258,7 +258,13 @@ fn incremental_primal_edge_norms_agree_with_exact_recomputation() {
         entering.add_entry(entry.index(), entry.coefficient());
     }
     let direction = basis.solve(&entering_dense).unwrap();
-    assert!(norms.test_entering_edge_norm_precision(entering_column, &direction));
+    let mut scattered_direction = ScatteredColumn::new(RowIndex::from_usize(direction.len()));
+    for (row, &value) in direction.iter().enumerate() {
+        if value != 0.0 {
+            scattered_direction.set(RowIndex::from_usize(row), value);
+        }
+    }
+    assert!(norms.test_entering_edge_norm_precision(entering_column, &scattered_direction));
     let mut update_row = UpdateRow::new(&full_matrix);
     norms
         .update_before_basis_pivot(
@@ -268,7 +274,7 @@ fn incremental_primal_edge_norms_agree_with_exact_recomputation() {
             entering_column,
             leaving_column,
             leaving_row,
-            &direction,
+            &scattered_direction,
             &mut update_row,
         )
         .unwrap();

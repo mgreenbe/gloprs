@@ -11,6 +11,7 @@ use flate2::read::GzDecoder;
 use glop::parameters::GlopParameters;
 use glop::revised_simplex::RevisedSimplex;
 use glop::time_limit::TimeLimit;
+use lp_data::lp_data::LinearProgram;
 use lp_data::lp_types::{ColIndex, RowIndex, VectorIndex};
 use lp_data::mps_reader::parse_mps_file;
 use serde::Deserialize;
@@ -86,6 +87,97 @@ fn assert_exact<T: Debug + PartialEq>(model: &str, field: &str, actual: &[T], ex
     );
 }
 
+/// Recompute the unscaled primal equations and dual stationarity from the
+/// input columns, independently of the solver's residual workspaces.
+fn check_independent_residuals(name: &str, model: &LinearProgram, simplex: &RevisedSimplex) {
+    let rows = model.num_constraints().to_usize();
+    let columns = model.num_variables().to_usize();
+    let mut activities = vec![0.0; rows];
+    let mut activity_scales = vec![0.0; rows];
+    let mut objective = model.objective_offset();
+    for column in 0..columns {
+        let column_index = ColIndex::from_usize(column);
+        let x = simplex.variable_value(column_index);
+        objective += model.objective_coefficients()[column_index] * x;
+        let lower = model.variable_lower_bounds()[column_index];
+        let upper = model.variable_upper_bounds()[column_index];
+        let bound_tolerance = 1e-6 * (1.0 + x.abs());
+        assert!(
+            x + bound_tolerance >= lower,
+            "{name}: variable {column} below bound"
+        );
+        assert!(
+            x - bound_tolerance <= upper,
+            "{name}: variable {column} above bound"
+        );
+        let mut dual_dot = 0.0;
+        let mut dual_scale = 1.0 + model.objective_coefficients()[column_index].abs();
+        for entry in model.sparse_column(column_index) {
+            let row = entry.index().to_usize();
+            let coefficient = entry.coefficient();
+            activities[row] += coefficient * x;
+            activity_scales[row] += (coefficient * x).abs();
+            let term = coefficient * simplex.dual_value(RowIndex::from_usize(row));
+            dual_dot += term;
+            dual_scale += term.abs();
+        }
+        let reduced = model.objective_coefficients()[column_index] - dual_dot;
+        let error = (reduced - simplex.reduced_cost(column_index)).abs();
+        assert!(
+            error <= 1e-7 * dual_scale,
+            "{name}: column {column} stationarity {error:e}"
+        );
+        let cost_tolerance = 1e-6 * dual_scale;
+        let at_lower = lower.is_finite() && x <= lower + bound_tolerance;
+        let at_upper = upper.is_finite() && x >= upper - bound_tolerance;
+        if !at_upper {
+            assert!(
+                reduced >= -cost_tolerance,
+                "{name}: column {column} lower-side dual sign"
+            );
+        }
+        if !at_lower {
+            assert!(
+                reduced <= cost_tolerance,
+                "{name}: column {column} upper-side dual sign"
+            );
+        }
+    }
+    for row in 0..rows {
+        let row_index = RowIndex::from_usize(row);
+        let activity = activities[row];
+        let tolerance = 1e-6 * (1.0 + activity_scales[row]);
+        assert!(
+            (activity - simplex.constraint_activity(row_index)).abs() <= tolerance,
+            "{name}: row {row} equation residual"
+        );
+        assert!(
+            activity + tolerance >= model.constraint_lower_bounds()[row_index],
+            "{name}: row {row} below bound"
+        );
+        assert!(
+            activity - tolerance <= model.constraint_upper_bounds()[row_index],
+            "{name}: row {row} above bound"
+        );
+        let lower = model.constraint_lower_bounds()[row_index];
+        let upper = model.constraint_upper_bounds()[row_index];
+        let at_lower = lower.is_finite() && activity <= lower + tolerance;
+        let at_upper = upper.is_finite() && activity >= upper - tolerance;
+        let dual = simplex.dual_value(row_index);
+        if !at_upper {
+            assert!(dual >= -1e-6, "{name}: row {row} lower-side dual sign");
+        }
+        if !at_lower {
+            assert!(dual <= 1e-6, "{name}: row {row} upper-side dual sign");
+        }
+    }
+    let objective_tolerance = 1e-7 * (1.0 + objective.abs());
+    assert!(
+        (objective - simplex.objective_value()).abs() <= objective_tolerance,
+        "{name}: independently computed objective differs"
+    );
+}
+
 #[test]
 #[ignore = "requires ../datasets/netlib and takes about a minute in release mode"]
 #[allow(clippy::too_many_lines)]
@@ -125,6 +217,7 @@ fn matches_native_glop_on_fast_netlib_instances() {
             "{}: status",
             expected.name
         );
+        check_independent_residuals(&expected.name, &model, &simplex);
         assert_eq!(
             simplex.number_of_iterations(),
             expected.iterations,

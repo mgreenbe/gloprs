@@ -68,6 +68,15 @@
       "basis_sha256": "21e0564904c8d8e350fc55ddff2a98f111f619c1463462de2b6dd695a9875468",
       "reduced_bits_sha256": "1323f81fa30503bd335977c5159eaa3ff2fa58c3cd6487f29f6e644b4923ffd9",
       "norm_bits_sha256": "114921e6b627fc35e191b58f6c33bf5efb59edfe0fe3d739752b019b67fad89c"
+    },
+    {
+      "limit": 150000,
+      "status": "DUAL_FEASIBLE",
+      "iterations": 150000,
+      "deterministic_time_bits": 4653412766545832439,
+      "basis_sha256": "e281153adbc370484f2d6c494bb31e326e0e2ecb26474e288dfa364e66caf6b8",
+      "reduced_bits_sha256": "19c24e5754d15b19af1ce34f81715f00608c782a37283e89ea6d867fa7ea45c9",
+      "norm_bits_sha256": "d5b4898e2574830fb985fb745ac1d9a24837667318e8af0032ee186d10ca5c8b"
     }
   ]
 }

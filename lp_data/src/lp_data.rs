@@ -392,6 +392,27 @@ impl LinearProgram {
         self.transpose_matrix.get_mut()
     }
 
+    /// Moves the mutable transpose out while presolve also updates bounds and
+    /// costs. This is the Rust ownership equivalent of GLOP retaining a
+    /// mutable transpose pointer alongside the unchanged original matrix.
+    pub fn take_mutable_transpose_sparse_matrix(&mut self) -> SparseMatrix {
+        std::mem::take(self.mutable_transpose_sparse_matrix())
+    }
+
+    /// Returns a mutated transpose and makes its transpose the reference
+    /// matrix, without rebuilding the old transpose during reinsertion.
+    pub fn use_owned_transpose_matrix_as_reference(&mut self, transpose: SparseMatrix) {
+        *self.transpose_matrix.get_mut() = transpose;
+        self.use_transpose_matrix_as_reference();
+    }
+
+    /// Returns an unchanged moved-out transpose when a presolve pass does
+    /// nothing, avoiding a redundant transposition of the original matrix.
+    pub fn restore_owned_transpose_sparse_matrix(&mut self, transpose: SparseMatrix) {
+        *self.transpose_matrix.get_mut() = transpose;
+        self.transpose_matrix_is_consistent.set(true);
+    }
+
     pub fn use_transpose_matrix_as_reference(&mut self) {
         debug_assert_eq!(
             self.transpose_matrix.get_mut().num_rows().value(),
@@ -421,9 +442,11 @@ impl LinearProgram {
         } else {
             self.clear_transpose_matrix();
         }
-        self.constraint_lower_bounds = source.constraint_lower_bounds.clone();
-        self.constraint_upper_bounds = source.constraint_upper_bounds.clone();
-        self.constraint_names = source.constraint_names.clone();
+        self.constraint_lower_bounds
+            .clone_from(&source.constraint_lower_bounds);
+        self.constraint_upper_bounds
+            .clone_from(&source.constraint_upper_bounds);
+        self.constraint_names.clone_from(&source.constraint_names);
         self.constraint_ids.clear();
         self.populate_name_objective_and_variables_from(source);
         self.first_slack_variable = source.first_slack_variable;
@@ -586,11 +609,14 @@ impl LinearProgram {
     }
 
     fn populate_name_objective_and_variables_from(&mut self, source: &Self) {
-        self.objective_coefficients = source.objective_coefficients.clone();
-        self.variable_lower_bounds = source.variable_lower_bounds.clone();
-        self.variable_upper_bounds = source.variable_upper_bounds.clone();
-        self.variable_names = source.variable_names.clone();
-        self.variable_types = source.variable_types.clone();
+        self.objective_coefficients
+            .clone_from(&source.objective_coefficients);
+        self.variable_lower_bounds
+            .clone_from(&source.variable_lower_bounds);
+        self.variable_upper_bounds
+            .clone_from(&source.variable_upper_bounds);
+        self.variable_names.clone_from(&source.variable_names);
+        self.variable_types.clone_from(&source.variable_types);
         self.integer_variable_lists_are_consistent
             .set(source.integer_variable_lists_are_consistent.get());
         self.integer_variables
@@ -620,6 +646,26 @@ impl LinearProgram {
         self.columns_are_known_to_be_clean.set(false);
         self.transpose_matrix_is_consistent.set(false);
         self.matrix.mutable_column(column)
+    }
+
+    pub fn add_multiple_between_columns_and_delete_common_index(
+        &mut self,
+        source: ColIndex,
+        destination: ColIndex,
+        multiplier: Fractional,
+        common_row: RowIndex,
+        drop_tolerance: Fractional,
+    ) {
+        self.columns_are_known_to_be_clean.set(false);
+        self.transpose_matrix_is_consistent.set(false);
+        self.matrix
+            .add_multiple_between_columns_and_delete_common_index(
+                source,
+                destination,
+                multiplier,
+                common_row,
+                drop_tolerance,
+            );
     }
 
     #[must_use]
@@ -762,34 +808,46 @@ impl LinearProgram {
 
     #[allow(clippy::float_cmp)] // GLOP intentionally tests exact zeros and one.
     pub fn scale_objective(&mut self, method: CostScalingAlgorithm) -> Fractional {
-        let nonzero_magnitudes: Vec<_> = self
-            .objective_coefficients
-            .iter()
-            .copied()
-            .filter(|&value| value != 0.0)
-            .map(Fractional::abs)
-            .collect();
         let factor = match method {
             CostScalingAlgorithm::NoCostScaling => 1.0,
             CostScalingAlgorithm::ContainOneCostScaling => {
-                let (minimum, maximum) = magnitude_range(&nonzero_magnitudes);
+                let mut minimum = INFINITY;
+                let mut maximum: Fractional = 0.0;
+                for &value in &self.objective_coefficients {
+                    let magnitude = value.abs();
+                    if magnitude != 0.0 && magnitude != INFINITY {
+                        minimum = minimum.min(magnitude);
+                        maximum = maximum.max(magnitude);
+                    }
+                }
                 divisor_so_range_contains_one(minimum, maximum)
             }
             CostScalingAlgorithm::MeanCostScaling => {
-                if nonzero_magnitudes.is_empty() {
+                let mut sum = 0.0;
+                let mut count = 0_i32;
+                for &value in &self.objective_coefficients {
+                    if value != 0.0 {
+                        sum += value.abs();
+                        count += 1;
+                    }
+                }
+                if count == 0 {
                     1.0
                 } else {
-                    nonzero_magnitudes.iter().sum::<Fractional>()
-                        / Fractional::from(
-                            i32::try_from(nonzero_magnitudes.len()).unwrap_or(i32::MAX),
-                        )
+                    sum / Fractional::from(count)
                 }
             }
             CostScalingAlgorithm::MedianCostScaling => {
-                if nonzero_magnitudes.is_empty() {
+                let mut magnitudes: Vec<_> = self
+                    .objective_coefficients
+                    .iter()
+                    .copied()
+                    .filter(|&value| value != 0.0)
+                    .map(Fractional::abs)
+                    .collect();
+                if magnitudes.is_empty() {
                     1.0
                 } else {
-                    let mut magnitudes = nonzero_magnitudes;
                     magnitudes.sort_by(Fractional::total_cmp);
                     magnitudes[magnitudes.len() / 2]
                 }
@@ -848,11 +906,47 @@ impl LinearProgram {
         factor
     }
 
+    /// GLOP preprocessor's column substitution without cloning the sparse
+    /// column: update both row bounds and the objective offset in entry order.
+    /// The row-bound delta is rounded before subtraction in upstream, whereas
+    /// its objective offset expression contracts into a fused multiply-add.
+    pub fn subtract_column_multiple_from_constraint_bounds(
+        &mut self,
+        column: ColIndex,
+        multiple: Fractional,
+    ) {
+        for entry in self.matrix.column(column) {
+            let row = entry.index();
+            let delta = multiple * entry.coefficient();
+            self.constraint_lower_bounds[row] -= delta;
+            self.constraint_upper_bounds[row] -= delta;
+        }
+        self.objective_offset =
+            self.objective_coefficients[column].mul_add(multiple, self.objective_offset);
+    }
+
     /// Scales the matrix and associated vectors using GLOP's default sparse
     /// equilibration factors.
     pub fn scale(&mut self, scaler: &mut SparseMatrixScaler) {
         scaler.init(&self.matrix);
         scaler.scale(&mut self.matrix);
+        self.scale_vectors_after_matrix(scaler);
+    }
+
+    /// Applies the auxiliary scaling LP's column and row divisors, then the
+    /// same objective/bound transformations as ordinary matrix scaling.
+    pub fn scale_from_lp_factors(
+        &mut self,
+        scaler: &mut SparseMatrixScaler,
+        column_factors: impl IntoIterator<Item = Fractional>,
+        row_factors: &DenseColumn,
+    ) {
+        scaler.init(&self.matrix);
+        scaler.scale_from_lp_factors(&mut self.matrix, column_factors, row_factors);
+        self.scale_vectors_after_matrix(scaler);
+    }
+
+    fn scale_vectors_after_matrix(&mut self, scaler: &SparseMatrixScaler) {
         scaler.scale_row_vector(false, &mut self.objective_coefficients);
         scaler.scale_row_vector(true, &mut self.variable_upper_bounds);
         scaler.scale_row_vector(true, &mut self.variable_lower_bounds);
@@ -1712,15 +1806,6 @@ fn format_printf_e(value: f64) -> String {
     };
     let exponent: i32 = exponent.parse().expect("Rust emitted a valid exponent");
     format!("{mantissa}e{exponent:+03}")
-}
-
-fn magnitude_range(values: &[Fractional]) -> (Fractional, Fractional) {
-    values
-        .iter()
-        .copied()
-        .fold((INFINITY, 0.0_f64), |(minimum, maximum), value| {
-            (minimum.min(value), maximum.max(value))
-        })
 }
 
 fn divisor_so_range_contains_one(minimum: Fractional, maximum: Fractional) -> Fractional {

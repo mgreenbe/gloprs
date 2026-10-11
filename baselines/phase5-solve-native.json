@@ -1,0 +1,706 @@
+{
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "cases_sha256": "fd15af63e4b7274f2a09614ab8d4f759243934ba3eac5f853bc6cee6e273cd86",
+  "results": [
+    {
+      "name": "unscaled_control",
+      "status": "OPTIMAL",
+      "iterations": 1,
+      "basis": [
+        0
+      ],
+      "capped_trajectory": [
+        {
+          "limit": 0,
+          "status": "INIT",
+          "basis": [
+            1
+          ],
+          "primal_bits": [
+            0
+          ],
+          "dual_bits": [
+            0
+          ]
+        },
+        {
+          "limit": 1,
+          "status": "PRIMAL_FEASIBLE",
+          "basis": [
+            0
+          ],
+          "primal_bits": [
+            4617315517961601024
+          ],
+          "dual_bits": [
+            4607182418800017408
+          ]
+        }
+      ],
+      "primal_bits": [
+        4617315517961601024
+      ],
+      "dual_bits": [
+        4607182418800017408
+      ],
+      "variable_status": [
+        "BASIC"
+      ],
+      "constraint_status": [
+        "AT_LOWER_BOUND"
+      ]
+    },
+    {
+      "name": "bound_shift_only",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "basis": [],
+      "capped_trajectory": [
+        {
+          "limit": 0,
+          "status": "INIT",
+          "basis": [
+            1
+          ],
+          "primal_bits": [
+            4611686018427387904
+          ],
+          "dual_bits": [
+            0
+          ]
+        }
+      ],
+      "primal_bits": [
+        4617315517961601024
+      ],
+      "dual_bits": [
+        4607182418800017408
+      ],
+      "variable_status": [
+        "BASIC"
+      ],
+      "constraint_status": [
+        "AT_LOWER_BOUND"
+      ]
+    },
+    {
+      "name": "scaling_only",
+      "status": "OPTIMAL",
+      "iterations": 1,
+      "basis": [
+        0
+      ],
+      "capped_trajectory": [
+        {
+          "limit": 0,
+          "status": "INIT",
+          "basis": [
+            1
+          ],
+          "primal_bits": [
+            0
+          ],
+          "dual_bits": [
+            0
+          ]
+        },
+        {
+          "limit": 1,
+          "status": "PRIMAL_FEASIBLE",
+          "basis": [
+            0
+          ],
+          "primal_bits": [
+            4611686018427387904
+          ],
+          "dual_bits": [
+            4572414629676717179
+          ]
+        }
+      ],
+      "primal_bits": [
+        4611686018427387904
+      ],
+      "dual_bits": [
+        4572414629676717179
+      ],
+      "variable_status": [
+        "BASIC"
+      ],
+      "constraint_status": [
+        "AT_LOWER_BOUND"
+      ]
+    },
+    {
+      "name": "bound_shift_and_scaling",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "basis": [],
+      "capped_trajectory": [
+        {
+          "limit": 0,
+          "status": "INIT",
+          "basis": [
+            1
+          ],
+          "primal_bits": [
+            4611686018427387904
+          ],
+          "dual_bits": [
+            0
+          ]
+        }
+      ],
+      "primal_bits": [
+        4617315517961601024
+      ],
+      "dual_bits": [
+        4572414629676717179
+      ],
+      "variable_status": [
+        "BASIC"
+      ],
+      "constraint_status": [
+        "AT_LOWER_BOUND"
+      ]
+    },
+    {
+      "name": "two_variable_combined",
+      "status": "OPTIMAL",
+      "iterations": 2,
+      "basis": [
+        1,
+        0
+      ],
+      "capped_trajectory": [
+        {
+          "limit": 0,
+          "status": "INIT",
+          "basis": [
+            2,
+            3
+          ],
+          "primal_bits": [
+            4611686018427387904,
+            0
+          ],
+          "dual_bits": [
+            0,
+            0
+          ]
+        },
+        {
+          "limit": 1,
+          "status": "INIT",
+          "basis": [
+            2,
+            1
+          ],
+          "primal_bits": [
+            4611686018427387904,
+            4608683618675807574
+          ],
+          "dual_bits": [
+            0,
+            4599676419421066581
+          ]
+        },
+        {
+          "limit": 2,
+          "status": "PRIMAL_FEASIBLE",
+          "basis": [
+            1,
+            0
+          ],
+          "primal_bits": [
+            4617314766860929348,
+            4599680425291315515
+          ],
+          "dual_bits": [
+            4572033911768257947,
+            4599620337237581424
+          ]
+        }
+      ],
+      "primal_bits": [
+        4617314766860929348,
+        4599680425291315515
+      ],
+      "dual_bits": [
+        4572033911768257947,
+        4599620337237581424
+      ],
+      "variable_status": [
+        "BASIC",
+        "BASIC"
+      ],
+      "constraint_status": [
+        "AT_LOWER_BOUND",
+        "AT_LOWER_BOUND"
+      ]
+    },
+    {
+      "name": "singleton_unscaled_control",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "basis": [
+        0
+      ],
+      "capped_trajectory": [
+        {
+          "limit": 0,
+          "status": "OPTIMAL",
+          "basis": [
+            0
+          ],
+          "primal_bits": [
+            4617315517961601024
+          ],
+          "dual_bits": [
+            4607182418800017408
+          ]
+        }
+      ],
+      "primal_bits": [
+        4617315517961601024
+      ],
+      "dual_bits": [
+        4607182418800017408
+      ],
+      "variable_status": [
+        "BASIC"
+      ],
+      "constraint_status": [
+        "AT_LOWER_BOUND"
+      ]
+    },
+    {
+      "name": "singleton_bound_shift_only",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "basis": [],
+      "capped_trajectory": [
+        {
+          "limit": 0,
+          "status": "OPTIMAL",
+          "basis": [
+            0
+          ],
+          "primal_bits": [
+            4617315517961601024
+          ],
+          "dual_bits": [
+            4607182418800017408
+          ]
+        }
+      ],
+      "primal_bits": [
+        4617315517961601024
+      ],
+      "dual_bits": [
+        4607182418800017408
+      ],
+      "variable_status": [
+        "BASIC"
+      ],
+      "constraint_status": [
+        "AT_LOWER_BOUND"
+      ]
+    },
+    {
+      "name": "singleton_scaling_only",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "basis": [
+        0
+      ],
+      "capped_trajectory": [
+        {
+          "limit": 0,
+          "status": "OPTIMAL",
+          "basis": [
+            0
+          ],
+          "primal_bits": [
+            4611686018427387904
+          ],
+          "dual_bits": [
+            4572414629676717179
+          ]
+        }
+      ],
+      "primal_bits": [
+        4611686018427387904
+      ],
+      "dual_bits": [
+        4572414629676717179
+      ],
+      "variable_status": [
+        "BASIC"
+      ],
+      "constraint_status": [
+        "AT_LOWER_BOUND"
+      ]
+    },
+    {
+      "name": "singleton_bound_shift_and_scaling",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "basis": [],
+      "capped_trajectory": [
+        {
+          "limit": 0,
+          "status": "OPTIMAL",
+          "basis": [
+            0
+          ],
+          "primal_bits": [
+            4617315517961601024
+          ],
+          "dual_bits": [
+            4572414629676717179
+          ]
+        }
+      ],
+      "primal_bits": [
+        4617315517961601024
+      ],
+      "dual_bits": [
+        4572414629676717179
+      ],
+      "variable_status": [
+        "BASIC"
+      ],
+      "constraint_status": [
+        "AT_LOWER_BOUND"
+      ]
+    },
+    {
+      "name": "singleton_cost_order",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "basis": [
+        0
+      ],
+      "capped_trajectory": [
+        {
+          "limit": 0,
+          "status": "OPTIMAL",
+          "basis": [
+            0
+          ],
+          "primal_bits": [
+            4617315517961601024,
+            0
+          ],
+          "dual_bits": [
+            4607182418800017408
+          ]
+        }
+      ],
+      "primal_bits": [
+        4617315517961601024,
+        0
+      ],
+      "dual_bits": [
+        4607182418800017408
+      ],
+      "variable_status": [
+        "BASIC",
+        "AT_LOWER_BOUND"
+      ],
+      "constraint_status": [
+        "AT_LOWER_BOUND"
+      ]
+    },
+    {
+      "name": "singleton_boxed_cost_flip",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "basis": [
+        1
+      ],
+      "capped_trajectory": [
+        {
+          "limit": 0,
+          "status": "OPTIMAL",
+          "basis": [
+            1
+          ],
+          "primal_bits": [
+            4611686018427387904,
+            4613937818241073152
+          ],
+          "dual_bits": [
+            4607182418800017408
+          ]
+        }
+      ],
+      "primal_bits": [
+        4611686018427387904,
+        4613937818241073152
+      ],
+      "dual_bits": [
+        4607182418800017408
+      ],
+      "variable_status": [
+        "AT_UPPER_BOUND",
+        "BASIC"
+      ],
+      "constraint_status": [
+        "AT_LOWER_BOUND"
+      ]
+    },
+    {
+      "name": "auxiliary_lp_scaled_solve",
+      "status": "OPTIMAL",
+      "iterations": 2,
+      "basis": [
+        3,
+        1
+      ],
+      "capped_trajectory": [
+        {
+          "limit": 0,
+          "status": "INIT",
+          "basis": [
+            2,
+            3
+          ],
+          "primal_bits": [
+            0,
+            0
+          ],
+          "dual_bits": [
+            0,
+            0
+          ]
+        },
+        {
+          "limit": 1,
+          "status": "PRIMAL_FEASIBLE",
+          "basis": [
+            3,
+            0
+          ],
+          "primal_bits": [
+            4602678819172646912,
+            0
+          ],
+          "dual_bits": [
+            4609434218613702656,
+            0
+          ]
+        },
+        {
+          "limit": 2,
+          "status": "OPTIMAL",
+          "basis": [
+            3,
+            1
+          ],
+          "primal_bits": [
+            0,
+            4589168020290535424
+          ],
+          "dual_bits": [
+            4589168020290535424,
+            0
+          ]
+        }
+      ],
+      "primal_bits": [
+        0,
+        4589168020290535424
+      ],
+      "dual_bits": [
+        4589168020290535424,
+        0
+      ],
+      "variable_status": [
+        "AT_LOWER_BOUND",
+        "BASIC"
+      ],
+      "constraint_status": [
+        "AT_LOWER_BOUND",
+        "BASIC"
+      ]
+    },
+    {
+      "name": "dense_three_row_shift_and_scale_path",
+      "status": "OPTIMAL",
+      "iterations": 3,
+      "basis": [
+        2,
+        0,
+        1
+      ],
+      "capped_trajectory": [
+        {
+          "limit": 0,
+          "status": "INIT",
+          "basis": [
+            3,
+            4,
+            5
+          ],
+          "primal_bits": [
+            4607182418800017408,
+            0,
+            0
+          ],
+          "dual_bits": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "limit": 1,
+          "status": "INIT",
+          "basis": [
+            3,
+            4,
+            2
+          ],
+          "primal_bits": [
+            4607182418800017408,
+            0,
+            4607745368753438720
+          ],
+          "dual_bits": [
+            0,
+            0,
+            4604930618986332160
+          ]
+        },
+        {
+          "limit": 2,
+          "status": "INIT",
+          "basis": [
+            0,
+            4,
+            2
+          ],
+          "primal_bits": [
+            4609431825926857688,
+            0,
+            4607464192862583685
+          ],
+          "dual_bits": [
+            4569352632318217235,
+            0,
+            4604929915254907169
+          ]
+        },
+        {
+          "limit": 3,
+          "status": "PRIMAL_FEASIBLE",
+          "basis": [
+            2,
+            0,
+            1
+          ],
+          "primal_bits": [
+            4609430764512093522,
+            4587127620958621278,
+            4607409897415032121
+          ],
+          "dual_bits": [
+            4568929710289127421,
+            4586202186699551520,
+            4604835560217390368
+          ]
+        }
+      ],
+      "primal_bits": [
+        4609430764512093522,
+        4587127620958621279,
+        4607409897415032121
+      ],
+      "dual_bits": [
+        4568929710289127421,
+        4586202186699551520,
+        4604835560217390368
+      ],
+      "variable_status": [
+        "BASIC",
+        "BASIC",
+        "BASIC"
+      ],
+      "constraint_status": [
+        "AT_LOWER_BOUND",
+        "AT_LOWER_BOUND",
+        "AT_LOWER_BOUND"
+      ]
+    },
+    {
+      "name": "default_basis_singleton_unscaled",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "basis": [
+        0
+      ],
+      "capped_trajectory": [
+        {
+          "limit": 0,
+          "status": "OPTIMAL",
+          "basis": [
+            0
+          ],
+          "primal_bits": [
+            4617315517961601024
+          ],
+          "dual_bits": [
+            4607182418800017408
+          ]
+        }
+      ],
+      "primal_bits": [
+        4617315517961601024
+      ],
+      "dual_bits": [
+        4607182418800017408
+      ],
+      "variable_status": [
+        "BASIC"
+      ],
+      "constraint_status": [
+        "AT_LOWER_BOUND"
+      ]
+    },
+    {
+      "name": "default_basis_singleton_shift_scale",
+      "status": "OPTIMAL",
+      "iterations": 0,
+      "basis": [],
+      "capped_trajectory": [
+        {
+          "limit": 0,
+          "status": "OPTIMAL",
+          "basis": [
+            0
+          ],
+          "primal_bits": [
+            4617315517961601024
+          ],
+          "dual_bits": [
+            4572414629676717179
+          ]
+        }
+      ],
+      "primal_bits": [
+        4617315517961601024
+      ],
+      "dual_bits": [
+        4572414629676717179
+      ],
+      "variable_status": [
+        "BASIC"
+      ],
+      "constraint_status": [
+        "AT_LOWER_BOUND"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,677 @@
+{
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "results": [
+    {
+      "name": "25fv47",
+      "presolved_sha256": "f0bc13342822eb1849ae9f271944124e884bf72bff21d3da489fed783cf8a9a5",
+      "presolved_summary": "presolved INIT 696 1436 9831",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 1352
+    },
+    {
+      "name": "80bau3b",
+      "presolved_sha256": "e2cb35156036e8686494738b0a4d0a97fa6825ff0a7140f9a622e90c00a05452",
+      "presolved_summary": "presolved INIT 1614 8308 18176",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 4602
+    },
+    {
+      "name": "adlittle",
+      "presolved_sha256": "0b7d4e3fc9ca77c6357161ad701bbeca6b75c8121c55b95c1bc13067226cccc3",
+      "presolved_summary": "presolved INIT 53 94 372",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 78
+    },
+    {
+      "name": "afiro",
+      "presolved_sha256": "f75a9adffca529412cc569d62b16d4773a16f7af80ce07cb00170c771f246517",
+      "presolved_summary": "presolved INIT 6 9 26",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 5
+    },
+    {
+      "name": "agg",
+      "presolved_sha256": "51fc876cdec89384b19488089d6d7a184ae6c5887f9d0919010efc5a945839df",
+      "presolved_summary": "presolved INIT 102 219 1025",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 120
+    },
+    {
+      "name": "agg2",
+      "presolved_sha256": "3868b263e928023bdecd6986f8f6e9cf21d3a83dc54ad5e281e1b528866c7f63",
+      "presolved_summary": "presolved INIT 282 368 3006",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 206
+    },
+    {
+      "name": "agg3",
+      "presolved_sha256": "869831226c31b6d8c059773b9d6bb459c4704cddefd3af1a3fba2cda9b88fa73",
+      "presolved_summary": "presolved INIT 281 367 3022",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 209
+    },
+    {
+      "name": "bandm",
+      "presolved_sha256": "4af61ae4607470828b20ae399d6a1383312a1de29f4e23867845f4e6d0a75517",
+      "presolved_summary": "presolved INIT 184 216 1538",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 204
+    },
+    {
+      "name": "beaconfd",
+      "presolved_sha256": "1d25389375bf9ac2a6a781c854c59b564df726a29d7c10b02950ea755ee3c0a7",
+      "presolved_summary": "presolved INIT 49 103 1037",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 7
+    },
+    {
+      "name": "blend",
+      "presolved_sha256": "27c80b906ea158128ac04eaa2a30aba5d89fe903cec8f105d7b447433a04032c",
+      "presolved_summary": "presolved INIT 57 59 391",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 40
+    },
+    {
+      "name": "bnl1",
+      "presolved_sha256": "11e018e9188a61fecce9f47bf5fbce4d3fd39c809c293ba2cc2173eff9166ce6",
+      "presolved_summary": "presolved INIT 472 1003 4610",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 860
+    },
+    {
+      "name": "bnl2",
+      "presolved_sha256": "662bd7ccdc42be91054170e205ca22d321eed90c61b218a8738debe68a0e5348",
+      "presolved_summary": "presolved INIT 1030 2141 9967",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 1526
+    },
+    {
+      "name": "boeing1",
+      "presolved_sha256": "d2a0eccf683b9b5eaad5797c15169851869704b1bf482bff8c5c3ec57fc7009a",
+      "presolved_summary": "presolved INIT 294 367 2725",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 419
+    },
+    {
+      "name": "boeing2",
+      "presolved_sha256": "cb06ecfe4b63161632d8b5e339c1681bc04c9d0e2765fa1e2b4cd9b3784506da",
+      "presolved_summary": "presolved INIT 122 139 790",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 160
+    },
+    {
+      "name": "bore3d",
+      "presolved_sha256": "fb0227410abb01ac5ff9ec3da34dcbb8461a7aa558e449da42df4b6810d5da0c",
+      "presolved_summary": "presolved INIT 49 66 385",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 27
+    },
+    {
+      "name": "brandy",
+      "presolved_sha256": "26b3fcd3d365f078be16792b90d632771eb7b7a2361d19b3a134b77c7a3889d6",
+      "presolved_summary": "presolved INIT 107 174 1635",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 133
+    },
+    {
+      "name": "capri",
+      "presolved_sha256": "20460b8ea43ba53874706589479ffe06f45fba8103d9e68f12a2f98fa3f20521",
+      "presolved_summary": "presolved INIT 198 260 1293",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 182
+    },
+    {
+      "name": "cycle",
+      "presolved_sha256": "82082b31d2693b771de13654c5215812774d229a4bb3d3e60c629f25a1347325",
+      "presolved_summary": "presolved INIT 1135 1975 13296",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 552
+    },
+    {
+      "name": "czprob",
+      "presolved_sha256": "1ce37918da150d80e441668735457503c8d33a1fa3fb7c4cf29dc7b5810b5ba6",
+      "presolved_summary": "presolved INIT 464 2440 4880",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 722
+    },
+    {
+      "name": "d2q06c",
+      "presolved_sha256": "74b3d6c1f34d8a74a0d4c8ed9b6c353810329b2bdeab4a7320c61e78616058e7",
+      "presolved_summary": "presolved INIT 1827 4060 29866",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 4571
+    },
+    {
+      "name": "d6cube",
+      "presolved_sha256": "8268c516409314b904b029106f148f559e205237924502b0d79e5acc8ff63904",
+      "presolved_summary": "presolved INIT 403 5443 34233",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 10046
+    },
+    {
+      "name": "degen2",
+      "presolved_sha256": "d824e965b3ef7adf767f271d26de75fdf0aa987b08c228b4444bda7937e37c2e",
+      "presolved_summary": "presolved INIT 382 471 3849",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 467
+    },
+    {
+      "name": "degen3",
+      "presolved_sha256": "25d9b156e2f2049b53587fb4025a2a2e2c144e5982ed03481c93e048408ae040",
+      "presolved_summary": "presolved INIT 1412 1718 24455",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 1784
+    },
+    {
+      "name": "dfl001",
+      "presolved_sha256": "0de0a73a0fd553c55c298e8841afcac4981f025240fe7c7bd269d7d6a1336940",
+      "presolved_summary": "presolved INIT 4602 9216 30719",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 16966
+    },
+    {
+      "name": "e226",
+      "presolved_sha256": "1774a5acea16d2d1e981d6a536acbd9f00ffc7ece33fa7f4ac53ded45e0b3370",
+      "presolved_summary": "presolved INIT 147 247 2259",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 207
+    },
+    {
+      "name": "etamacro",
+      "presolved_sha256": "8780ef6896e9be0ab7fced86fca6e2d7f55daa8e99d16e47ddaaf973714e8d21",
+      "presolved_summary": "presolved INIT 319 453 1762",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 459
+    },
+    {
+      "name": "fffff800",
+      "presolved_sha256": "d7d717340c388650e7dd7b56217a98bfabf310c0ad87c839e984fbed086eca42",
+      "presolved_summary": "presolved INIT 278 567 4692",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 142
+    },
+    {
+      "name": "finnis",
+      "presolved_sha256": "85f0890c248e7b83554e8024aa9d779a0b7554b3d1dcf8fd71e786a2bef46008",
+      "presolved_summary": "presolved INIT 337 393 1405",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 339
+    },
+    {
+      "name": "fit1d",
+      "presolved_sha256": "884186de5b4f5830aa832655cce23cbde3023181b3e5be3d8ef041fee3a47b89",
+      "presolved_summary": "presolved INIT 24 1024 13386",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 493
+    },
+    {
+      "name": "fit1p",
+      "presolved_sha256": "42a1e5d40afcb82060399fc52432f3b5e2490f6f8eff2006d7db625be3f4435d",
+      "presolved_summary": "presolved INIT 627 1050 9241",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 342
+    },
+    {
+      "name": "fit2d",
+      "presolved_sha256": "c3a10d7caf405e4dca855644afd40be566b9a1228dfb3586c50bbe1e483a7279",
+      "presolved_summary": "presolved INIT 25 10363 127760",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 5642
+    },
+    {
+      "name": "fit2p",
+      "presolved_sha256": "d39ce8bcc5738013f270892fc20cb488f1615c1194f7584a1fdd0a984dbe0d07",
+      "presolved_summary": "presolved INIT 3000 10525 47284",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 4602
+    },
+    {
+      "name": "forplan",
+      "presolved_sha256": "53e0548eaf07fb01c1060351228ed7a9968842adc3f575a0d992a38a6cd0f048",
+      "presolved_summary": "presolved INIT 104 364 3849",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 101
+    },
+    {
+      "name": "ganges",
+      "presolved_sha256": "3cd2435da2c26642033dbee0fb925d173e1f5d7e5e8679a142543a393fc423d1",
+      "presolved_summary": "presolved INIT 480 576 2752",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 338
+    },
+    {
+      "name": "gfrd-pnc",
+      "presolved_sha256": "ab976d6bd6759d461069b0728124432d9102c70d2b00a531f565eace26cc56b3",
+      "presolved_summary": "presolved INIT 322 792 1779",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 472
+    },
+    {
+      "name": "greenbea",
+      "presolved_sha256": "6003cd50588dc545bfb4d7789df0db70c3f66644fc2bed8c414ca6f39ebe1cfd",
+      "presolved_summary": "presolved INIT 1525 3456 23026",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 4462
+    },
+    {
+      "name": "greenbeb",
+      "presolved_sha256": "7e2787085bcc08a60e23490bcea4427d0b401d0b8e88eae411e857482c834366",
+      "presolved_summary": "presolved INIT 1524 3446 22914",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 1985
+    },
+    {
+      "name": "grow15",
+      "presolved_sha256": "c48660bd6b8e5f009866f7609ab171d008bdcb8dcd71bdca1cb194dcccaa02da",
+      "presolved_summary": "presolved INIT 300 583 5558",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 441
+    },
+    {
+      "name": "grow22",
+      "presolved_sha256": "e388f2eb23fa4dc9bac611079cec09e6e91c0337006509c55b9da4fb87478fb5",
+      "presolved_summary": "presolved INIT 440 863 8169",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 550
+    },
+    {
+      "name": "grow7",
+      "presolved_sha256": "802c247b9f85851ca5d6a5ebbadf23e6d43305fb57a4ba982e3dcadd8ba39cb1",
+      "presolved_summary": "presolved INIT 140 263 2574",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 169
+    },
+    {
+      "name": "israel",
+      "presolved_sha256": "d8d5fc9ccd43a7ebf225289fb5d93c8052210748d6f57fcb783ed8d98bcc58ed",
+      "presolved_summary": "presolved INIT 163 141 2256",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 113
+    },
+    {
+      "name": "kb2",
+      "presolved_sha256": "a1a8e6dc4a1c1790589eb7cf2ac93ce9349f28f244a2a8895b627e0162b18fe2",
+      "presolved_summary": "presolved INIT 37 28 258",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 34
+    },
+    {
+      "name": "lotfi",
+      "presolved_sha256": "2a100df4d2d3f0fe2d75be88cd61485231c1f14953e3ae500c67870a84dbdd06",
+      "presolved_summary": "presolved INIT 117 212 526",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 100
+    },
+    {
+      "name": "maros",
+      "presolved_sha256": "26177ec166e5e362196b1a18a51f093755d9a6618bd68d985aaa9b09ff3d143e",
+      "presolved_summary": "presolved INIT 524 799 5767",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 619
+    },
+    {
+      "name": "maros-r7",
+      "presolved_sha256": "762cf8e3faa382c042385fde1b9a82a223d67dfe8d6601e342aa5dbbfdc6a568",
+      "presolved_summary": "presolved INIT 2152 4453 78042",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 2430
+    },
+    {
+      "name": "modszk1",
+      "presolved_sha256": "6915884e7a74077c1d21070205fea095fa9daa01d45479dfe92cd76f08f33030",
+      "presolved_summary": "presolved INIT 592 1009 2402",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 596
+    },
+    {
+      "name": "nesm",
+      "presolved_sha256": "4dfa5ffc4d184f7cbb9cc3f7dc9a294042485a3d1caf8cd4f8793901c5d36774",
+      "presolved_summary": "presolved INIT 567 2224 12324",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 1968
+    },
+    {
+      "name": "perold",
+      "presolved_sha256": "df8b3af3f6ef3d3a3f1603fe408c74bd3f3ef5b470dedfdede29fb18150dfab1",
+      "presolved_summary": "presolved INIT 550 1122 5346",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 821
+    },
+    {
+      "name": "pilot",
+      "presolved_sha256": "404f29b2d8ba4964013f6642425aa5f1db8183725ef2f666ca4a851c1c37d52d",
+      "presolved_summary": "presolved INIT 1225 3074 38555",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 3567
+    },
+    {
+      "name": "pilot.ja",
+      "presolved_sha256": "71c663306782e17de4361d7410d3769f54d95ff4d82ffd82f54bcbd30c965f31",
+      "presolved_summary": "presolved INIT 744 1411 10929",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 1361
+    },
+    {
+      "name": "pilot.we",
+      "presolved_sha256": "010aec0c099b3a175ab257f15e22949fe30476d4f880a0a796c5468fce6cd342",
+      "presolved_summary": "presolved INIT 615 2358 8200",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 1155
+    },
+    {
+      "name": "pilot4",
+      "presolved_sha256": "6e507aeb09da2577446db5870c2a0219429156ad9aabd3524609b47cb532d0cc",
+      "presolved_summary": "presolved INIT 366 782 4627",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 483
+    },
+    {
+      "name": "pilot87",
+      "presolved_sha256": "de16851de022554ee130cf820c2049c6a6a5c970051603ab0064d412fc574d9e",
+      "presolved_summary": "presolved INIT 1776 4378 69736",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 5019
+    },
+    {
+      "name": "pilotnov",
+      "presolved_sha256": "a43c1e257c4dcefdb8dc059feb33791ebe65f8cd33e44d9d4f8df066c9e0cd8d",
+      "presolved_summary": "presolved INIT 795 1739 11470",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 751
+    },
+    {
+      "name": "qap8",
+      "presolved_sha256": "95da58bd4df135ca400ec776d7fa2e4ea2ab178b02e80d04728fa571144d2a4f",
+      "presolved_summary": "presolved INIT 912 1632 7296",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 1966
+    },
+    {
+      "name": "recipe",
+      "presolved_sha256": "b0609b8b2cde7aae00cf919ad385bd4abdaaf8fbba34a3894be84c8fd607cbe3",
+      "presolved_summary": "presolved INIT 60 79 392",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 22
+    },
+    {
+      "name": "sc105",
+      "presolved_sha256": "b7ab11f883702179793d9556d30b99e783bd6dc0b6236ece6dbb452f0a0ed9be",
+      "presolved_summary": "presolved INIT 71 70 206",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 43
+    },
+    {
+      "name": "sc205",
+      "presolved_sha256": "b38485f03890e64e9ddfa4fbc5563de24d9280360d04c7df66e4440dde10dc9b",
+      "presolved_summary": "presolved INIT 143 142 413",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 96
+    },
+    {
+      "name": "sc50a",
+      "presolved_sha256": "07af1309117301cb1e7d22184371e37128604a660bb5337dfbdb409caa1f991b",
+      "presolved_summary": "presolved INIT 31 30 91",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 23
+    },
+    {
+      "name": "sc50b",
+      "presolved_sha256": "c2985b7677d42975bbec7b1513c523bb6b5e4b6cb292badb6a63d595f4abc43b",
+      "presolved_summary": "presolved INIT 23 23 62",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 18
+    },
+    {
+      "name": "scagr25",
+      "presolved_sha256": "7c61af9b88df9d10e285eb5e7dbaf606008d7aec99127a60fd1e6e799a78d72a",
+      "presolved_summary": "presolved INIT 264 292 1032",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 224
+    },
+    {
+      "name": "scagr7",
+      "presolved_sha256": "b2aae1436b68154464d9199b860e06a2caf29680970314f4ba9da6176bab4fb6",
+      "presolved_summary": "presolved INIT 66 76 258",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 73
+    },
+    {
+      "name": "scfxm1",
+      "presolved_sha256": "9ea2818b05f5184578196327438e774caa3ad5c7e78231b1c7d8f4251e3bd4f3",
+      "presolved_summary": "presolved INIT 254 380 2186",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 249
+    },
+    {
+      "name": "scfxm2",
+      "presolved_sha256": "aced4267fbdb075c2473524d41b5abaaa74f4c469ba56bfe456897cfd7671bce",
+      "presolved_summary": "presolved INIT 509 761 4393",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 489
+    },
+    {
+      "name": "scfxm3",
+      "presolved_sha256": "9e845e363bc8bd77f6c5c38c7c536a949b1969840bf9eac30eb58807aed60832",
+      "presolved_summary": "presolved INIT 764 1142 6600",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 756
+    },
+    {
+      "name": "scorpion",
+      "presolved_sha256": "3126f8192a2093c0c8559f4aec26b171721e85b9db5df197698b5c11e6ad22f2",
+      "presolved_summary": "presolved INIT 183 168 932",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 131
+    },
+    {
+      "name": "scrs8",
+      "presolved_sha256": "2b6cf585d4d6859ee64bf0b13900b9cce1739c24d55065f399cd61e97d458136",
+      "presolved_summary": "presolved INIT 204 828 2408",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 284
+    },
+    {
+      "name": "scsd1",
+      "presolved_sha256": "c78fae4c9c1f0f1bea01ef372689e7cdfbb754d4ed8f716a4aabe200e7fc2300",
+      "presolved_summary": "presolved INIT 77 750 2378",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 84
+    },
+    {
+      "name": "scsd6",
+      "presolved_sha256": "5ae80050cce7bedc4a76d7f69be04d3be85d1f845ff15f5a60fedfb0a6f540c8",
+      "presolved_summary": "presolved INIT 147 1342 4308",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 200
+    },
+    {
+      "name": "scsd8",
+      "presolved_sha256": "55295565225f4db6ed34de7ec0867f47a66d4c80f3a3e50635890d1670485711",
+      "presolved_summary": "presolved INIT 397 2744 8578",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 528
+    },
+    {
+      "name": "sctap1",
+      "presolved_sha256": "db357fa1067484b32371d1908a42a831153657f04f83ff0fd2e9bac9d9fa7aca",
+      "presolved_summary": "presolved INIT 269 339 1444",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 130
+    },
+    {
+      "name": "sctap2",
+      "presolved_sha256": "f9e31a6d61ac789075fa32c28bdae194e67a1f099ae10f4c3aecc03f7e2283bc",
+      "presolved_summary": "presolved INIT 977 1326 5717",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 292
+    },
+    {
+      "name": "sctap3",
+      "presolved_sha256": "8af29744d6744cf91794871f349fdc091936df69a65c6358b9da8f42a2758e8d",
+      "presolved_summary": "presolved INIT 1344 1767 7630",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 474
+    },
+    {
+      "name": "seba",
+      "presolved_sha256": "c347fa83d24fdfbd947bafe671252d8eeef712896216233ce336521f38e2c0c0",
+      "presolved_summary": "presolved INIT 9 7 17",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 19
+    },
+    {
+      "name": "share1b",
+      "presolved_sha256": "e04d2f3a4b603bcadee2272396949df4509ebab2d228c4ae5808c8433fa2d0f4",
+      "presolved_summary": "presolved INIT 94 190 1025",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 161
+    },
+    {
+      "name": "share2b",
+      "presolved_sha256": "b00f4256e8fb51eb10050474a3474bdbef4f5686c356206abdafe903bd423260",
+      "presolved_summary": "presolved INIT 93 79 691",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 75
+    },
+    {
+      "name": "shell",
+      "presolved_sha256": "2a3cc126bc5974f532222325ceb264a46cbee07fbd6282124ed720a0b2913427",
+      "presolved_summary": "presolved INIT 249 1179 2364",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 342
+    },
+    {
+      "name": "ship04l",
+      "presolved_sha256": "be3b85c39020e66f07e77800dfd2a14d49441da24a3e93a35e2adda46a491376",
+      "presolved_summary": "presolved INIT 288 1886 4267",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 302
+    },
+    {
+      "name": "ship04s",
+      "presolved_sha256": "b7717f8c85b2a8407c3432e32dc41c4debea61244e824eca900b7344e001d39f",
+      "presolved_summary": "presolved INIT 188 1238 2804",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 216
+    },
+    {
+      "name": "ship08l",
+      "presolved_sha256": "b4f63c88f6877311181ae10e950fcadb086f0d9e7e1e321e483da9fe73fa8160",
+      "presolved_summary": "presolved INIT 470 3099 7100",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 557
+    },
+    {
+      "name": "ship08s",
+      "presolved_sha256": "e19d670a4c3729f6eecb4fbcb003930be44aa4863a42cd4a356bb49f71b3c875",
+      "presolved_summary": "presolved INIT 234 1526 3508",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 272
+    },
+    {
+      "name": "ship12l",
+      "presolved_sha256": "e6ec5d5e8da50efcadc37cc15bbbfc7ed78d4216a1280011b42aed25491a955a",
+      "presolved_summary": "presolved INIT 609 4147 9222",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 657
+    },
+    {
+      "name": "ship12s",
+      "presolved_sha256": "817ae7c499e860973b26d1ca72a47298512b91722f0af1a2aaee509da53f8d62",
+      "presolved_summary": "presolved INIT 267 1847 4121",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 342
+    },
+    {
+      "name": "sierra",
+      "presolved_sha256": "8200851603ae545db03dcacf83b08fdd3d8e94ee2a89a306c22f6caf0b9902af",
+      "presolved_summary": "presolved INIT 993 1830 6100",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 313
+    },
+    {
+      "name": "stair",
+      "presolved_sha256": "a2d0f23d5c5f6bfd31a2c9a481255814d9885fbcd42168c82884f640a1339f63",
+      "presolved_summary": "presolved INIT 275 303 3480",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 224
+    },
+    {
+      "name": "standata",
+      "presolved_sha256": "4a4a77a95e8d5dd1718b21156005dea69bb3b8f9d9ef5f991248c8d117bf2e90",
+      "presolved_summary": "presolved INIT 252 328 873",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 74
+    },
+    {
+      "name": "standgub",
+      "presolved_sha256": "4a4a77a95e8d5dd1718b21156005dea69bb3b8f9d9ef5f991248c8d117bf2e90",
+      "presolved_summary": "presolved INIT 252 328 873",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 74
+    },
+    {
+      "name": "standmps",
+      "presolved_sha256": "73a5afe99f551f86e230033b4634563c49f0a179414a5e74ac5c760421d7367b",
+      "presolved_summary": "presolved INIT 360 922 2499",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 223
+    },
+    {
+      "name": "stocfor1",
+      "presolved_sha256": "f00287a1503cba8a4b12a0ff0d300fdb4d16847e3652b128fcf77d67f6db4631",
+      "presolved_summary": "presolved INIT 74 76 319",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 25
+    },
+    {
+      "name": "stocfor2",
+      "presolved_sha256": "cfe52ecee0e747d300ef8dbee003e476708f2929525c9d0a895499aebf381920",
+      "presolved_summary": "presolved INIT 1448 1334 6024",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 594
+    },
+    {
+      "name": "stocfor3",
+      "presolved_sha256": "690f1e6168a657bf6ae1d413271f791641730ab1c6e403ca6c30bd04fb032943",
+      "presolved_summary": "presolved INIT 11256 10302 46928",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 4801
+    },
+    {
+      "name": "truss",
+      "presolved_sha256": "72ac3898d791bba3be953ebe99c48a21f70df698f1f03dd6870208710f0075f9",
+      "presolved_summary": "presolved INIT 1000 8802 27832",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 3262
+    },
+    {
+      "name": "tuff",
+      "presolved_sha256": "f29417d3fb20d2ce13699133829aebaaa47875788301b04c82bd6431d42ae56c",
+      "presolved_summary": "presolved INIT 180 426 3742",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 60
+    },
+    {
+      "name": "vtp.base",
+      "presolved_sha256": "40bd0a207801d5a6c99e20a9f9dc01fe7252988b861d20b1fc95d0353c9bbb10",
+      "presolved_summary": "presolved INIT 40 57 173",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 29
+    },
+    {
+      "name": "wood1p",
+      "presolved_sha256": "82627e1af25e286934ce994d8ff356464705114d01fe21963ae66d2f1f101e01",
+      "presolved_summary": "presolved INIT 170 1716 44572",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 347
+    },
+    {
+      "name": "woodw",
+      "presolved_sha256": "6ccb7fc712fb91b0158f439c3818eb74fcc347cc8d9c2e54269b8a19a4d42b6a",
+      "presolved_summary": "presolved INIT 703 5194 19574",
+      "solve_status": "OPTIMAL",
+      "solve_iterations": 662
+    }
+  ]
+}

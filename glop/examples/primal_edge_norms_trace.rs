@@ -7,6 +7,7 @@ use glop::primal_edge_norms::PrimalEdgeNorms;
 use glop::time_limit::TimeLimit;
 use glop::update_row::UpdateRow;
 use lp_data::lp_types::{ColBitVec, ColIndex, RowIndex, VectorIndex};
+use lp_data::scattered_vector::ScatteredColumn;
 use lp_data::sparse::SparseMatrix;
 
 fn add_basis_entries(
@@ -106,7 +107,13 @@ fn main() {
         entering_dense[entry.index().to_usize()] = entry.coefficient();
     }
     let direction = basis.solve(&entering_dense).unwrap();
-    let precise = norms.test_entering_edge_norm_precision(entering, &direction);
+    let mut scattered_direction = ScatteredColumn::new(RowIndex::from_usize(n));
+    for (row, &value) in direction.iter().enumerate() {
+        if value != 0.0 {
+            scattered_direction.set(RowIndex::from_usize(row), value);
+        }
+    }
+    let precise = norms.test_entering_edge_norm_precision(entering, &scattered_direction);
     let mut update = UpdateRow::new(&matrix);
     norms
         .update_before_basis_pivot(
@@ -119,7 +126,7 @@ fn main() {
             entering,
             basis_variables[leaving],
             leaving,
-            &direction,
+            &scattered_direction,
             &mut update,
         )
         .unwrap();
@@ -130,7 +137,7 @@ fn main() {
     let updated_devex = norms.devex_weights().to_vec();
     watcher.set(false);
     norms.set_parameters(-1.0, 150, true);
-    let _ = norms.test_entering_edge_norm_precision(entering, &direction);
+    let _ = norms.test_entering_edge_norm_precision(entering, &scattered_direction);
     let precision_watcher = watcher.get();
     watcher.set(false);
     norms.clear();

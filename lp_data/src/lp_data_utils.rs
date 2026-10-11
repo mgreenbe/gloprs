@@ -5,6 +5,26 @@ use crate::lp_types::{ColIndex, DenseRow, Fractional, INFINITY, RowIndex, Vector
 use crate::matrix_scaler::SparseMatrixScaler;
 use crate::scattered_vector::{ScatteredColumn, ScatteredRow};
 
+/// Parameters for GLOP's `LpScalingHelper::Scale(params, lp)`.
+///
+/// The matrix algorithm is supplied by the caller because the
+/// `LINEAR_PROGRAM` option needs `RevisedSimplex`, which lives in the `glop`
+/// crate rather than this lower-level `lp_data` crate.
+pub trait LpScalingParameters {
+    fn scale_matrix(&self, lp: &mut LinearProgram, scaler: &mut SparseMatrixScaler);
+    fn cost_scaling_algorithm(&self) -> CostScalingAlgorithm;
+}
+
+impl LpScalingParameters for CostScalingAlgorithm {
+    fn scale_matrix(&self, lp: &mut LinearProgram, scaler: &mut SparseMatrixScaler) {
+        lp.scale(scaler);
+    }
+
+    fn cost_scaling_algorithm(&self) -> CostScalingAlgorithm {
+        *self
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct LpScalingHelper {
     matrix_is_scaled: bool,
@@ -41,7 +61,7 @@ impl LpScalingHelper {
 
     /// Scales a model with GLOP's default matrix, bound, and cost algorithms.
     pub fn scale(&mut self, lp: &mut LinearProgram) {
-        self.scale_with_cost_algorithm(lp, CostScalingAlgorithm::ContainOneCostScaling);
+        self.scale_with_parameters(&CostScalingAlgorithm::ContainOneCostScaling, lp);
     }
 
     /// Scales a model with GLOP's equilibration matrix scaling and the given
@@ -52,13 +72,28 @@ impl LpScalingHelper {
         lp: &mut LinearProgram,
         cost_scaling: CostScalingAlgorithm,
     ) {
+        self.scale_with_parameters(&cost_scaling, lp);
+    }
+
+    /// Scales matrix, bounds, and costs in upstream `LpScalingHelper::Scale`
+    /// order using an explicit scaling-method configuration.
+    pub fn scale_with_parameters(
+        &mut self,
+        parameters: &impl LpScalingParameters,
+        lp: &mut LinearProgram,
+    ) {
         let mut scaler = SparseMatrixScaler::new();
-        lp.scale(&mut scaler);
+        parameters.scale_matrix(lp, &mut scaler);
         self.bound_scaling_factor = 1.0 / lp.scale_bounds();
-        self.objective_scaling_factor = 1.0 / lp.scale_objective(cost_scaling);
+        self.objective_scaling_factor =
+            1.0 / lp.scale_objective(parameters.cost_scaling_algorithm());
         self.matrix_is_scaled = true;
         self.row_unscaling_factors = scaler.row_scales().as_slice().to_vec();
         self.col_unscaling_factors = scaler.col_scales().as_slice().to_vec();
+        self.row_unscaling_factors
+            .resize(lp.num_constraints().to_usize(), 1.0);
+        self.col_unscaling_factors
+            .resize(lp.num_variables().to_usize(), 1.0);
     }
 
     pub fn configure_from_factors(&mut self, row_factors: &[f64], col_factors: &[f64]) {

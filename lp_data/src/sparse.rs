@@ -521,6 +521,42 @@ impl SparseMatrix {
         }
     }
 
+    /// Adds a multiple of one live column into another while removing the
+    /// common row, using disjoint borrows rather than copying either column.
+    ///
+    /// # Panics
+    ///
+    /// Panics if source and destination are the same column.
+    pub fn add_multiple_between_columns_and_delete_common_index(
+        &mut self,
+        source: ColIndex,
+        destination: ColIndex,
+        multiplier: Fractional,
+        common_row: RowIndex,
+        drop_tolerance: Fractional,
+    ) {
+        assert_ne!(source, destination);
+        let source_index = source.to_usize();
+        let destination_index = destination.to_usize();
+        if source_index < destination_index {
+            let (left, right) = self.columns.split_at_mut(destination_index);
+            left[source_index].add_multiple_to_sparse_vector_and_delete_common_index(
+                multiplier,
+                common_row,
+                drop_tolerance,
+                &mut right[0],
+            );
+        } else {
+            let (left, right) = self.columns.split_at_mut(source_index);
+            right[0].add_multiple_to_sparse_vector_and_delete_common_index(
+                multiplier,
+                common_row,
+                drop_tolerance,
+                &mut left[destination_index],
+            );
+        }
+    }
+
     pub fn clear(&mut self) {
         self.columns.clear();
         self.num_rows = RowIndex::new(0);

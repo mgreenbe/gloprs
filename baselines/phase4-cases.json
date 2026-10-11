@@ -137,8 +137,35 @@
       "covers": ["warm_start_basis", "warm_changed_matrix_compute_initial_basis"]
     },
     {
+      "name": "warm_removed_first_row",
+      "mode": "warm_removed_first_row",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["1", "0", "inf"], ["1", "0", "inf"]],
+      "constraints": [["1", "inf"], ["1", "inf"]],
+      "covers": ["warm_start_basis", "warm_changed_matrix_compute_initial_basis"]
+    },
+    {
+      "name": "warm_removed_all_rows",
+      "mode": "warm_removed_all_rows",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["1", "0", "inf"], ["1", "0", "inf"]],
+      "constraints": [["1", "inf"], ["1", "inf"]],
+      "covers": ["warm_start_basis"]
+    },
+    {
       "name": "warm_removed_basic_column",
       "mode": "warm_removed_column",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"], [1, 1, "1"]],
+      "variables": [["1", "0", "inf"], ["1", "0", "inf"]],
+      "constraints": [["1", "inf"], ["1", "inf"]],
+      "covers": ["warm_start_basis"]
+    },
+    {
+      "name": "warm_removed_all_columns",
+      "mode": "warm_removed_all_columns",
       "iterations": 100,
       "matrix": [[0, 0, "1"], [1, 1, "1"]],
       "variables": [["1", "0", "inf"], ["1", "0", "inf"]],
@@ -546,6 +573,15 @@
       "covers": ["primal_phase_two", "primal_unbounded_termination", "primal_ray_validated"]
     },
     {
+      "name": "primal_unbounded_negative_ray",
+      "mode": "primal",
+      "iterations": 100,
+      "matrix": [],
+      "variables": [["1", "-inf", "0"]],
+      "constraints": [],
+      "covers": ["primal_unbounded_termination", "primal_ray_validated"]
+    },
+    {
       "name": "dual_phase_two",
       "mode": "dual",
       "iterations": 100,
@@ -766,6 +802,15 @@
       "covers": ["dual_unbounded_termination", "dual_ray_validated"]
     },
     {
+      "name": "dual_unbounded_positive_ray",
+      "mode": "dual",
+      "iterations": 100,
+      "matrix": [[0, 0, "1"]],
+      "variables": [["0", "0", "0"]],
+      "constraints": [["-inf", "-1"]],
+      "covers": ["dual_unbounded_termination", "dual_ray_validated"]
+    },
+    {
       "name": "dual_infeasible_no_rows",
       "mode": "dual",
       "iterations": 100,
@@ -891,6 +936,15 @@
       "constraints": [["1", "inf"], ["-inf", "0"], ["0.1", "inf"]],
       "covers": ["dual_cost_shift", "dual_cost_shift_removed", "optimal_cleanup", "cleanup_dual_to_primal", "cleanup_primal_reoptimization"],
       "forbids": ["dual_edge_norm_recomputation_requested"]
+    },
+    {
+      "name": "zero_internal_tolerance_dual_cleanup",
+      "mode": "zero_internal_dual",
+      "iterations": 100,
+      "matrix": [[0, 0, "-0.7"], [0, 1, "100"], [0, 2, "2"], [1, 0, "0.01"], [1, 1, "-0.01"], [1, 2, "100"], [2, 0, "0.7"], [2, 1, "100"], [2, 2, "0.7"]],
+      "variables": [["-2", "0", "1"], ["1", "0", "1"], ["0", "0", "1"]],
+      "constraints": [["1", "inf"], ["-inf", "0"], ["0.1", "inf"]],
+      "covers": ["optimal_cleanup", "cleanup_dual_to_primal", "cleanup_primal_reoptimization"]
     },
     {
       "name": "dual_zero_norm_threshold",

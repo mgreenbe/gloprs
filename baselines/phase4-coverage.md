@@ -1,6 +1,6 @@
 # Phase-4 branch fixture coverage
 
-The small-LP fixture currently has 153 pinned-native cases: 151 terminal
+The small-LP fixture currently has 159 pinned-native cases: 157 terminal
 outcomes with exact clocks and two pinned LU errors. Each listed branch
 tag is emitted by the Rust driver only when that path is taken; the test also
 compares the case's final state to GLOP. This is **not** a claim that every
@@ -29,7 +29,7 @@ work needed to make that claim.
 | Early imprecise pivot and adaptive LU threshold escalation | `adaptive_lu_pivot_threshold` | Exercised; native/Rust final threshold bits agree |
 | Early imprecise dual pivot and adaptive LU threshold escalation | `dual_adaptive_lu_pivot_threshold`, `dual_adaptive_lu_default_control` | Four-row dual case requires escalation at zero refactorization threshold; same LP at the default threshold forbids it. Both match native status, state, clock, and final LU threshold bits |
 | Exact primal Harris tie and shared-RNG choice | `primal_harris_exact_tie` | Exercised |
-| Primal unbounded ray | `primal_unbounded`, `primal_unbounded_coupled_ray` | Exercised; coupled ray has two nonzero structural entries |
+| Primal unbounded ray | `primal_unbounded`, `primal_unbounded_coupled_ray`, `primal_unbounded_negative_ray` | Exercised; coupled ray has two nonzero structural entries, and negative ray exercises the opposite movement direction |
 | Primal ray postsolve validation (accepted) | `primal_unbounded` | Exercised |
 | Primal weak-ray rejection and stronger-ray acceptance | `primal_weak_ray_rejected`, `primal_strong_ray_accepted` | Exercised |
 | Primal weak-ray rejection with imprecise conversion disabled | `primal_weak_ray_rejected_without_imprecise_conversion` | Exercised; lazy reduced-cost refresh and native operation clock agree |
@@ -47,7 +47,7 @@ work needed to make that claim.
 | Already optimal at zero dual iteration limit | `dual_already_optimal_at_zero_limit` | Exercised |
 | Dual objective limit and cleanup before stopping | `dual_objective_limit`, `warm_dual_changed_objective_limit` | Exercised; `dual_objective_limit_cleanup` required and native operation clocks agree |
 | Same dual LP without an objective limit | `dual_objective_no_limit_control` | Exercised; native trajectory and operation clock agree, limit branch forbidden |
-| Dual-unbounded ray | `dual_unbounded_ray`, `dual_unbounded_coupled_ray` | Exercised; coupled certificate has two nonzero row entries |
+| Dual-unbounded ray | `dual_unbounded_ray`, `dual_unbounded_coupled_ray`, `dual_unbounded_positive_ray` | Exercised; coupled certificate has two nonzero row entries, and the new upper-bound contradiction reverses the certificate sign |
 | Dual ray postsolve validation (accepted) | `dual_unbounded_ray` | Exercised |
 | Dual weak-ray rejection and tolerance-boundary acceptance | `dual_weak_ray_rejected`, `dual_ray_at_solution_tolerance` | Exercised |
 | Dual weak-ray rejection with imprecise conversion disabled | `dual_weak_ray_without_imprecise_conversion` | Exercised |
@@ -73,7 +73,10 @@ work needed to make that claim.
 | Incremental added-row warm start refactorizing the extended basis, with structural or slack basis | `warm_added_row`, `warm_added_row_from_slack_basis` | Exercised; native operation clock agrees |
 | Added row and structural column in the same warm start | `warm_added_row_and_column` | Full warm initialization and Markowitz candidates agree with native terminal state and clock |
 | Removed row leaving too many saved BASIC candidates | `warm_removed_row` | Markowitz candidate pass agrees with native state and clock; candidate-count test no longer truncates before deciding |
+| Removed first row with surviving second-row structural pivot | `warm_removed_first_row` | Native and Rust agree on reordered row/basis coordinates and exact clock |
+| Removal of every row after a solved two-row basis | `warm_removed_all_rows` | Native and Rust agree on zero-dimensional reinitialization, terminal state, and exact clock |
 | Removed BASIC structural column | `warm_removed_basic_column` | Native and Rust agree on `DUAL_UNBOUNDED`, basis, certificate, and exact clock |
+| Removal of every structural column after a solved two-row basis | `warm_removed_all_columns` | Native and Rust agree on the slack-only infeasibility certificate, terminal state, and exact clock |
 | Added-row warm basis rejected by condition threshold, then recovered with a fresh basis | `warm_added_row_condition_fallback` | Exercised; computed Markowitz candidate basis is used and native operation clock agrees |
 | Added-row warm start with a changed existing coefficient | `warm_added_row_with_changed_old_coefficient` | Exercised; full warm-basis rebuild selects initial-basis candidates before factorization, with exact native clock |
 | Saved basis made singular by an existing-coefficient edit | `warm_singular_saved_basis_after_matrix_change` | Recovery via Markowitz candidate basis matches native terminal state and exact clock |
@@ -103,7 +106,7 @@ work needed to make that claim.
 | Cleanup reoptimization count exhausted | `cleanup_reoptimization_limit_zero`, `cleanup_reoptimization_limit_zero_dual` | Exercised in both cross-algorithm directions with zero allowed reoptimizations; follow-up solve forbidden, exact native clocks |
 | Relaxed internal tolerances avoid both cross-algorithm cleanup switches | `cleanup_primal_to_dual_relaxed_tolerance`, `cleanup_dual_to_primal_relaxed_tolerance` | Exercised and explicitly forbidden in the relaxed cases |
 | Dual cost shift and its removal | `dual_degenerate_cost_shift` | Exercised |
-| Dual cost-shift removal followed by dual-to-primal cleanup | `dual_cost_shift_forces_primal_cleanup` | Native and Rust agree on switch, primal reoptimization, terminal state, and exact clock |
+| Dual cost-shift removal followed by dual-to-primal cleanup | `dual_cost_shift_forces_primal_cleanup`, `zero_internal_tolerance_dual_cleanup` | Native and Rust agree on switch, primal reoptimization, terminal state, and exact clock, including the zero-internal-tolerance boundary |
 | Dual perturbation removal after Phase II followed by dual-to-primal cleanup | `dual_perturbation_removal_forces_primal_cleanup` | Native and Rust agree on switch, primal reoptimization, terminal state, and exact clock; cost shift forbidden |
 | Dual boxed-variable bound flip | `dual_boxed_bound_flip` | Exercised |
 | Immediate deterministic-time limit in primal Phase I | `primal_deterministic_limit_zero` | Exercised |
@@ -122,49 +125,51 @@ work needed to make that claim.
 | Explicitly cleared integrality scales | `post_optimal_integrality_scales_cleared` | Setting then clearing the scale vector disables polishing; native fractional solution, basis, and clock agree |
 | Polishing after cleanup reoptimization | `post_optimal_integrality_polish_after_cleanup_reoptimization` | Primal-to-dual cleanup causes a second optimization; both post-optimal polishing calls match native terminal state and operation clock |
 | Polishing accepts a pivot, then rejects the next candidate or stops at the deterministic limit | `post_optimal_integrality_polish_accept_then_reject`, `post_optimal_integrality_polish_time_limit_after_pivot` | Candidate removal and the post-pivot time check match native terminal state and exact clocks; the limited case forbids the later rejection |
-| Advanced transposed-matrix entry, changed bounds/matrix, and transformed slack objective | `transposed_matrix_with_slack_entry`, `transposed_matrix_with_slack_warm_bound_change`, `transposed_matrix_with_slack_changed_matrix`, `transposed_matrix_with_slack_nonzero_slack_cost_and_objective_transform` | First solve, quick dual warm solve after a bound mutation, full reinitialization after a matrix mutation, and nonzero slack cost with objective scale/offset match native state and exact operation clocks. Unchanged advanced calls skip the matrix scan; the numerical matrix, basis representation, and VariablesInfo share the caller's compact allocation. Other collaborators still use a sparse-column copy, so large-model performance remains to reconcile |
+| Advanced transposed-matrix entry, changed bounds/matrix, and transformed slack objective | `transposed_matrix_with_slack_entry`, `transposed_matrix_with_slack_warm_bound_change`, `transposed_matrix_with_slack_changed_matrix`, `transposed_matrix_with_slack_nonzero_slack_cost_and_objective_transform` | First solve, quick dual warm solve after a bound mutation, full reinitialization after a matrix mutation, and nonzero slack cost with objective scale/offset match native state and exact operation clocks. Unchanged advanced calls skip the matrix scan; the equation-form adapter borrows the compact candidate without a sparse-column copy. Three large Netlib models have a serial advanced-entry timing comparison below |
 | Zero-row advanced transposed solve | `transposed_matrix_with_slack_zero_rows` | Native/Rust status, variable values, reduced costs, and operation clocks agree without a basis or slack columns |
 | Changed objective on the advanced transposed entry | `transposed_matrix_with_slack_warm_objective_change` | Native and Rust reject the unchanged-objective dual fast path, rebuild from the saved basis, and agree on status, basis, values, reduced costs, and exact clock |
 | External starting basis on the advanced transposed entry | `transposed_matrix_with_slack_external_basis` | Native and Rust initialize from the caller-supplied structural basis with matching terminal state and exact clock |
-| Direct, unscaled qap15 prefixes and former clock split | `qap15_dual`, `qap15-clock-transition.json` | Status, ordered basis, reduced-cost bits, dual-norm bits, and deterministic clock agree through 100,000 pivots. The former pivot-28,149 split was caused by invalidating `UpdateRow` after a no-op refactorization; the opt-in fixture now requires exact native clock equality |
+| Direct, unscaled qap15 prefixes and former clock split (deferred; not a Phase-4 gate) | `qap15_dual`, `qap15-clock-transition.json` | Status, ordered basis, reduced-cost bits, dual-norm bits, and deterministic clock agree through 150,000 pivots. The former pivot-28,149 split was caused by invalidating `UpdateRow` after a no-op refactorization; the opt-in fixture now requires exact native clock equality |
 
-Still needed:
+Phase-4 exit evidence: the 96 fast Netlib models agree with native GLOP on
+status, iteration count, ordered basis, full pivot path, reduced-cost bits, and
+dual-norm bits. The same regression independently recomputes objective,
+primal equations and bounds, dual stationarity, and complementary dual signs
+from each input MPS. The 159 small native-pinned cases exercise the named
+decision branches above, including zero-internal-tolerance cleanup.
 
-- Direct, unscaled qap15 terminal behavior and prefixes beyond 100,000 pivots
-  remain unvalidated.
+Further coverage/performance work:
 
-- The alternate `MinimizeFromTransposedMatrixWithSlack()` entry point now has
-  seven native-pinned functional cases and no longer builds a cached
-  equation-form `LinearProgram`. Unchanged incremental calls skip the matrix
-  scan, and full initialization keeps the directly transposed compact
-  numerical matrix. The basis representation and `VariablesInfo` share that
-  compact allocation, and factorization reads selected columns directly,
-  matching upstream's view.
-  Other collaborators still need a sparse-column copy of the advanced matrix;
-  eliminate that copy and validate performance before calling the advanced
-  port performance-faithful. Optional
-  `SetIntegralityScale()`/`Polish()` has native-pinned
-  bound-flip, pivot, multi-candidate rejection, post-cleanup reoptimization,
-  and no-scale controls;
-  precision-request polishing remains untested. The time-limit branch is
-  covered before its first move and after a pivot.
-- The both-infeasible cleanup classification and sharper tolerance boundaries
-  remain. Cost-shift- and perturbation-removal-induced dual-to-primal cleanup
-  are both covered.
-- More ray configurations beyond the targeted threshold, coupled-certificate,
-  and conversion-disabled cases above.
-- Other dimension-changing warm-start failure modes remain untested, beyond
-  the added/removed rows and columns and changed existing coefficient now
-  covered. Native matrix mutation requires `CleanUp()` before `Solve()`;
-  omitting it in an earlier diagnostic probe produced invalid comparisons.
-- Further pivot-precision refactorization variants and Harris stability cases
-  beyond the covered exact tie. Zero-threshold norm-drift requests and their
-  subsequent forced LU refactorizations now have both primal and dual cases.
-- Wall-clock limits reached after substantial work and further near-boundary deterministic limits
-  (eight cases cover four boundaries, but not all phase transitions),
-  singular/abnormal and error exits, and
-  iteration-limit placements beyond the covered Phase-I/II cases above.
+The default `exploit_singleton_column_in_initial_basis` path now selects
+singleton structural columns before the advanced crash, matching native GLOP.
+The Phase-5 partial-pipeline fixture checks enabled and disabled controls,
+including the formerly divergent zero-pivot one-row solves.
+
+- The advanced transposed-matrix entry has seven native-pinned functional
+  cases and shares its compact matrix with the basis representation without a
+  sparse-column copy. On `fit2p`, `maros-r7`, and `stocfor3`, serial cold-entry
+  Rust/native solve-time ratios were 1.309, 0.958, and 1.546; ordinary-entry
+  controls were 1.310, 0.957, and 1.547. Initialization-only ratios were
+  1.587, 1.966, and 0.957 for advanced entry versus 1.662, 2.118, and 1.218
+  for ordinary entry. Thus no advanced-specific penalty was measured, but the
+  shared solver performance gap remains Phase-8 work. Reproduce with
+  `tools/benchmark_netlib_solve.py --mode advanced` and `--mode dual`, adding
+  `--iteration-limit 0` for initialization-only timing.
+- A precision request inside `Polish()` is not reachable in the pinned upstream
+  control flow: its initial `GetReducedCosts()` clears the request on the
+  refactorized optimal basis, and no call inside `Polish()` sets it again. The
+  branch is retained for source correspondence; polishing moves, rejection,
+  cleanup reoptimization, and time limits have native fixtures.
+- Additional both-infeasible cleanup, ray, warm-start mutation, Harris,
+  pivot-precision, wall-clock, and error-exit variants can strengthen branch
+  coverage. The corresponding algorithms are implemented; this ledger does
+  not claim exhaustive branch coverage. Native matrix mutation requires
+  `CleanUp()` before the next `Solve()`.
 
 For each missing path, add an event at the decision site, a minimized LP (or a
 multi-solve mutation sequence), and a pinned-native expected result. The test
 must assert the event was hit; matching terminal status alone is insufficient.
+
+Deferred until scaling and preprocessing are implemented: direct, unscaled
+qap15 terminal behavior and prefixes beyond 150,000 pivots. The existing
+qap15 fixtures remain opt-in regressions, not Phase-4 completion gates.

@@ -251,10 +251,17 @@ unscaling, ordinary and slack variables, clearing, infinities, and degenerate
 cost/bound normalization. Whole-model equilibration agrees on a further 1,000
 native traces spanning all four objective cost-scaling algorithms and covering
 every model bound, objective coefficient, sparse matrix entry, and retained
-helper factor. The optional `LINEAR_PROGRAM`
-matrix-scaling branch intentionally remains open because it calls the revised
-simplex itself; a different optimizer would not be a faithful Phase-1
-replacement.
+helper factor. The parameterized helper API now delegates the matrix method to
+`glop`, where the actual revised simplex is available without reversing crate
+dependencies. Another 500 generated native comparisons cover default,
+equilibration, and auxiliary-LP matrix scaling with all four objective-scaling
+algorithms. The auxiliary LP's ordered model also matched native bit-for-bit
+on the investigated case. These randomized LP-method cases require every row
+to contain an entry: upstream creates an absent row's scaling variable only
+after solving, so its empty-row factor is not a stable solution value. A
+separate native fixture retains empty-row coverage. The error-to-equilibration
+dispatch is tested with an injected auxiliary-solve error; a naturally failing
+native auxiliary LP remains to be found for differential fallback validation.
 The basis now uses
 GLOP's middle-product-form rank-one updates and the same identity-basis,
 fixed-period, and deterministic-time-adjusted refactorization policy. The
@@ -411,7 +418,11 @@ Exit criteria:
 
 ## Phase 4: port revised simplex end to end
 
-Status: in progress. File-level Rust counterparts for `revised_simplex` and
+Status: the previously specified unscaled, unpreprocessed exit gates pass.
+The singleton-column initial-basis shortcut is now ported and checked against
+native GLOP by the Phase-5 partial-pipeline solve fixture, including the
+default enabled path and zero-pivot one-row controls.
+File-level Rust counterparts for `revised_simplex` and
 `lp_solver` now exist. The current driver includes equation-form conversion,
 the primal phase-I piecewise-linear feasibility objective and breakpoint ratio
 test, primal optimization, Harris ratio tests, bound flips, product-form basis
@@ -1124,19 +1135,19 @@ directly from the caller. The basis representation now shares the same
 columns directly through a compact Markowitz/LU view. A 128-case generated
 test matches sparse-view pivots, factors, and operation counts; `VariablesInfo`
 also shares that compact allocation on ordinary and advanced initialization.
-The seven pinned advanced
-cases and the ordinary and perturbed fast-96 Netlib regressions pass. The
-advanced entry still materializes a sparse-column copy for other solver
-collaborators, so complete compact ownership and its performance validation
-remain open before declaring this path or Phase 4 complete.
+The seven pinned advanced cases and the ordinary and perturbed fast-96 Netlib
+regressions pass. The advanced entry now supplies a borrowed compact equation-
+form view, with no sparse-column compatibility matrix. Its changed-matrix
+candidate is installed only after warm-start comparisons against the prior
+compact source, preserving the upstream rebuild decision and clock.
 `PrimalEdgeNorms` now shares the solver's immutable compact matrix, rather
 than cloning sparse columns on initialization or rebind; the workspace tests
 and strict lint pass.
 `UpdateRow` now shares the advanced entry's compact transpose instead of
 building a sparse transpose copy; ordinary full initialization builds a
 compact transpose directly from the LP matrix. The pinned small-case and
-numerical-kernel tests pass. The advanced sparse-column compatibility copy is
-still present for initialization and comparison paths.
+numerical-kernel tests pass. Initialization and warm comparisons now accept
+both the ordinary borrowed sparse LP input and the advanced compact input.
 The solver's four direct update-row calls now consume the compact numerical
 matrix; the column-wise update kernel uses its four-accumulator scalar product.
 The focused numerical tests, pinned Phase 4 cases, and both fast-96 native
@@ -1147,21 +1158,43 @@ passes. `PrimalEdgeNorms` now also shares the compact matrix and traverses its
 columns for exact and incremental norms. Basis updates already retain a
 compact problem-column index; they do not need a sparse replacement column.
 The dual-unbounded certificate's full update row now also reads compact
-columns. The sparse-column compatibility copy remains for the initialization
-input and comparison paths and several solver inspection/certificate loops.
-Those are Rust-only dependencies to remove,
-not justified deviations from upstream.
+columns. The former sparse-column compatibility copy is removed; ordinary LP
+input remains borrowed only at the equation-form boundary.
 The solver's residual, imprecise-pivot, and value-correction loops now use
 compact columns, and `UpdateRow` constructs or rebinds its transpose directly
-from the compact matrix. The remaining sparse copy is increasingly isolated
-to the equation-form input adapter and warm-start matrix comparisons.
+from the compact matrix. The equation-form adapter and warm-start comparisons
+now read either borrowed sparse input or borrowed compact input directly.
 The ordinary solver basis now uses the shared compact view as well. Added
 columns rebind the view and shift slack indices without numerical rebuild;
-added rows reinitialize from the compact source. Standalone sparse-view
-regression tests remain, but solver refactorization no longer selects sparse
-columns from its copied matrix. The full workspace suite, strict lint, both
+added rows reinitialize from the compact source. The obsolete sparse-view
+basis branch and its `Rc<SparseMatrix>` have been removed; selected sparse
+factorizations remain covered only as isolated Markowitz test references.
+The full workspace suite, strict lint, both
 fast-96 Netlib trajectory fixtures, and the 100,000-pivot qap15 native-state
 and clock fixture pass on this compact-view implementation.
+The direct unscaled qap15 comparison now also passes a native-pinned
+150,000-pivot cap, including exact ordered basis, reduced-cost and dual-norm
+bits, and operation clock. Native and Rust each report `DUAL_FEASIBLE` at the
+cap. This is deeper-prefix evidence, not a terminal solve.
+The pinned Phase-4 branch suite now includes 159 small cases. Two additional
+ray cases validate the opposite primal movement direction and the opposite
+dual-certificate sign against native GLOP, including exact ray bits and
+deterministic clocks. These extend, but do not complete, the outstanding
+ray-configuration inventory in `baselines/phase4-coverage.md`.
+Three native-pinned warm-start cases remove the first row, every row, or every
+structural column after a solved two-row basis, validating reordered basis
+coordinates, zero-dimensional reinitialization, and the slack-only
+infeasibility certificate with exact operation clocks.
+A zero-internal-tolerance cleanup case also matches native GLOP through its
+dual-to-primal switch and reoptimization. The separate both-infeasible guard
+has not been reached by a native-pinned LP; this is a non-gating branch-coverage
+follow-up, not a missing implementation.
+The alternate transposed-matrix entry now has a direct serial large-model
+timing control. On `fit2p`, `maros-r7`, and `stocfor3`, its Rust/native median
+solve-time ratios are 1.309, 0.958, and 1.546 (three trials and one warm-up
+per solver); the ordinary-entry controls are 1.310, 0.957, and 1.547.
+The advanced entry therefore has no measurable extra cost on this sample,
+although the shared solver gap on `stocfor3` still needs profile-guided work.
 
 Exit criteria:
 
@@ -1169,10 +1202,155 @@ Exit criteria:
 - Independent KKT/residual validation passes.
 - Any iteration divergence is understood and recorded.
 
+These criteria now pass for the unscaled Phase-4 scope: both fast-96 native
+trajectory fixtures pass, the small native branch suite has 159 cases, and
+the ordinary fast-96 regression independently recomputes objective, primal
+equations and bounds, dual stationarity, and complementary signs from the MPS
+input. The smallest-50 public-solver comparison passes status, objective, and
+feasibility checks. This completion does not assert exhaustive branch
+coverage, Phase-5 preprocessing/postsolve, or Phase-8 performance parity;
+remaining hardening work is tracked in `baselines/phase4-coverage.md`.
+
+The direct, unscaled `qap15` terminal solve and any prefix deeper than the
+verified 150,000 pivots are **not** Phase-4 exit criteria. Keep their native
+fixtures opt-in. Revisit `qap15` after Phase-5 scaling/preprocessing is in
+place, first comparing the normal preprocessed solve and only then deciding
+whether deeper direct, unscaled tracing is useful.
+
 ## Phase 5: port scaling and preprocessing
 
-Port scaling and preprocessors incrementally, one transformation at a time.
-Each transformation needs:
+Status: complete for the continuous-LP preprocessing and default-solve pipeline.
+`ShiftVariableBoundsPreprocessor` now ports GLOP's
+first transformation: zero-domain detection, compensated row/objective
+offsets, overflow status, and status-sensitive recovery. `ScalingPreprocessor`
+ports the later equilibration and auxiliary-LP matrix methods, objective and
+bound scaling order, and recovers
+primal and dual values with exact original-bound snapping. Focused tests include
+shifted, scaled, and combined solves checked against the original model. The
+components now have thirteen pinned-native differential fixtures checking the
+complete transformed model and recovered primal/dual values bit-for-bit,
+including their composition, overflow, all four cost-scaling choices, and
+four auxiliary-LP matrix-scaling cases, including an empty row and column.
+Regenerate the fixture with the native adapter build script using
+`--source tools/preprocessor_reference_adapter.cc --output
+target/native/preprocessor_reference_adapter`, then run
+`python3 tools/generate_preprocessor_fixture.py`.
+They are now wired into `LPSolver` through the full ordered
+`MainLpPreprocessor`: it copies the model, drops near-zero entries, runs
+presolve and scaling, solves, unwinds postsolve in reverse, and validates in
+original coordinates. Fifteen native-pinned complete solves through the full
+pipeline agree on status, iteration count, recovered
+primal/dual bits, and basis statuses. Six cases disable the singleton-column
+initial-basis shortcut to isolate Phase-5 transformations; nine enable it,
+including the default
+initial-basis path and zero-pivot one-row controls.
+Ten isolated bound-shift/scaling cases also have native-pinned capped-state trajectories:
+independent solves at every iteration cap compare the ordered basis, status,
+and recovered primal/dual bits (20 snapshots total, up to a three-pivot
+combined shift-and-scale path). These snapshots are not presented as a direct
+pivot-event trace, because a cap at a phase transition can reorder multiple
+basis rows. A direct native pivot hook would strengthen this gate later.
+Thirteen additional stand-alone passes now have pinned-native transformation and
+postsolve fixtures: fixed variables, free constraints, empty constraints,
+empty columns, singleton-column sign normalization, and forcing/implied-free
+constraints, implied-free variables, doubleton-free columns, and doubleton-equality
+rows, proportional rows, proportional columns, dualization, and unconstrained
+variables. The empty-row infeasibility, empty-column unbounded, forcing
+dual recovery, conflicting forcing bounds, and implied-free relaxation paths
+are covered by forty-nine basic-pass cases. Doubleton-free cases cover both pivot
+signs, a later column touching an already deleted row, and the no-change path.
+Doubleton-equality cases cover induced and retained bounds, plus chained dual recovery.
+Proportional-row cases cover coincident/split bound sources, negative factors,
+dual transfer, and primal infeasibility.
+Proportional-column cases cover merging, opposite factors, slope-based fixing,
+infeasible slope intervals, and infinite-distance postsolve.
+Dualization cases cover ranged-row duplication, shifted bounds, a one-sided row,
+a free column, and recovered status conversion.
+Unconstrained-variable cases cover finite-bound dominance, unbounded-cost
+detection, and one- and two-row zero-cost postsolve.
+The arithmetic fixtures distinguish
+native fused objective/activity accumulation from the deliberately rounded
+column-substitution delta. The singleton pass, including all four postsolve
+undo operations, and the 20-pass main driver are now wired into `LPSolver`.
+Forty-nine native basic-pass fixtures include singleton chains, complete driver
+transformations, and adverse statuses. A pinned fixture now compares every bit
+of the presolved model (bounds, objective, offset, and ordered sparse entries)
+on all 96 fast Netlib models; all agree. Public solves on those models also
+agree on status. Direct presolved-model comparisons localized an early
+divergence to primal steepest-edge pricing. Using GLOP's scattered squared
+norm, scattered BTRAN path, and four-accumulator fused compact-column dot
+product reduced iteration-count differences from 29 to 16 of 96. A further
+small-pivot retry correction reduced the count to 14: GLOP refactorizes the
+basis without eagerly recomputing reduced costs or rebuilding the primal
+pricing heap, whereas Rust had reset both. The reduced-cost reset changed
+`grow15`'s cached cost for column
+603 at pivot 249, suppressed its native precision-triggered refactorization
+at pivot 297, and caused a later path split. `grow15` now matches native's
+441 iterations. The eager heap rebuild consumed an extra tie draw at `grow22`
+pivot 151 and changed its pivot-185 tie; `grow22` now matches native's 550
+iterations. A further correction removed an eager primal-pricing reset after
+`UpdateAndPivot()` refactorizes an imprecise pivot; native GLOP retains that
+heap as well. A sparse precision-dot arithmetic difference remained: native
+Clang rounds four products before adding them in
+order and fuses the tail, while Rust used a uniform accumulation. Matching the
+native grouping fixes `czprob`'s one-ulp discrepancy at pivot 264 and restores
+native status and iteration counts on all 96 default-presolve Netlib models.
+The release-only full-pipeline gate now enforces exact iteration counts rather
+than allowing named exceptions. A further serial native/Rust public-solver
+comparison over all 96 fast Netlib models checks status and iteration count,
+both recovered basis-status vectors exactly, and objective, primal/dual
+infeasibility, primal/reduced-cost/dual/activity vectors to relative or absolute
+`1e-9`. All pass; 598,355 of 601,244 numerical vector entries also agree
+bit-for-bit, and the largest normalized vector difference is `2.91e-11`.
+The native outputs are pinned in
+`baselines/phase5-netlib-solution-native.json.gz`; the release regression is
+`cargo test --release -p gloprs-glop --test phase5_netlib_solution -- --ignored`.
+Regenerate with `tools/generate_phase5_netlib_solution_fixture.py` after
+building `tools/phase5_netlib_solution_reference_adapter.cc` against the
+pinned upstream checkout. `tools/validate_phase5_netlib_solution.py` remains
+the live side-by-side diagnostic.
+`greenbeb` exposed an unfused sparse-vector dot product in forcing-constraint
+postsolve; native-style fused accumulation restores its BASIC choices.
+`pilot` exposed missing public-solver strong-optimal-guarantee snapping and
+cost/rhs perturbation checks; those now follow upstream's pre-snap objective,
+post-snap residual order. The native and Rust default pipelines agree on
+`pilot`'s 3,567 iterations and recovered solution.
+The main driver's retained pass stack now mirrors GLOP's one-allocation-per-pass
+ownership instead of storing large concrete passes inline. Its non-destructive
+`RecoverSolution()` counterpart is also present; native-pinned main cases check
+that repeated recovery and destructive recovery produce the same solution.
+The `MainLpPreprocessor` LP driver and Phase-5 exit criteria are validated by
+the pinned pass fixtures, 96-model presolved-state gate, and 96-model public
+postsolve check. Serial three-trial release measurements on Apple arm64
+(`rustc 1.95.0`, Apple Clang 17) compare the public solver with preprocessing
+and scaling enabled and disabled. On `greenbeb`, presolve speeds native by
+2.07x and Rust by 2.05x; default-pipeline Rust/native time is 1.40x. On
+`pilot`, the respective speedups are 1.39x and 1.40x, and the default
+Rust/native ratio is 1.27x. Tiny `afiro` is dominated by overhead, and
+`scsd6` slows with presolve on both implementations. Performance parity is a
+Phase-8 concern, not an unmeasured Phase-5 claim. The former raw,
+presolve-disabled `pilot` mismatch (4,427 native versus 4,680 Rust) came from
+the primal singleton crash's equal-penalty `std::sort` traversal. A small
+index-based port of pinned libc++ comparator-sort ordering now gives the same
+initial basis and 4,427 iterations on raw `pilot`. The public objective and
+infeasibility bits match, and recovered vectors are numerically identical
+(remaining bit differences are signed zeros). Six native-pinned primal
+iteration caps also match on ordered basis and reduced-cost bits.
+Its native-ordering fixtures exercise insertion, partition, and heap-fallback
+cases, and the 96-model default public-solver gate remains green. Normal
+`qap15` with a 20-second wall limit returned
+`PRIMAL_FEASIBLE` on both sides but 11,790 native versus 8,858 Rust iterations;
+the time-limited result is not a deterministic trajectory gate and `qap15`
+remains deferred to performance work.
+As upstream, auxiliary-LP
+scaling falls back to equilibration only when its internal simplex errors.
+`LPSolver` retains and repopulates an owned model across calls, and objective
+scaling allocates a magnitude vector only for the median method.
+The pinned main order starts with bound shifting, then repeated presolve
+passes, terminal empty/proportional/dualization steps, and finally scaling;
+`use_scaling` is independent of `use_preprocessing`.
+
+The transformations were validated incrementally with:
 
 - direct unit tests;
 - a reversible transformation/postsolve test;
@@ -1180,17 +1358,7 @@ Each transformation needs:
 - solution recovery tests for optimal, infeasible, and unbounded cases;
 - before/after performance measurements on affected Netlib problems.
 
-Likely work includes:
-
-- matrix equilibration and objective/bound scaling;
-- singleton and empty row/column handling;
-- fixed variables and implied bounds;
-- forcing and dominated constraints;
-- duplicate/proportional rows and columns where used upstream;
-- unconstrained variables and free constraints;
-- postsolve stack and status reconstruction.
-
-Exit criteria:
+Exit criteria (met):
 
 - Enabling transformations one by one preserves independently validated
   solutions.
@@ -1492,9 +1660,10 @@ Exit criteria:
 
 ## Immediate next actions
 
-1. Begin Phase 3 with the remaining simplex-state components, preserving the
-   same side-by-side source correspondence and native trace discipline.
-2. Profile and reduce the measured roughly 1.8x--2.0x LU factorization gap, and
-   add equivalent allocation/traversal/runtime benchmarks for basis updates.
-3. Implement the revised-simplex-dependent `LINEAR_PROGRAM` scaling branch in
-   Phase 5 rather than introducing a non-upstream placeholder.
+1. Begin Phase 6's parameter/public-API mapping and validation against pinned
+   GLOP, preserving the same file-level source correspondence.
+2. Carry the measured LU and public-solve Rust/native gaps into Phase 8's
+   profile-guided performance work. Keep `qap15` outside deterministic
+   wall-time trajectory gates until its performance is tractable.
+3. Find a naturally failing auxiliary-LP scaling case for native differential
+   fallback validation; the injected-error branch test already pins dispatch.

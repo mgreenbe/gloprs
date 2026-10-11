@@ -188,57 +188,6 @@ impl LuFactorization {
         Ok(())
     }
 
-    pub(crate) fn factorize_selected_with_parameters(
-        matrix: &SparseMatrix,
-        selected_columns: &[usize],
-        parameters: &GlopParameters,
-    ) -> Result<Self, FactorizationError> {
-        let mut result = Self::new();
-        result.compute_factorization_selected_with_parameters(
-            matrix,
-            selected_columns,
-            parameters,
-        )?;
-        Ok(result)
-    }
-
-    pub(crate) fn compute_factorization_selected_with_parameters(
-        &mut self,
-        matrix: &SparseMatrix,
-        selected_columns: &[usize],
-        parameters: &GlopParameters,
-    ) -> Result<(), FactorizationError> {
-        parameters
-            .validate()
-            .map_err(FactorizationError::InvalidParameters)?;
-        let rows = matrix.num_rows().to_usize();
-        let columns = selected_columns.len();
-        if rows != columns {
-            return Err(FactorizationError::NonSquare { rows, columns });
-        }
-        for &column in selected_columns {
-            if column >= matrix.num_cols().to_usize() {
-                return Err(FactorizationError::DimensionMismatch);
-            }
-            for entry in matrix.column(ColIndex::from_usize(column)) {
-                if !entry.coefficient().is_finite() {
-                    return Err(FactorizationError::NonFinite);
-                }
-            }
-        }
-        let factors = markowitz::factorize_selected(
-            matrix,
-            selected_columns,
-            parameters,
-            &mut self.markowitz_workspace,
-            &mut self.lower,
-            &mut self.upper,
-        )
-        .map_err(|step| FactorizationError::Singular { step })?;
-        self.install_sparse_lu(factors, rows, columns, parameters);
-        Ok(())
-    }
-
     pub(crate) fn factorize_selected_compact_with_parameters(
         matrix: &CompactSparseMatrix,
         selected_columns: &[usize],
@@ -1192,6 +1141,15 @@ impl LuFactorization {
                 .hyper_sparse_solve_with_reversed_nonzeros(&mut values, &mut non_zeros);
         }
         Ok(squared_norm_and_reset_rows(&mut values, &non_zeros))
+    }
+
+    /// Diagnostic: traversal order retained by the last specialized norm solve.
+    pub(crate) fn diagnostic_last_norm_nonzeros(&self) -> Vec<usize> {
+        self.non_zero_rows
+            .borrow()
+            .iter()
+            .map(|row| row.to_usize())
+            .collect()
     }
 
     /// Computes `||(A^T)^-1 e_row||_2^2`.

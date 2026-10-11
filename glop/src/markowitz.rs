@@ -1096,6 +1096,7 @@ pub(crate) fn factorize(
     factors_from_result(result, n, lower, upper)
 }
 
+#[cfg(test)]
 pub(crate) fn factorize_selected(
     matrix: &SparseMatrix,
     columns: &[usize],

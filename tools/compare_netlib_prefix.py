@@ -18,10 +18,12 @@ NATIVE = ROOT / "target/native/dual_netlib_trace_reference_adapter"
 RUST = ROOT / "target/release/examples/dual_netlib_trace"
 
 
-def snapshot(binary: Path, model: Path, iteration: int, mode: str) -> dict[str, list[str]]:
+def snapshot(binary: Path, model: Path, iteration: int, mode: str, prepared: bool) -> dict[str, list[str]]:
     arguments = [binary, model, str(iteration)]
     if mode != "dual":
         arguments.append(mode)
+    if prepared:
+        arguments.append("prepared")
     result = subprocess.run(
         arguments,
         check=True,
@@ -35,10 +37,10 @@ def snapshot(binary: Path, model: Path, iteration: int, mode: str) -> dict[str, 
     }
 
 
-def compare(model: Path, iteration: int, mode: str) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+def compare(model: Path, iteration: int, mode: str, prepared: bool) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-        native = pool.submit(snapshot, NATIVE, model, iteration, mode)
-        rust = pool.submit(snapshot, RUST, model, iteration, mode)
+        native = pool.submit(snapshot, NATIVE, model, iteration, mode, prepared)
+        rust = pool.submit(snapshot, RUST, model, iteration, mode, prepared)
         return native.result(), rust.result()
 
 
@@ -49,12 +51,13 @@ def main() -> None:
     parser.add_argument("--matching", type=int, required=True)
     parser.add_argument("--different", type=int, required=True)
     parser.add_argument("--basis-set", action="store_true", help="compare basic-column sets only")
+    parser.add_argument("--prepared", action="store_true", help="apply public-solver copy and entry dropping")
     args = parser.parse_args()
 
     lower, upper = args.matching, args.different
     while upper - lower > 1:
         middle = (lower + upper) // 2
-        native, rust = compare(args.model, middle, args.mode)
+        native, rust = compare(args.model, middle, args.mode, args.prepared)
         same = (
             set(native["basis"]) == set(rust["basis"])
             if args.basis_set
@@ -68,8 +71,8 @@ def main() -> None:
             upper = middle
 
     print(f"first differing prefix: {upper}")
-    previous_native, previous_rust = compare(args.model, lower, args.mode)
-    native, rust = compare(args.model, upper, args.mode)
+    previous_native, previous_rust = compare(args.model, lower, args.mode, args.prepared)
+    native, rust = compare(args.model, upper, args.mode, args.prepared)
     print(f"previous prefix {lower}: basis equal={previous_native['basis'] == previous_rust['basis']}")
     print(
         f"previous prefix {lower}: value-bit differences="

@@ -1,0 +1,449 @@
+{
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "scope": "Individual early and terminal MainLpPreprocessor passes with exact postsolve",
+  "cases": [
+    {
+      "name": "fixed_variable",
+      "mode": "fixed",
+      "matrix": [[0, 0, "2"], [0, 1, "3"]],
+      "variables": [["5", "4", "4"], ["1", "0", "10"]],
+      "constraints": [["20", "30"]],
+      "post_variables": [["basic", "2"]],
+      "post_constraints": [["lower", "0.5"]]
+    },
+    {
+      "name": "free_constraint",
+      "mode": "free_row",
+      "matrix": [[0, 0, "2"], [1, 0, "3"]],
+      "variables": [["1", "0", "10"]],
+      "constraints": [["-inf", "inf"], ["1", "5"]],
+      "post_variables": [["basic", "2"]],
+      "post_constraints": [["lower", "0.25"]]
+    },
+    {
+      "name": "empty_constraint",
+      "mode": "empty_row",
+      "matrix": [[0, 0, "2"]],
+      "variables": [["1", "0", "10"]],
+      "constraints": [["1", "5"], ["0", "5"]],
+      "post_variables": [["basic", "1"]],
+      "post_constraints": [["upper", "0.125"]]
+    },
+    {
+      "name": "empty_column",
+      "mode": "empty_column",
+      "matrix": [[0, 0, "2"]],
+      "variables": [["1", "0", "10"], ["-2", "0", "5"]],
+      "constraints": [["1", "5"]],
+      "post_variables": [["basic", "1"]],
+      "post_constraints": [["upper", "0.125"]]
+    },
+    {
+      "name": "singleton_column_sign",
+      "mode": "singleton_sign",
+      "matrix": [[0, 0, "-2"]],
+      "variables": [["3", "0", "10"]],
+      "constraints": [["-10", "0"]],
+      "post_variables": [["lower", "-10"]],
+      "post_constraints": [["basic", "0.5"]]
+    },
+    {
+      "name": "empty_constraint_infeasible",
+      "mode": "empty_row",
+      "matrix": [],
+      "variables": [],
+      "constraints": [["1", "2"]],
+      "post_variables": [],
+      "post_constraints": [["free", "0"]]
+    },
+    {
+      "name": "empty_column_unbounded",
+      "mode": "empty_column",
+      "matrix": [],
+      "variables": [["-1", "0", "inf"]],
+      "constraints": [],
+      "post_variables": [["free", "0"]],
+      "post_constraints": []
+    },
+    {
+      "name": "forcing_down_dual_recovery",
+      "mode": "forcing",
+      "matrix": [[0, 0, "1"], [0, 1, "1"]],
+      "variables": [["1", "1", "2"], ["2", "0", "1"]],
+      "constraints": [["3", "3"]],
+      "post_variables": [],
+      "post_constraints": []
+    },
+    {
+      "name": "forcing_up_dual_recovery",
+      "mode": "forcing",
+      "matrix": [[0, 0, "-2"]],
+      "variables": [["3", "0", "1"]],
+      "constraints": [["0", "0"]],
+      "post_variables": [],
+      "post_constraints": []
+    },
+    {
+      "name": "forcing_conflict_infeasible",
+      "mode": "forcing",
+      "matrix": [[0, 0, "1"], [1, 0, "1"]],
+      "variables": [["1", "0", "1"]],
+      "constraints": [["1", "1"], ["0", "0"]],
+      "post_variables": [["free", "0"]],
+      "post_constraints": [["free", "0"], ["free", "0"]]
+    },
+    {
+      "name": "implied_free_relaxes_without_postsolve",
+      "mode": "forcing",
+      "matrix": [[0, 0, "1"]],
+      "variables": [["1", "0", "10"]],
+      "constraints": [["-1", "11"]],
+      "post_variables": [["lower", "0"]],
+      "post_constraints": [["basic", "0"]]
+    },
+    {
+      "name": "implied_free_positive_coefficient",
+      "mode": "implied_free",
+      "matrix": [[0, 0, "1"]],
+      "variables": [["2", "1", "5"]],
+      "constraints": [["1", "4"]],
+      "post_variables": [["free", "0"]],
+      "post_constraints": [["basic", "0"]]
+    },
+    {
+      "name": "implied_free_negative_coefficient_basic",
+      "mode": "implied_free",
+      "matrix": [[0, 0, "-1"]],
+      "variables": [["2", "1", "5"]],
+      "constraints": [["-4", "-1"]],
+      "post_variables": [["basic", "2"]],
+      "post_constraints": [["lower", "0.5"]]
+    },
+    {
+      "name": "implied_free_detects_infeasibility",
+      "mode": "implied_free",
+      "matrix": [[0, 0, "1"]],
+      "variables": [["0", "0", "1"]],
+      "constraints": [["2", "3"]],
+      "post_variables": [["lower", "0"]],
+      "post_constraints": [["basic", "0"]]
+    },
+    {
+      "name": "fixed_objective_offset_contraction",
+      "mode": "fixed",
+      "matrix": [],
+      "variables": [["-0.00048000000000000007", "1", "1"], ["-48", "-0.00001", "-0.00001"]],
+      "constraints": [],
+      "post_variables": [],
+      "post_constraints": []
+    },
+    {
+      "name": "fixed_row_bound_keeps_rounded_delta",
+      "mode": "fixed",
+      "matrix": [[0, 0, "-48"]],
+      "variables": [["0", "-0.00001", "-0.00001"]],
+      "constraints": [["0.00048000000000000007", "0.00048000000000000007"]],
+      "post_variables": [],
+      "post_constraints": [["basic", "0"]]
+    },
+    {
+      "name": "forcing_implied_activity_contraction",
+      "mode": "forcing_exact",
+      "matrix": [[0, 0, "-0.00048000000000000007"], [0, 1, "-48"]],
+      "variables": [["0", "1", "1"], ["0", "-0.00001", "-0.00001"]],
+      "constraints": [["0", "0"]],
+      "post_variables": [["fixed", "1"], ["fixed", "-0.00001"]],
+      "post_constraints": [["basic", "0"]]
+    },
+    {
+      "name": "empty_column_objective_offset_contraction",
+      "mode": "empty_column",
+      "matrix": [],
+      "variables": [["-0.00048000000000000007", "0", "1"], ["-48", "-0.00002", "-0.00001"]],
+      "constraints": [],
+      "post_variables": [],
+      "post_constraints": []
+    },
+    {
+      "name": "doubleton_free_positive_pivot",
+      "mode": "doubleton_free",
+      "matrix": [[0, 0, "2"], [1, 0, "1"], [0, 1, "3"], [1, 1, "4"]],
+      "variables": [["6", "-inf", "inf"], ["7", "0", "10"]],
+      "constraints": [["4", "8"], ["1", "10"]],
+      "post_variables": [["lower", "2"], ["basic", "1"]],
+      "post_constraints": [["upper", "0.25"]]
+    },
+    {
+      "name": "doubleton_free_negative_pivot",
+      "mode": "doubleton_free",
+      "matrix": [[0, 0, "-3"], [1, 0, "2"], [0, 1, "1"], [1, 1, "5"]],
+      "variables": [["3", "-inf", "inf"], ["1", "0", "10"]],
+      "constraints": [["-6", "-3"], ["0", "10"]],
+      "post_variables": [["upper", "2"], ["basic", "1"]],
+      "post_constraints": [["lower", "-0.5"]]
+    },
+    {
+      "name": "doubleton_free_skips_original_deleted_row",
+      "mode": "doubleton_free",
+      "matrix": [[0, 0, "2"], [1, 0, "1"], [0, 1, "3"], [2, 1, "1"]],
+      "variables": [["2", "-inf", "inf"], ["1", "-inf", "inf"]],
+      "constraints": [["2", "4"], ["-10", "10"], ["-10", "10"]],
+      "post_variables": [["lower", "1"], ["basic", "0"]],
+      "post_constraints": [["basic", "0"], ["basic", "0"]]
+    },
+    {
+      "name": "doubleton_free_no_change_preserves_transpose",
+      "mode": "doubleton_free",
+      "matrix": [[0, 0, "2"]],
+      "variables": [["1", "-inf", "inf"]],
+      "constraints": [["0", "2"]],
+      "post_variables": [["basic", "1"]],
+      "post_constraints": [["upper", "0"]]
+    },
+    {
+      "name": "doubleton_equality_induced_upper_bound",
+      "mode": "doubleton_equality",
+      "matrix": [[0, 0, "1"], [1, 0, "2"], [0, 1, "1"], [1, 1, "3"]],
+      "variables": [["2", "0", "10"], ["3", "0", "10"]],
+      "constraints": [["5", "5"], ["0", "30"]],
+      "post_variables": [["upper", "5"]],
+      "post_constraints": [["lower", "0.5"]]
+    },
+    {
+      "name": "doubleton_equality_keeps_modified_bound",
+      "mode": "doubleton_equality",
+      "matrix": [[0, 0, "1"], [0, 1, "1"]],
+      "variables": [["2", "0", "10"], ["3", "1", "2"]],
+      "constraints": [["5", "5"]],
+      "post_variables": [["lower", "1"]],
+      "post_constraints": []
+    },
+    {
+      "name": "doubleton_equality_chained_dual_recovery",
+      "mode": "doubleton_equality",
+      "matrix": [[0, 0, "1"], [0, 1, "1"], [1, 1, "1"], [1, 2, "1"]],
+      "variables": [["2", "0", "10"], ["3", "0", "10"], ["4", "0", "10"]],
+      "constraints": [["5", "5"], ["7", "7"]],
+      "post_variables": [["lower", "2"]],
+      "post_constraints": []
+    },
+    {
+      "name": "proportional_row_one_tightest_source",
+      "mode": "proportional_row",
+      "matrix": [[0, 0, "1"], [1, 0, "2"]],
+      "variables": [["1", "0", "10"]],
+      "constraints": [["0", "10"], ["4", "12"]],
+      "post_variables": [["basic", "3"]],
+      "post_constraints": [["lower", "0.5"]]
+    },
+    {
+      "name": "proportional_row_split_sources_dual_transfer",
+      "mode": "proportional_row",
+      "matrix": [[0, 0, "1"], [1, 0, "2"]],
+      "variables": [["1", "0", "10"]],
+      "constraints": [["2", "10"], ["0", "12"]],
+      "post_variables": [["basic", "3"]],
+      "post_constraints": [["lower", "0.5"]]
+    },
+    {
+      "name": "proportional_row_negative_factor",
+      "mode": "proportional_row",
+      "matrix": [[0, 0, "1"], [1, 0, "-2"]],
+      "variables": [["1", "0", "10"]],
+      "constraints": [["0", "10"], ["-8", "-2"]],
+      "post_variables": [["basic", "3"]],
+      "post_constraints": [["upper", "-0.5"]]
+    },
+    {
+      "name": "proportional_row_infeasible",
+      "mode": "proportional_row",
+      "matrix": [[0, 0, "1"], [1, 0, "2"]],
+      "variables": [["1", "0", "10"]],
+      "constraints": [["0", "1"], ["4", "10"]],
+      "post_variables": [["lower", "0"]],
+      "post_constraints": [["basic", "0"], ["basic", "0"]]
+    },
+    {
+      "name": "proportional_column_merge_basic",
+      "mode": "proportional_column",
+      "matrix": [[0, 0, "1"], [0, 1, "1"]],
+      "variables": [["1", "0", "2"], ["1", "0", "3"]],
+      "constraints": [["0", "10"]],
+      "post_variables": [["basic", "4"]],
+      "post_constraints": [["basic", "0"]]
+    },
+    {
+      "name": "proportional_column_opposite_factors",
+      "mode": "proportional_column",
+      "matrix": [[0, 0, "1"], [0, 1, "-1"]],
+      "variables": [["1", "0", "2"], ["-1", "-3", "0"]],
+      "constraints": [["-10", "10"]],
+      "post_variables": [["basic", "4"]],
+      "post_constraints": [["basic", "0"]]
+    },
+    {
+      "name": "proportional_column_slope_fixes_bound",
+      "mode": "proportional_column",
+      "matrix": [[0, 0, "1"], [0, 1, "1"]],
+      "variables": [["1", "0", "inf"], ["2", "0", "inf"]],
+      "constraints": [["0", "10"]],
+      "post_variables": [["basic", "1"]],
+      "post_constraints": [["basic", "0"]]
+    },
+    {
+      "name": "proportional_column_slope_conflict",
+      "mode": "proportional_column",
+      "matrix": [[0, 0, "1"], [0, 1, "1"]],
+      "variables": [["1", "0", "inf"], ["2", "-inf", "0"]],
+      "constraints": [["-10", "10"]],
+      "post_variables": [["basic", "1"], ["upper", "0"]],
+      "post_constraints": [["basic", "0"]]
+    },
+    {
+      "name": "proportional_column_infinite_distance_postsolve",
+      "mode": "proportional_column",
+      "matrix": [[0, 0, "1"], [0, 1, "1"]],
+      "variables": [["1", "-inf", "inf"], ["1", "-inf", "inf"]],
+      "constraints": [["-10", "10"]],
+      "post_variables": [["basic", "4"]],
+      "post_constraints": [["basic", "0"]]
+    },
+    {
+      "name": "dualizer_ranged_row_and_shifted_bounds",
+      "mode": "dualizer",
+      "matrix": [[0, 0, "2"]],
+      "variables": [["6", "1", "4"]],
+      "constraints": [["3", "5"]],
+      "post_status": "DUAL_FEASIBLE",
+      "post_variables": [["basic", "0"], ["basic", "0"], ["upper", "0"], ["lower", "0"]],
+      "post_constraints": [["basic", "0"]]
+    },
+    {
+      "name": "dualizer_one_sided_row_free_column",
+      "mode": "dualizer",
+      "matrix": [[0, 0, "1"]],
+      "variables": [["2", "-inf", "inf"]],
+      "constraints": [["3", "inf"]],
+      "post_status": "PRIMAL_INFEASIBLE",
+      "post_variables": [["lower", "0"]],
+      "post_constraints": [["basic", "0"]]
+    },
+    {
+      "name": "unconstrained_finite_bound_dominance",
+      "mode": "unconstrained",
+      "matrix": [[0, 0, "1"]],
+      "variables": [["1", "0", "10"]],
+      "constraints": [["-inf", "10"]],
+      "post_variables": [],
+      "post_constraints": [["basic", "0"]]
+    },
+    {
+      "name": "unconstrained_detects_unbounded_cost",
+      "mode": "unconstrained",
+      "matrix": [[0, 0, "1"]],
+      "variables": [["1", "-inf", "10"]],
+      "constraints": [["-inf", "10"]],
+      "post_variables": [["lower", "0"]],
+      "post_constraints": [["basic", "0"]]
+    },
+    {
+      "name": "unconstrained_zero_cost_unbounded_postsolve",
+      "mode": "unconstrained",
+      "matrix": [[0, 0, "1"]],
+      "variables": [["0", "0", "inf"]],
+      "constraints": [["1", "inf"]],
+      "post_variables": [],
+      "post_constraints": []
+    },
+    {
+      "name": "unconstrained_zero_cost_two_row_maximum_shift",
+      "mode": "unconstrained",
+      "matrix": [[0, 0, "1"], [1, 0, "2"]],
+      "variables": [["0", "0", "inf"]],
+      "constraints": [["1", "inf"], ["6", "inf"]],
+      "post_variables": [],
+      "post_constraints": []
+    },
+    {
+      "name": "singleton_zero_cost_column",
+      "mode": "singleton",
+      "matrix": [[0, 0, "1"]],
+      "variables": [["0", "0", "4"]],
+      "constraints": [["1", "5"]],
+      "post_variables": [],
+      "post_constraints": [["basic", "0"]]
+    },
+    {
+      "name": "singleton_nonzero_cost_equality",
+      "mode": "singleton",
+      "matrix": [[0, 0, "1"], [0, 1, "2"]],
+      "variables": [["3", "0", "5"], ["1", "0", "5"]],
+      "constraints": [["4", "4"]],
+      "post_variables": [["basic", "0"]],
+      "post_constraints": []
+    },
+    {
+      "name": "singleton_none_in_cycle",
+      "mode": "singleton",
+      "matrix": [[0, 0, "1"], [1, 0, "2"], [0, 1, "3"], [1, 1, "4"]],
+      "variables": [["1", "0", "5"], ["2", "0", "5"]],
+      "constraints": [["0", "5"], ["1", "6"]],
+      "post_variables": [["basic", "1"], ["lower", "0"]],
+      "post_constraints": [["basic", "0"], ["basic", "0"]]
+    },
+    {
+      "name": "singleton_rows_tighten_same_variable",
+      "mode": "singleton",
+      "matrix": [[0, 0, "1"], [1, 0, "2"], [2, 0, "3"]],
+      "variables": [["1", "0", "10"]],
+      "constraints": [["1", "5"], ["0", "10"], ["-inf", "15"]],
+      "post_variables": [["lower", "1"]],
+      "post_constraints": []
+    },
+    {
+      "name": "singleton_column_induces_row_chain",
+      "mode": "singleton",
+      "matrix": [[0, 0, "1"], [0, 1, "1"], [1, 1, "2"], [2, 1, "3"]],
+      "variables": [["0", "0", "4"], ["1", "0", "10"]],
+      "constraints": [["1", "5"], ["0", "10"], ["-inf", "15"]],
+      "post_variables": [["lower", "1"]],
+      "post_constraints": []
+    },
+    {
+      "name": "main_singleton_to_fixed_point",
+      "mode": "main",
+      "matrix": [[0, 0, "1"]],
+      "variables": [["1", "0", "10"]],
+      "constraints": [["5", "inf"]],
+      "post_variables": [],
+      "post_constraints": []
+    },
+    {
+      "name": "main_dense_two_by_two",
+      "mode": "main",
+      "matrix": [[0, 0, "1"], [1, 0, "2"], [0, 1, "3"], [1, 1, "4"]],
+      "variables": [["1", "0", "5"], ["2", "0", "5"]],
+      "constraints": [["0", "5"], ["1", "6"]],
+      "post_variables": [["basic", "0"], ["basic", "0"]],
+      "post_constraints": [["basic", "0"], ["basic", "0"]]
+    },
+    {
+      "name": "main_empty_row_infeasible",
+      "mode": "main",
+      "matrix": [],
+      "variables": [["0", "0", "1"]],
+      "constraints": [["1", "2"]],
+      "post_variables": [],
+      "post_constraints": [["basic", "0"]]
+    },
+    {
+      "name": "main_empty_column_unbounded",
+      "mode": "main",
+      "matrix": [],
+      "variables": [["-1", "0", "inf"]],
+      "constraints": [],
+      "post_variables": [["basic", "0"]],
+      "post_constraints": []
+    }
+  ]
+}

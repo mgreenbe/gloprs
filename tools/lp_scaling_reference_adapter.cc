@@ -47,11 +47,15 @@ int main() {
   }
   int cost_scaling;
   std::cin >> cost_scaling;
+  int scaling_method = GlopParameters::EQUILIBRATION;
+  std::cin >> scaling_method;
   lp.CleanUp();
   LpScalingHelper helper;
   GlopParameters params;
   params.set_cost_scaling(
       static_cast<GlopParameters::CostScalingAlgorithm>(cost_scaling));
+  params.set_scaling_method(
+      static_cast<GlopParameters::ScalingAlgorithm>(scaling_method));
   helper.Scale(params, &lp);
   std::cout << std::setprecision(17);
   Print("objective", lp.objective_coefficients());

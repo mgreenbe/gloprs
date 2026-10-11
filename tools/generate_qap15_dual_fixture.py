@@ -27,8 +27,8 @@ def main() -> None:
         "--limits",
         type=int,
         nargs="+",
-        default=[0, 10_000, 20_000, 30_000, 40_000, 50_000, 100_000],
-        help="iteration caps to snapshot (default: 0 10000 20000 30000 40000 50000 100000)",
+        default=[0, 10_000, 20_000, 30_000, 40_000, 50_000, 100_000, 150_000],
+        help="iteration caps to snapshot (default: 0 10000 20000 30000 40000 50000 100000 150000)",
     )
     parser.add_argument(
         "--include-terminal",

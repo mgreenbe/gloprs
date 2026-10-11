@@ -325,6 +325,8 @@ fn small_phase4_cases_match_pinned_native_glop() {
                 "relaxed_internal_primal" | "relaxed_internal_dual"
             ) {
                 1e-15
+            } else if case.mode == "zero_internal_dual" {
+                0.0
             } else if matches!(
                 case.mode.as_str(),
                 "tight_internal_dual"
@@ -342,6 +344,8 @@ fn small_phase4_cases_match_pinned_native_glop() {
                 "relaxed_internal_primal" | "relaxed_internal_dual"
             ) {
                 1e-15
+            } else if case.mode == "zero_internal_dual" {
+                0.0
             } else if matches!(
                 case.mode.as_str(),
                 "tight_internal_dual"
@@ -470,7 +474,10 @@ fn small_phase4_cases_match_pinned_native_glop() {
                 | "warm_added_row"
                 | "warm_added_row_and_column"
                 | "warm_removed_row"
+                | "warm_removed_first_row"
+                | "warm_removed_all_rows"
                 | "warm_removed_column"
+                | "warm_removed_all_columns"
                 | "warm_added_row_low_condition_threshold"
                 | "warm_added_row_slack"
                 | "warm_added_row_changed_coefficient"
@@ -600,14 +607,32 @@ fn small_phase4_cases_match_pinned_native_glop() {
                     lp.set_coefficient(RowIndex::from_usize(0), ColIndex::from_usize(0), 2.0);
                 }
             }
-            if case.mode == "warm_removed_row" {
+            if matches!(
+                case.mode.as_str(),
+                "warm_removed_row" | "warm_removed_first_row" | "warm_removed_all_rows"
+            ) {
                 let mut deleted = DenseBooleanColumn::filled(RowIndex::from_usize(2), false);
-                deleted[RowIndex::from_usize(1)] = true;
+                if case.mode == "warm_removed_all_rows" {
+                    deleted[RowIndex::from_usize(0)] = true;
+                    deleted[RowIndex::from_usize(1)] = true;
+                } else {
+                    deleted[RowIndex::from_usize(usize::from(
+                        case.mode != "warm_removed_first_row",
+                    ))] = true;
+                }
                 lp.delete_rows(&deleted);
             }
-            if case.mode == "warm_removed_column" {
+            if matches!(
+                case.mode.as_str(),
+                "warm_removed_column" | "warm_removed_all_columns"
+            ) {
                 let mut deleted = DenseBooleanRow::filled(ColIndex::from_usize(2), false);
-                deleted[ColIndex::from_usize(1)] = true;
+                if case.mode == "warm_removed_all_columns" {
+                    deleted[ColIndex::from_usize(0)] = true;
+                    deleted[ColIndex::from_usize(1)] = true;
+                } else {
+                    deleted[ColIndex::from_usize(1)] = true;
+                }
                 lp.delete_columns(&deleted);
             }
         }

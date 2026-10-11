@@ -1,9 +1,8 @@
 //! Public LP solver orchestration and solution validation.
 //!
-//! This follows `ortools/glop/lp_solver.{h,cc}` with preprocessing and scaling
-//! intentionally disabled until Phase 5.  The unscaled solution is checked
-//! against the caller's original model, not the equation-form copy used by
-//! [`RevisedSimplex`].
+//! This follows `ortools/glop/lp_solver.{h,cc}`. The Phase-5 presolve stack
+//! includes the ordered presolve stack. The recovered solution is checked against the caller's
+//! original model, not the transformed copy used by [`RevisedSimplex`].
 
 #![allow(clippy::float_cmp, clippy::missing_errors_doc)]
 
@@ -15,6 +14,7 @@ use lp_data::lp_types::{
 use lp_data::lp_utils::{accurate_sum, precise_scalar_product};
 
 use crate::parameters::GlopParameters;
+use crate::preprocessor::MainLpPreprocessor;
 use crate::revised_simplex::RevisedSimplex;
 use crate::time_limit::TimeLimit;
 use crate::variables_info::BasisState;
@@ -23,6 +23,7 @@ use crate::variables_info::BasisState;
 pub struct LPSolver {
     parameters: GlopParameters,
     revised_simplex: RevisedSimplex,
+    current_linear_program: LinearProgram,
     num_revised_simplex_iterations: u64,
     primal_values: DenseRow,
     dual_values: DenseColumn,
@@ -37,6 +38,7 @@ pub struct LPSolver {
     max_absolute_primal_infeasibility: f64,
     max_absolute_dual_infeasibility: f64,
     may_have_multiple_solutions: bool,
+    last_error: Option<String>,
 }
 
 impl Default for LPSolver {
@@ -51,6 +53,7 @@ impl LPSolver {
         Self {
             parameters: GlopParameters::default(),
             revised_simplex: RevisedSimplex::new(),
+            current_linear_program: LinearProgram::new(),
             num_revised_simplex_iterations: 0,
             primal_values: DenseRow::new(),
             dual_values: DenseColumn::new(),
@@ -65,6 +68,7 @@ impl LPSolver {
             max_absolute_primal_infeasibility: 0.0,
             max_absolute_dual_infeasibility: 0.0,
             may_have_multiple_solutions: false,
+            last_error: None,
         }
     }
 
@@ -81,6 +85,12 @@ impl LPSolver {
         &mut self.parameters
     }
 
+    /// Diagnostic for an unsupported Phase-5 option or a pre-solve failure.
+    #[must_use]
+    pub fn last_error(&self) -> Option<&str> {
+        self.last_error.as_deref()
+    }
+
     pub fn solve(&mut self, lp: &LinearProgram) -> ProblemStatus {
         let mut time_limit = TimeLimit::from_parameters(&self.parameters);
         self.solve_with_time_limit(lp, &mut time_limit)
@@ -91,56 +101,101 @@ impl LPSolver {
         lp: &LinearProgram,
         time_limit: &mut TimeLimit,
     ) -> ProblemStatus {
+        self.last_error = None;
         if !lp.is_cleaned_up() || !lp.is_valid(self.parameters.max_valid_magnitude) {
             self.resize_solution(lp.num_constraints(), lp.num_variables());
             return ProblemStatus::InvalidProblem;
         }
-        // Rays are populated outside `ProblemSolution`, so clear certificates
-        // retained from a previous solve before launching revised simplex.
+        // Keep GLOP's reusable internal copy owned by the solver. Temporarily
+        // move it out so postsolve can mutate the other solver fields.
+        let mut current_lp = std::mem::take(&mut self.current_linear_program);
+        current_lp.populate_from_linear_program(lp);
+        let status = self.solve_copied_program(lp, time_limit, &mut current_lp);
+        self.current_linear_program = current_lp;
+        status
+    }
+
+    fn solve_copied_program(
+        &mut self,
+        lp: &LinearProgram,
+        time_limit: &mut TimeLimit,
+        current_lp: &mut LinearProgram,
+    ) -> ProblemStatus {
+        // Certificates are solver-owned, not stored in `ProblemSolution`.
         self.primal_ray.clear();
         self.constraints_dual_ray.clear();
         self.variable_bounds_dual_ray.clear();
+        self.num_revised_simplex_iterations = 0;
+        // GLOP makes an internal model copy and drops tiny entries before
+        // running its ordered presolve stack, even when presolve is disabled.
+        current_lp.remove_near_zero_entries(self.parameters.drop_magnitude);
+        let mut preprocessor = MainLpPreprocessor::new();
+        let postsolve_needed = preprocessor.run(current_lp, &self.parameters, time_limit);
+        let mut solution =
+            ProblemSolution::new(current_lp.num_constraints(), current_lp.num_variables());
+        solution.status = preprocessor.status();
+        if solution.status != ProblemStatus::Init {
+            if postsolve_needed {
+                preprocessor.destructive_recover_solution(&mut solution);
+            }
+            return self.load_and_verify_solution(lp, &solution);
+        }
+        if time_limit.limit_reached() {
+            solution.status = ProblemStatus::Init;
+            if postsolve_needed {
+                preprocessor.destructive_recover_solution(&mut solution);
+            }
+            return self.load_and_verify_solution(lp, &solution);
+        }
+        current_lp.clear_transpose_matrix();
         self.revised_simplex.set_parameters(&self.parameters);
-        if self.revised_simplex.solve(lp, time_limit).is_err() {
+        if self.revised_simplex.solve(current_lp, time_limit).is_err() {
             self.resize_solution(lp.num_constraints(), lp.num_variables());
             return ProblemStatus::Abnormal;
         }
         self.num_revised_simplex_iterations = self.revised_simplex.number_of_iterations();
-        let mut solution = ProblemSolution::new(lp.num_constraints(), lp.num_variables());
         solution.status = self.revised_simplex.problem_status();
-        for column in 0..lp.num_variables().to_usize() {
+        for column in 0..current_lp.num_variables().to_usize() {
             let column = ColIndex::from_usize(column);
             solution.primal_values[column] = self.revised_simplex.variable_value(column);
             solution.variable_statuses[column] = self.revised_simplex.variable_status(column);
         }
-        for row in 0..lp.num_constraints().to_usize() {
+        for row in 0..current_lp.num_constraints().to_usize() {
             let row = RowIndex::from_usize(row);
             solution.dual_values[row] = self.revised_simplex.dual_value(row);
             solution.constraint_statuses[row] = self.revised_simplex.constraint_status(row);
         }
-        match solution.status {
-            ProblemStatus::PrimalUnbounded => {
-                self.primal_ray = self.revised_simplex.primal_ray().clone();
-                self.primal_ray.truncate(lp.num_variables());
-            }
-            ProblemStatus::DualUnbounded => {
-                self.constraints_dual_ray = self.revised_simplex.dual_ray().clone();
-                if !lp.is_maximization_problem() {
-                    for value in self.constraints_dual_ray.as_mut_slice() {
-                        *value = -*value;
+        if !self.parameters.use_preprocessing && !self.parameters.use_scaling {
+            match solution.status {
+                ProblemStatus::PrimalUnbounded => {
+                    self.primal_ray = self.revised_simplex.primal_ray().clone();
+                    self.primal_ray.truncate(current_lp.num_variables());
+                }
+                ProblemStatus::DualUnbounded => {
+                    self.constraints_dual_ray = self.revised_simplex.dual_ray().clone();
+                    if !lp.is_maximization_problem() {
+                        for value in self.constraints_dual_ray.as_mut_slice() {
+                            *value = -*value;
+                        }
+                    }
+                    self.variable_bounds_dual_ray =
+                        DenseRow::filled(current_lp.num_variables(), 0.0);
+                    for column in 0..current_lp.num_variables().to_usize() {
+                        let column = ColIndex::from_usize(column);
+                        self.variable_bounds_dual_ray[column] = -current_lp
+                            .sparse_column(column)
+                            .iter()
+                            .map(|entry| {
+                                self.constraints_dual_ray[entry.index()] * entry.coefficient()
+                            })
+                            .sum::<f64>();
                     }
                 }
-                self.variable_bounds_dual_ray = DenseRow::filled(lp.num_variables(), 0.0);
-                for column in 0..lp.num_variables().to_usize() {
-                    let column = ColIndex::from_usize(column);
-                    self.variable_bounds_dual_ray[column] = -lp
-                        .sparse_column(column)
-                        .iter()
-                        .map(|entry| self.constraints_dual_ray[entry.index()] * entry.coefficient())
-                        .sum::<f64>();
-                }
+                _ => {}
             }
-            _ => {}
+        }
+        if postsolve_needed {
+            preprocessor.destructive_recover_solution(&mut solution);
         }
         self.load_and_verify_solution(lp, &solution)
     }
@@ -186,13 +241,32 @@ impl LPSolver {
         self.compute_reduced_costs(lp);
         let primal_objective_value = self.compute_objective(lp);
         let dual_objective_value = self.compute_dual_objective(lp);
+        // GLOP's strong optimal guarantee snaps primal values into their
+        // variable bounds and one-sided dual values to zero after recording
+        // the pre-snap objective pair, then recomputes public residuals.
+        if solution.status == ProblemStatus::Optimal
+            && self.parameters.provide_strong_optimal_guarantee
+        {
+            self.move_primal_values_within_bounds(lp);
+            self.move_dual_values_within_bounds(lp);
+        }
+        self.compute_reduced_costs(lp);
         self.compute_constraint_activities(lp);
         self.problem_objective_value =
             lp.objective_scaling_factor() * (self.compute_objective(lp) + lp.objective_offset());
+        let rhs_perturbation_is_too_large = self.rhs_perturbation_is_too_large(lp);
+        let cost_perturbation_is_too_large = self.cost_perturbation_is_too_large(lp);
         let (primal_infeasibility_is_too_large, dual_infeasibility_is_too_large) =
             self.compute_infeasibilities(lp);
 
         let mut status = solution.status;
+        if status == ProblemStatus::Optimal
+            && self.parameters.provide_strong_optimal_guarantee
+            && self.parameters.change_status_to_imprecise
+            && (rhs_perturbation_is_too_large || cost_perturbation_is_too_large)
+        {
+            status = ProblemStatus::Imprecise;
+        }
         if matches!(
             status,
             ProblemStatus::Optimal | ProblemStatus::PrimalFeasible
@@ -338,15 +412,38 @@ impl LPSolver {
             (0..lp.num_variables().to_usize())
                 .map(|column| {
                     let column = ColIndex::from_usize(column);
-                    let matrix_dual = lp
-                        .sparse_column(column)
-                        .iter()
-                        .map(|entry| self.dual_values[entry.index()] * entry.coefficient())
-                        .sum::<f64>();
+                    let matrix_dual = lp.sparse_column(column).scalar_product(&self.dual_values);
                     lp.objective_coefficients()[column] - matrix_dual
                 })
                 .collect(),
         );
+    }
+
+    fn move_primal_values_within_bounds(&mut self, lp: &LinearProgram) {
+        for position in 0..lp.num_variables().to_usize() {
+            let col = ColIndex::from_usize(position);
+            self.primal_values[col] = self.primal_values[col].min(lp.variable_upper_bounds()[col]);
+            self.primal_values[col] = self.primal_values[col].max(lp.variable_lower_bounds()[col]);
+        }
+    }
+
+    fn move_dual_values_within_bounds(&mut self, lp: &LinearProgram) {
+        let optimization_sign = if lp.is_maximization_problem() {
+            -1.0
+        } else {
+            1.0
+        };
+        for position in 0..lp.num_constraints().to_usize() {
+            let row = RowIndex::from_usize(position);
+            let mut value = optimization_sign * self.dual_values[row];
+            if lp.constraint_lower_bounds()[row] == f64::NEG_INFINITY && value > 0.0 {
+                value = 0.0;
+            }
+            if lp.constraint_upper_bounds()[row] == f64::INFINITY && value < 0.0 {
+                value = 0.0;
+            }
+            self.dual_values[row] = optimization_sign * value;
+        }
     }
 
     fn compute_constraint_activities(&mut self, lp: &LinearProgram) {
@@ -354,8 +451,9 @@ impl LPSolver {
         for column in 0..lp.num_variables().to_usize() {
             let column = ColIndex::from_usize(column);
             for entry in lp.sparse_column(column) {
-                self.constraint_activities[entry.index()] +=
-                    entry.coefficient() * self.primal_values[column];
+                let row = entry.index();
+                self.constraint_activities[row] = self.primal_values[column]
+                    .mul_add(entry.coefficient(), self.constraint_activities[row]);
             }
         }
     }
@@ -411,10 +509,53 @@ impl LPSolver {
         for column in 0..lp.num_variables().to_usize() {
             let column = ColIndex::from_usize(column);
             error += lp.objective_coefficients()[column].abs()
-                * tolerance
-                * self.primal_values[column].abs().max(1.0);
+                * (tolerance * self.primal_values[column].abs().max(1.0));
         }
         error
+    }
+
+    fn rhs_perturbation_is_too_large(&self, lp: &LinearProgram) -> bool {
+        let tolerance = self.parameters.solution_feasibility_tolerance;
+        for position in 0..lp.num_constraints().to_usize() {
+            let row = RowIndex::from_usize(position);
+            let activity = self.constraint_activities[row];
+            let lower = lp.constraint_lower_bounds()[row];
+            let upper = lp.constraint_upper_bounds()[row];
+            let status = self.constraint_statuses[row];
+            if status == ConstraintStatus::AtLowerBound || activity < lower {
+                if (activity - lower).abs() > tolerance * lower.abs().max(1.0) {
+                    return true;
+                }
+            } else if (status == ConstraintStatus::AtUpperBound || activity > upper)
+                && (activity - upper).abs() > tolerance * upper.abs().max(1.0)
+            {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn cost_perturbation_is_too_large(&self, lp: &LinearProgram) -> bool {
+        let tolerance = self.parameters.solution_feasibility_tolerance;
+        let sign = if lp.is_maximization_problem() {
+            -1.0
+        } else {
+            1.0
+        };
+        for position in 0..lp.num_variables().to_usize() {
+            let col = ColIndex::from_usize(position);
+            let reduced = sign * self.reduced_costs[col];
+            let status = self.variable_statuses[col];
+            if (status == VariableStatus::Basic
+                || status == VariableStatus::Free
+                || (status == VariableStatus::AtUpperBound && reduced > 0.0)
+                || (status == VariableStatus::AtLowerBound && reduced < 0.0))
+                && reduced.abs() > tolerance * lp.objective_coefficients()[col].abs().max(1.0)
+            {
+                return true;
+            }
+        }
+        false
     }
 
     fn compute_infeasibilities(&mut self, lp: &LinearProgram) -> (bool, bool) {

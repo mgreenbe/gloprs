@@ -95,6 +95,24 @@ impl SparseMatrixScaler {
         self.equilibrate_columns(matrix);
     }
 
+    /// Applies the logarithmic scaling LP's solution in upstream order:
+    /// columns first, then rows. Factors are divisors, as in `LPScale()`.
+    pub fn scale_from_lp_factors(
+        &mut self,
+        matrix: &mut SparseMatrix,
+        column_factors: impl IntoIterator<Item = Fractional>,
+        row_factors: &DenseColumn,
+    ) {
+        debug_assert_eq!(row_factors.len(), matrix.num_rows());
+        let mut columns_scaled = 0;
+        for (position, factor) in column_factors.into_iter().enumerate() {
+            self.scale_matrix_column(matrix, ColIndex::from_usize(position), factor);
+            columns_scaled += 1;
+        }
+        debug_assert_eq!(columns_scaled, matrix.num_cols().to_usize());
+        self.scale_matrix_rows(matrix, row_factors);
+    }
+
     pub fn scale_row_vector(&self, up: bool, values: &mut DenseRow) {
         let size = self
             .col_scales

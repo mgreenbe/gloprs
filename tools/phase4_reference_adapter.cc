@@ -169,6 +169,10 @@ int main() {
     parameters.set_primal_feasibility_tolerance(1e-16);
     parameters.set_dual_feasibility_tolerance(1e-16);
   }
+  if (mode == "zero_internal_dual") {
+    parameters.set_primal_feasibility_tolerance(0.0);
+    parameters.set_dual_feasibility_tolerance(0.0);
+  }
   if (mode == "no_reopt_primal" || mode == "no_reopt_dual") {
     parameters.set_primal_feasibility_tolerance(1e-16);
     parameters.set_dual_feasibility_tolerance(1e-16);
@@ -249,8 +253,9 @@ int main() {
       mode == "warm_dual_multiple_bound_changes" ||
       mode == "warm_added_column" || mode == "warm_added_row" ||
       mode == "warm_added_row_and_column" ||
-      mode == "warm_removed_row" ||
-      mode == "warm_removed_column" ||
+      mode == "warm_removed_row" || mode == "warm_removed_first_row" ||
+      mode == "warm_removed_all_rows" ||
+      mode == "warm_removed_column" || mode == "warm_removed_all_columns" ||
       mode == "warm_added_row_low_condition_threshold" ||
       mode == "warm_added_row_slack" || mode == "warm_added_row_changed_coefficient" ||
       mode == "warm_singular_saved_basis" ||
@@ -347,19 +352,30 @@ int main() {
         lp.CleanUp();
       }
     }
-    if (mode == "warm_removed_row") {
+    if (mode == "warm_removed_row" || mode == "warm_removed_first_row" ||
+        mode == "warm_removed_all_rows") {
       glop::DenseBooleanColumn deleted;
       deleted.resize(glop::RowIndex(rows), false);
-      deleted[glop::RowIndex(1)] = true;
+      if (mode == "warm_removed_all_rows") {
+        for (int row = 0; row < rows; ++row)
+          deleted[glop::RowIndex(row)] = true;
+      } else {
+        deleted[glop::RowIndex(mode == "warm_removed_first_row" ? 0 : 1)] = true;
+      }
       lp.DeleteRows(deleted);
-      --rows;
+      rows = mode == "warm_removed_all_rows" ? 0 : rows - 1;
     }
-    if (mode == "warm_removed_column") {
+    if (mode == "warm_removed_column" || mode == "warm_removed_all_columns") {
       glop::DenseBooleanRow deleted;
       deleted.resize(glop::ColIndex(columns), false);
-      deleted[glop::ColIndex(1)] = true;
+      if (mode == "warm_removed_all_columns") {
+        for (int column = 0; column < columns; ++column)
+          deleted[glop::ColIndex(column)] = true;
+      } else {
+        deleted[glop::ColIndex(1)] = true;
+      }
       lp.DeleteColumns(deleted);
-      --columns;
+      columns = mode == "warm_removed_all_columns" ? 0 : columns - 1;
     }
   }
   const auto result = [&]() {
