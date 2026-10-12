@@ -74,9 +74,15 @@ impl SharedRandom {
     fn next_u64(&self) -> u64 {
         self.0.borrow_mut().next_u64()
     }
+
+    /// Inspect the next draw without advancing the shared stream.
+    #[must_use]
+    pub fn diagnostic_peek_next_u64(&self) -> u64 {
+        self.0.borrow().clone().next_u64()
+    }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Mt19937_64 {
     state: [u64; STATE_SIZE],
     index: usize,

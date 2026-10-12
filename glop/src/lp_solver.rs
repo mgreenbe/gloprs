@@ -41,6 +41,34 @@ pub struct LPSolver {
     last_error: Option<String>,
 }
 
+/// Borrowed, allocation-free snapshot of the public solve result.
+#[derive(Debug)]
+pub struct SolveResult<'a> {
+    pub status: ProblemStatus,
+    pub objective_value: f64,
+    pub simplex_iterations: u64,
+    pub maximum_primal_infeasibility: f64,
+    pub maximum_dual_infeasibility: f64,
+    pub deterministic_time: f64,
+    pub may_have_multiple_optimal_solutions: bool,
+    pub variable_values: &'a DenseRow,
+    pub reduced_costs: &'a DenseRow,
+    pub variable_statuses: &'a VariableStatusRow,
+    pub dual_values: &'a DenseColumn,
+    pub constraint_activities: &'a DenseColumn,
+    pub constraint_statuses: &'a ConstraintStatusColumn,
+    pub primal_ray: &'a DenseRow,
+    pub constraints_dual_ray: &'a DenseColumn,
+    pub variable_bounds_dual_ray: &'a DenseRow,
+}
+
+/// Public basis statuses in the model's variable and constraint coordinates.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SolverBasis {
+    pub variable_statuses: VariableStatusRow,
+    pub constraint_statuses: ConstraintStatusColumn,
+}
+
 impl Default for LPSolver {
     fn default() -> Self {
         Self::new()
@@ -102,6 +130,12 @@ impl LPSolver {
         time_limit: &mut TimeLimit,
     ) -> ProblemStatus {
         self.last_error = None;
+        self.num_revised_simplex_iterations = 0;
+        if let Err(error) = self.parameters.validate_supported() {
+            self.last_error = Some(error);
+            self.resize_solution(lp.num_constraints(), lp.num_variables());
+            return ProblemStatus::Abnormal;
+        }
         if !lp.is_cleaned_up() || !lp.is_valid(self.parameters.max_valid_magnitude) {
             self.resize_solution(lp.num_constraints(), lp.num_variables());
             return ProblemStatus::InvalidProblem;
@@ -201,7 +235,55 @@ impl LPSolver {
     }
 
     pub fn clear(&mut self) {
+        let parameters = self.parameters.clone();
         *self = Self::new();
+        self.parameters = parameters;
+    }
+
+    /// Solve and expose the same solver-owned values as the individual GLOP getters.
+    pub fn solve_result(&mut self, lp: &LinearProgram) -> SolveResult<'_> {
+        let status = self.solve(lp);
+        self.result(status)
+    }
+
+    #[must_use]
+    pub fn result(&self, status: ProblemStatus) -> SolveResult<'_> {
+        SolveResult {
+            status,
+            objective_value: self.objective_value(),
+            simplex_iterations: self.number_of_simplex_iterations(),
+            maximum_primal_infeasibility: self.maximum_primal_infeasibility(),
+            maximum_dual_infeasibility: self.maximum_dual_infeasibility(),
+            deterministic_time: self.deterministic_time(),
+            may_have_multiple_optimal_solutions: self.may_have_multiple_optimal_solutions(),
+            variable_values: self.variable_values(),
+            reduced_costs: self.reduced_costs(),
+            variable_statuses: self.variable_statuses(),
+            dual_values: self.dual_values(),
+            constraint_activities: self.constraint_activities(),
+            constraint_statuses: self.constraint_statuses(),
+            primal_ray: self.primal_ray(),
+            constraints_dual_ray: self.constraints_dual_ray(),
+            variable_bounds_dual_ray: self.variable_bounds_dual_ray(),
+        }
+    }
+
+    #[must_use]
+    pub fn export_basis(&self) -> SolverBasis {
+        SolverBasis {
+            variable_statuses: self.variable_statuses.clone(),
+            constraint_statuses: self.constraint_statuses.clone(),
+        }
+    }
+
+    pub fn import_basis(&mut self, basis: &SolverBasis) {
+        self.set_initial_basis(&basis.variable_statuses, &basis.constraint_statuses);
+    }
+
+    /// Cumulative deterministic work since construction or [`Self::clear`].
+    #[must_use]
+    pub fn deterministic_time(&self) -> f64 {
+        self.revised_simplex.deterministic_time()
     }
 
     pub fn set_initial_basis(

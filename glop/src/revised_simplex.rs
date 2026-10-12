@@ -27,7 +27,7 @@ use lp_data::permutation::ColumnPermutation;
 use lp_data::scattered_vector::ScatteredColumn;
 use lp_data::sparse::{CompactSparseMatrix, SparseMatrix};
 
-use crate::basis_representation::BasisRepresentation;
+use crate::basis_representation::{BasisRepresentation, DiagnosticSolveStage};
 use crate::dual_edge_norms::DualEdgeNorms;
 use crate::entering_variable::EnteringVariable;
 use crate::initial_basis::InitialBasis;
@@ -323,6 +323,8 @@ pub struct RevisedSimplex {
     last_deterministic_time_update: f64,
     trace_enabled: bool,
     trace: Vec<IterationEvent>,
+    diagnostic_capture_direction: bool,
+    diagnostic_last_direction: Option<ScatteredColumn>,
     phase4_events_enabled: bool,
     phase4_events: Vec<&'static str>,
     initial_basis_before_permutation: RowToColMapping,
@@ -442,6 +444,8 @@ impl RevisedSimplex {
             last_deterministic_time_update: 0.0,
             trace_enabled: false,
             trace: Vec::new(),
+            diagnostic_capture_direction: false,
+            diagnostic_last_direction: None,
             phase4_events_enabled: false,
             phase4_events: Vec::new(),
             initial_basis_before_permutation: RowToColMapping::new(),
@@ -496,6 +500,44 @@ impl RevisedSimplex {
         self.basis_factorization
             .as_ref()
             .map_or(0, BasisRepresentation::num_updates)
+    }
+
+    #[must_use]
+    pub fn num_basis_refactorizations(&self) -> i64 {
+        self.basis_factorization
+            .as_ref()
+            .map_or(0, BasisRepresentation::num_refactorizations)
+    }
+
+    pub fn set_diagnostic_capture_direction(&mut self, enabled: bool) {
+        self.diagnostic_capture_direction = enabled;
+        self.diagnostic_last_direction = None;
+    }
+
+    #[must_use]
+    pub fn diagnostic_last_direction(&self) -> Option<&ScatteredColumn> {
+        self.diagnostic_last_direction.as_ref()
+    }
+
+    #[must_use]
+    pub fn diagnostic_random_next(&self) -> u64 {
+        self.random.diagnostic_peek_next_u64()
+    }
+
+    pub fn diagnostic_left_solve_stages(
+        &self,
+    ) -> Result<[DiagnosticSolveStage; 3], FactorizationError> {
+        self.basis_factorization
+            .as_ref()
+            .unwrap()
+            .diagnostic_left_solve_stages(self.diagnostic_last_direction.as_ref().unwrap())
+    }
+
+    #[must_use]
+    pub fn diagnostic_lu_row_permutation(&self) -> &[usize] {
+        self.basis_factorization
+            .as_ref()
+            .map_or(&[], BasisRepresentation::diagnostic_lu_row_permutation)
     }
 
     #[must_use]
@@ -3377,6 +3419,9 @@ impl RevisedSimplex {
                 return Ok(());
             };
             self.direction(entering, &mut direction)?;
+            if self.diagnostic_capture_direction {
+                self.diagnostic_last_direction = Some(direction.clone());
+            }
             let entering_edge_norm_is_precise = self
                 .primal_edge_norms
                 .as_mut()

@@ -1366,6 +1366,18 @@ Exit criteria (met):
 
 ## Phase 6: parameters and public API
 
+Implementation status: complete. The 59-field `GlopParameters` schema has an
+automated pinned-proto default/type check (`tools/validate_parameter_defaults.py`)
+and the existing native validation-diagnostic comparison. The solver rejects
+non-default settings for five runtime knobs without a faithful Rust behavior,
+reporting the field name through `last_error()`. `LPSolver` exposes an
+allocation-free borrowed `SolveResult`, owned basis export/import, cumulative
+deterministic time, and parameter-preserving `clear()`; MPS loading remains in
+`lp_data`. The CLI exposes raw/dual/default solve modes. Two runnable examples
+cover constructed and MPS models. A native-pinned public-API fixture verifies
+that basis import changes a two-iteration cold solve to a zero-iteration warm
+solve with identical primal/status/objective values.
+
 Replace `parameters.proto` with ordinary Rust types while retaining:
 
 - corresponding enum variants;
@@ -1391,7 +1403,41 @@ Exit criteria:
 - Public examples solve representative LPs.
 - Warm-start behavior is covered by differential tests.
 
+Exit criteria (met): all 59 defaults and five enum variant sets agree with the
+pinned proto; constructed-LP and MPS examples run; and the public cold/warm
+basis test agrees with the pinned native adapter on status, objective, primal
+solution, basis statuses, and iteration counts.
+
 ## Phase 7: full differential validation
+
+Audit implementation: `tools/phase7_netlib_audit.py` serially checks all 98
+manifest-pinned Netlib MPS files against the native model fingerprints, checks
+the 96 pinned and two live presolve hashes, and compares default-pipeline public results
+against native traces: status, objective, iteration count, infeasibilities,
+four solution vectors, both basis-status vectors, and deterministic time. It
+also independently recomputes primal bound/equation violations from the input
+matrix. `glop/tests/phase5_netlib_solution.rs` independently recomputes the
+full original-model KKT conditions on the 96 fast terminal solves. The
+checked-in report is `baselines/phase7-netlib-report.json`; non-matches have
+stable IDs in `baselines/phase7-known-issues.md`. The first affected clock
+prefixes on `d2q06c` and `sierra` are pinned by
+`tools/validate_phase7_clock_prefix.py`.
+
+The refreshed 98-model terminal audit has 97 clean matches and one documented
+`qap15` path discrepancy (P7-001). The former `d2q06c` and `sierra` clock
+defects are repaired: Rust no longer marks the temporary sparse membership
+mask while scattering the direction into the cached inverse. Their first
+affected clock prefixes and the three-stage `d2q06c` transpose solve now
+agree bit-for-bit. The audit also compares live native/Rust refactorization
+counts on all 98 models; the 97 other terminal solves agree. The
+96-model KKT gate passes, and the `qap15` terminal solution has a separate
+opt-in original-model KKT gate. Native `qap15` takes 74,317 pivots and 527
+refactorizations; Rust takes 73,789 and 521. Both report `OPTIMAL` with valid
+primal/dual feasibility, but their trajectories and final bases differ. The
+native terminal trace is pinned, and an opt-in 67,016/67,017 fixed-cap pair
+reproduces the narrowest tested capped-state difference. Fixed-cap cleanup
+can change the path, so that pair does not identify the first live divergent
+pivot. P7-001 remains a port-fidelity defect, not an invalid solution.
 
 Build a harness that runs GLOP and `gloprs` with matched parameters and compares:
 
@@ -1422,6 +1468,13 @@ Exit criteria:
   harness.
 - No unexplained incorrect status or invalid solution remains.
 - Known divergences have issue references and minimized tests.
+
+Exit criteria (met): the full checked-in report and regression harness cover
+all 98 models, no incorrect status or invalid solution is unexplained, and
+P7-001 has a pinned terminal fixture plus a narrow opt-in capped-state
+regression. Phase 7's validation deliverable is complete; exact `qap15`
+trajectory equivalence is still open and must not be described as validated
+port fidelity.
 
 ## Phase 8: performance parity campaign
 
@@ -1660,8 +1713,8 @@ Exit criteria:
 
 ## Immediate next actions
 
-1. Begin Phase 6's parameter/public-API mapping and validation against pinned
-   GLOP, preserving the same file-level source correspondence.
+1. Begin Phase 7's full differential validation using the public Phase-6 API,
+   preserving the same file-level source correspondence.
 2. Carry the measured LU and public-solve Rust/native gaps into Phase 8's
    profile-guided performance work. Keep `qap15` outside deterministic
    wall-time trajectory gates until its performance is tractable.

@@ -6,7 +6,7 @@ use lp_data::mps_reader::parse_mps_file;
 
 fn usage(program: &std::ffi::OsStr) -> ExitCode {
     eprintln!(
-        "usage: {} inspect [--tsv] MODEL.mps\n       {} solve [--dual] MODEL.mps",
+        "usage: {} inspect [--tsv] MODEL.mps\n       {} solve [--dual|--default] MODEL.mps",
         program.to_string_lossy(),
         program.to_string_lossy()
     );
@@ -24,7 +24,8 @@ fn main() -> ExitCode {
     };
     let tab_separated = command == "inspect" && path == "--tsv";
     let dual_simplex = command == "solve" && path == "--dual";
-    if tab_separated || dual_simplex {
+    let default_parameters = command == "solve" && path == "--default";
+    if tab_separated || dual_simplex || default_parameters {
         let Some(actual_path) = arguments.next() else {
             return usage(&program);
         };
@@ -58,8 +59,10 @@ fn main() -> ExitCode {
     }
     if command == "solve" {
         let mut solver = LPSolver::new();
-        solver.parameters_mut().use_preprocessing = false;
-        solver.parameters_mut().use_scaling = false;
+        if !default_parameters {
+            solver.parameters_mut().use_preprocessing = false;
+            solver.parameters_mut().use_scaling = false;
+        }
         solver.parameters_mut().use_dual_simplex = dual_simplex;
         let status = solver.solve(&model);
         println!(
@@ -70,6 +73,10 @@ fn main() -> ExitCode {
             solver.maximum_primal_infeasibility(),
             solver.maximum_dual_infeasibility()
         );
+        if let Some(error) = solver.last_error() {
+            eprintln!("{error}");
+            return ExitCode::FAILURE;
+        }
         return ExitCode::SUCCESS;
     }
     usage(&program)

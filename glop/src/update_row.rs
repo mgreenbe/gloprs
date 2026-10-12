@@ -430,7 +430,7 @@ impl UpdateRow {
         for (index, &value) in left_inverse.iter().enumerate() {
             if value != 0.0 {
                 self.unit_row_left_inverse
-                    .set(ColIndex::from_usize(index), value);
+                    .scatter_entry_without_mask(ColIndex::from_usize(index), value);
             }
         }
         self.filtered_non_zeros.clear();

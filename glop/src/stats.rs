@@ -154,6 +154,15 @@ impl StatsGroup {
         }
     }
 
+    /// Number of observations in a named statistic, or zero if absent.
+    #[must_use]
+    pub fn count(&self, name: &str) -> i64 {
+        self.distributions
+            .iter()
+            .find(|distribution| distribution.name == name)
+            .map_or(0, |distribution| distribution.count)
+    }
+
     #[must_use]
     pub fn stat_string(&self) -> String {
         let mut distributions: Vec<_> = self

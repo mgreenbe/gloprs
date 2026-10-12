@@ -125,6 +125,9 @@ struct LuNonZerosTag {
 struct LuRowPermutationTag { friend auto Access(LuRowPermutationTag); };
 template struct PrivateMemberAccessAuto<LuRowPermutationTag,
     &operations_research::glop::LuFactorization::row_perm_>;
+struct LuInverseRowPermutationTag { friend auto Access(LuInverseRowPermutationTag); };
+template struct PrivateMemberAccessAuto<LuInverseRowPermutationTag,
+    &operations_research::glop::LuFactorization::inverse_row_perm_>;
 template struct PrivateMemberAccess<LuNonZerosTag,
     &operations_research::glop::LuFactorization::non_zero_rows_>;
 struct MaxUpdatesTag {
@@ -145,6 +148,9 @@ struct RankOneTag {
 };
 template struct PrivateMemberAccess<RankOneTag,
     &operations_research::glop::BasisFactorization::rank_one_factorization_>;
+struct BasisStatsTag { friend auto Access(BasisStatsTag); };
+template struct PrivateMemberAccessAuto<BasisStatsTag,
+    &operations_research::glop::BasisFactorization::stats_>;
 
 operations_research::glop::RevisedSimplex* g_diagnostic_direct = nullptr;
 extern "C" __attribute__((used, noinline)) int diag_basis(int row) {
@@ -355,7 +361,7 @@ extern "C" __attribute__((used, noinline)) int diag_rc_recompute() {
 
 int main(int argc, char** argv) {
   namespace glop = operations_research::glop;
-  if (argc < 2 || argc > 3) return EXIT_FAILURE;
+  if (argc < 2 || argc > 5) return EXIT_FAILURE;
   const auto model = glop::MpsFileToMPModelProto(argv[1]);
   if (!model.ok()) return EXIT_FAILURE;
   glop::LinearProgram lp;
@@ -373,7 +379,7 @@ int main(int argc, char** argv) {
     std::memcpy(&result, &value, sizeof(result));
     return result;
   };
-  if (argc == 2) {
+  if (argc == 2 || (argc == 3 && std::strcmp(argv[2], "presolve_only") == 0)) {
   std::cerr << "presolved " << glop::GetProblemStatusString(preprocessor.status())
             << ' ' << presolved.num_constraints().value()
             << ' ' << presolved.num_variables().value()
@@ -395,13 +401,48 @@ int main(int argc, char** argv) {
   }
   std::cerr << "offset " << bits(presolved.objective_offset()) << '\n';
   }
-  if (argc == 3 && preprocessor.status() == glop::ProblemStatus::INIT) {
+  if (argc == 3 && std::strcmp(argv[2], "presolve_only") == 0)
+    return EXIT_SUCCESS;
+  if (argc >= 3 && preprocessor.status() == glop::ProblemStatus::INIT) {
     parameters.set_max_number_of_iterations(std::atoi(argv[2]));
     glop::RevisedSimplex direct;
     g_diagnostic_direct = &direct;
     direct.SetParameters(parameters);
-    operations_research::TimeLimit direct_limit(20.0);
+    operations_research::TimeLimit direct_limit(argc >= 5 ? std::atof(argv[4]) : 20.0);
     if (!direct.Solve(presolved, &direct_limit).ok()) return EXIT_FAILURE;
+    if (argc >= 4 && std::strcmp(argv[3], "rng") == 0) {
+      std::cout << "random_next " << diag_random_next() << '\n';
+      return EXIT_SUCCESS;
+    }
+    if (argc >= 4 && std::strcmp(argv[3], "clock") == 0) {
+      std::cout << "clock " << bits(direct.DeterministicTime())
+                << " updates " << direct.GetBasisFactorization().NumUpdates()
+                << " basis_time " << bits(direct.GetBasisFactorization().DeterministicTime())
+                << " refactorizations " << (direct.GetBasisFactorization().*Access(BasisStatsTag{})).refactorization_interval.Num()
+                << '\n';
+      return EXIT_SUCCESS;
+    }
+    if (argc >= 4 && std::strcmp(argv[3], "fingerprint") == 0) {
+      uint64_t basis = 14695981039346656037ULL;
+      uint64_t values = basis;
+      uint64_t reduced = basis;
+      for (int row = 0; row < presolved.num_constraints().value(); ++row)
+        basis = (basis ^ static_cast<uint64_t>(direct.GetBasis(glop::RowIndex(row)).value())) * 1099511628211ULL;
+      const int total = presolved.num_variables().value() + presolved.num_constraints().value();
+      for (int col = 0; col < total; ++col) {
+        const double value = direct.GetVariableValue(glop::ColIndex(col));
+        const double cost = direct.GetReducedCost(glop::ColIndex(col));
+        values = (values ^ bits(value == 0.0 ? 0.0 : value)) * 1099511628211ULL;
+        reduced = (reduced ^ bits(cost == 0.0 ? 0.0 : cost)) * 1099511628211ULL;
+      }
+      std::cout << "fingerprint " << glop::GetProblemStatusString(direct.GetProblemStatus())
+                << ' ' << direct.GetNumberOfIterations() << ' ' << basis << ' '
+                << values << ' ' << reduced << ' ' << bits(direct.DeterministicTime())
+                << ' ' << bits(direct.GetBasisFactorization().DeterministicTime())
+                << ' ' << (direct.GetBasisFactorization().*Access(BasisStatsTag{})).refactorization_interval.Num()
+                << '\n';
+      return EXIT_SUCCESS;
+    }
     std::cout << "direct " << glop::GetProblemStatusString(direct.GetProblemStatus())
               << ' ' << direct.GetNumberOfIterations() << '\n';
     std::cout << "basis";
@@ -427,6 +468,11 @@ int main(int argc, char** argv) {
     for (double value : inverse.values) std::cout << ' ' << bits(value);
     std::cout << "\ninverse_order";
     for (const auto col : inverse.non_zeros) std::cout << ' ' << col.value();
+    const auto& inverse_lu = direct.GetBasisFactorization().*Access(BasisLuTag{});
+    std::cout << "\nlu_row_perm";
+    const auto& lu_row_perm = inverse_lu.*Access(LuInverseRowPermutationTag{});
+    for (int index = 0; index < lu_row_perm.size().value(); ++index)
+      std::cout << ' ' << lu_row_perm[glop::RowIndex(index)].value();
     const auto& update_row = direct.*Access(UpdateRowTag{});
     std::cout << "\nupdate_row";
     for (const auto col : update_row.GetNonZeroPositions())
@@ -437,6 +483,32 @@ int main(int argc, char** argv) {
     std::cout << "\ndirection_values";
     for (double value : (direct.*Access(DirectionTag{})).values)
       std::cout << ' ' << bits(value);
+    if (argc >= 4 && std::strcmp(argv[3], "stages") == 0) {
+      glop::ScatteredRow stage;
+      stage.values = glop::Transpose((direct.*Access(DirectionTag{})).values);
+      for (const auto row : (direct.*Access(DirectionTag{})).non_zeros)
+        stage.non_zeros.push_back(glop::RowToColIndex(row));
+      const auto& factorization = direct.GetBasisFactorization();
+      const auto& lu = factorization.*Access(BasisLuTag{});
+      const auto& updates = factorization.*Access(RankOneTag{});
+      lu.LeftSolveUWithNonZeros(&stage);
+      std::cout << "\nstage_upper";
+      for (double value : stage.values) std::cout << ' ' << bits(value);
+      std::cout << "\nstage_upper_order";
+      for (const auto index : stage.non_zeros) std::cout << ' ' << index.value();
+      updates.LeftSolveWithNonZeros(&stage);
+      std::cout << "\nstage_updates";
+      for (double value : stage.values) std::cout << ' ' << bits(value);
+      std::cout << "\nstage_updates_order";
+      for (const auto index : stage.non_zeros) std::cout << ' ' << index.value();
+      lu.LeftSolveLWithNonZeros(&stage);
+      std::cout << "\nstage_lower";
+      for (double value : stage.values) std::cout << ' ' << bits(value);
+      std::cout << "\nstage_lower_order";
+      for (const auto index : stage.non_zeros) std::cout << ' ' << index.value();
+      std::cout << '\n';
+      return EXIT_SUCCESS;
+    }
     std::cout << "\ndirection_precise_norm "
               << bits(1.0 + glop::SquaredNorm(direct.*Access(DirectionTag{})));
     glop::ScatteredColumn direction;

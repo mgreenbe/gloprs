@@ -915,7 +915,7 @@ impl LuFactorization {
                 .copy_from_slice(rhs.values().as_slice());
         } else {
             for entry in rhs.iter() {
-                result_before_permutation.set(
+                result_before_permutation.scatter_entry_without_mask(
                     RowIndex::from_usize(entry.index().to_usize()),
                     entry.coefficient(),
                 );

@@ -53,13 +53,68 @@ fn main() {
         );
     }
     eprintln!("offset {}", presolved.objective_offset().to_bits());
+    if matches!(env::args().nth(2).as_deref(), Some("presolve_only")) {
+        return;
+    }
     if let Some(cap) = env::args().nth(2) {
         let mut direct = RevisedSimplex::new();
+        direct.set_diagnostic_capture_direction(true);
         let mut direct_parameters = parameters.clone();
         direct_parameters.max_number_of_iterations = cap.parse().unwrap();
         direct.set_parameters(&direct_parameters);
-        let mut direct_limit = TimeLimit::new(20.0, f64::INFINITY);
+        let direct_wall_seconds = env::args().nth(4).map_or(20.0, |value| {
+            value.parse::<f64>().expect("numeric direct wall limit")
+        });
+        let mut direct_limit = TimeLimit::new(direct_wall_seconds, f64::INFINITY);
         direct.solve(&presolved, &mut direct_limit).unwrap();
+        if matches!(env::args().nth(3).as_deref(), Some("rng")) {
+            println!("random_next {}", direct.diagnostic_random_next());
+            return;
+        }
+        if matches!(env::args().nth(3).as_deref(), Some("clock")) {
+            println!(
+                "clock {} updates {} basis_time {} refactorizations {}",
+                direct.deterministic_time().to_bits(),
+                direct.num_basis_updates(),
+                direct.basis_deterministic_time().to_bits(),
+                direct.num_basis_refactorizations()
+            );
+            return;
+        }
+        if matches!(env::args().nth(3).as_deref(), Some("fingerprint")) {
+            let mut basis = 14_695_981_039_346_656_037_u64;
+            let mut values = basis;
+            let mut reduced = basis;
+            for row in 0..presolved.num_constraints().to_usize() {
+                basis = (basis
+                    ^ u64::try_from(direct.basis(RowIndex::from_usize(row)).value())
+                        .expect("nonnegative basis index"))
+                .wrapping_mul(1_099_511_628_211);
+            }
+            for col in
+                0..presolved.num_variables().to_usize() + presolved.num_constraints().to_usize()
+            {
+                let index = ColIndex::from_usize(col);
+                let value = direct.variable_value(index);
+                let cost = direct.reduced_cost(index);
+                values = (values ^ if value == 0.0 { 0 } else { value.to_bits() })
+                    .wrapping_mul(1_099_511_628_211);
+                reduced = (reduced ^ if cost == 0.0 { 0 } else { cost.to_bits() })
+                    .wrapping_mul(1_099_511_628_211);
+            }
+            println!(
+                "fingerprint {} {} {} {} {} {} {} {}",
+                direct.problem_status(),
+                direct.number_of_iterations(),
+                basis,
+                values,
+                reduced,
+                direct.deterministic_time().to_bits(),
+                direct.basis_deterministic_time().to_bits(),
+                direct.num_basis_refactorizations()
+            );
+            return;
+        }
         println!(
             "direct {} {}",
             direct.problem_status(),
@@ -106,6 +161,37 @@ fn main() {
         print!("\ninverse_order");
         for col in inverse_order {
             print!(" {col}");
+        }
+        print!("\nlu_row_perm");
+        for row in direct.diagnostic_lu_row_permutation() {
+            print!(" {row}");
+        }
+        if let Some(direction) = direct.diagnostic_last_direction() {
+            print!("\ndirection_values");
+            for value in direction.values().as_slice() {
+                print!(" {}", value.to_bits());
+            }
+            print!("\ndirection_order");
+            for row in direction.non_zeros() {
+                print!(" {}", row.to_usize());
+            }
+            if matches!(env::args().nth(3).as_deref(), Some("stages")) {
+                for (label, (stage, order)) in ["stage_upper", "stage_updates", "stage_lower"]
+                    .into_iter()
+                    .zip(direct.diagnostic_left_solve_stages().unwrap())
+                {
+                    print!("\n{label}");
+                    for value in stage {
+                        print!(" {}", value.to_bits());
+                    }
+                    print!("\n{label}_order");
+                    for index in order {
+                        print!(" {index}");
+                    }
+                }
+                println!();
+                return;
+            }
         }
         print!("\nupdate_row");
         for (col, value) in direct.diagnostic_update_row() {

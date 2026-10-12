@@ -18,6 +18,7 @@ component affects solver behavior.
 | `lu_factorization.{h,cc}` | `glop/src/lu_factorization.rs` | validated | Contiguous sparse triangular L/U and explicit transposes, GLOP-direction permutations and inverses (including empty-as-identity after basis absorption), identity state, dense plus scattered/hypersparse direct/transpose and split-factor solves, initial-basis completion, norms, fill and diagnostics; 1,000 generated factorization traces and 500 rectangular initial-basis traces agree, and a large low-density trace directly covers hypersparse values and position sets. Sampling localized 75% of Rust factorization time to candidate-column solves; removing non-upstream candidate/pattern copies and duplicate scattered-workspace clearing reduced the large-case gap. In-process release benchmarks on Apple arm64 (Rust 1.95, Apple Clang 17; median of repeated trials) now measure Rust/native ratios of 1.72x, 1.83x, and 1.93x at n=500, 750, and 1000 with 2% generated density. Material optimization work remains, but there is no unexplained order-of-magnitude regression. `Clear()` retains parameters and last deterministic time, test-only `L*U` materialization is exposed, and exact Markowitz statistics strings are included in the 1,000-case trace |
 | `markowitz.{h,cc}` | `glop/src/markowitz.rs` | validated | Square LU and rectangular permutation modes use two-stage singleton ordering, including GLOP's direct residual-singleton chain before the first general candidate solve, an incremental residual pattern, bucketed Zlatev queue, and cached sparse candidates backed by GLOP-style reusable physical-column pools. As upstream, the actual in-progress `TriangularMatrix` L owns the DFS-restricted partially permuted solve, persistent in-place dependency-graph pruning, swapped numerical traversal order, and operation counter; there is no parallel symbolic graph or duplicate unpruned L. Symbolic-zero behavior, pivot ties, contracted multiply-add ordering, and floating-operation accounting are preserved. Rust records that a cached candidate needs splitting while already traversing a singleton pivot row, retaining GLOP's constant-time cardinality fast path without letting an exact-cancellation support overestimate mask a deleted row. Residual degree removal and residual-singleton selection distinguish structural zeros from nonstructural exact-zero reachability overestimates rather than depending on incidental sparse-entry order; regressions cover both cases, `scagr25`, and the `scsd6` factorization path. Strict traces agree on deterministic time as well as factors for 1,000 standard, 300 dense 40–100-dimensional, and 500 nondefault-threshold/Zlatev cases; all four structural statistic distributions and formatting agree exactly in the native LU and repeated-refactorization traces |
 | `parameters.proto` | `glop/src/parameters.rs` | ported | The complete pinned 59-field schema, five enum types, protobuf scalar types, and defaults are represented directly. Existing LU/Markowitz, basis-update, update-row, and edge-norm code consumes the shared bundle; 500 nondefault-threshold/Zlatev native LU traces agree. Rust does not reproduce protobuf field-presence/reflection machinery, which is serialization infrastructure rather than solver behavior |
+
 | `parameters_validation.{h,cc}` | `glop/src/parameters.rs` | validated | Every pinned finite, nonnegative, not-NaN, integer, magnitude-limit, and Zlatev check is ported in source order with the exact diagnostic text. A dedicated native adapter exercises all validation branches and boundary categories; 124 cases agree byte-for-byte |
 | `preprocessor.{h,cc}` | `glop/src/preprocessor.rs` | validated for LP | The main LP driver and all pinned LP pass types are ported in source order: bound shifting; up to 20 passes of fixed-variable, singleton, forcing/implied-free constraint, free constraint, implied-free, unconstrained variable, doubleton-free column, and doubleton-equality row; empty column/constraint; proportional column/row; dualizer and its conditional cleanup; singleton-column sign; then independently controlled scaling. Changed passes are retained in one heap allocation per concrete pass, mirroring upstream's pointer stack; both reusable and reverse-order destructive postsolve are available, with status and time-limit checks at each invocation. Native-pinned main-pass cases check that both recovery paths agree. Forty-nine pinned-native basic cases compare transformed matrices, bounds, costs, terminal statuses, and recovered values/statuses, including singleton queue chains, full-driver transformations, and adverse statuses. A separate pinned fixture proves bit-exact equality of the entire presolved model—costs, offset, bounds, ordered sparse entries, and dimensions—on all 96 fast Netlib models. Fifteen full-pipeline solves agree in status, iterations, primal/dual bits, and basis statuses; thirteen shift/scaling transformations and twenty isolated capped states remain as focused gates. MIP-only singleton rules are outside this LP driver. A further 96-model native public-solver check validates recovered statuses exactly and all solution vectors to `1e-9`; `greenbeb`'s forcing-column recovery choice exposed and fixed an unfused sparse dot product. Three-trial serial before/after timing checks on `afiro`, `greenbeb`, `pilot`, and `scsd6` show the preprocessing speedups and remaining Rust/native performance gap documented in `PLAN.md`. |
 
@@ -715,6 +716,40 @@ terms. Rust's uniform sparse accumulator gave `czprob` a one-ulp different
 precise reduced cost at pivot 264, which propagated to a heap-order tie and
 a different pivot at 349. Matching the native operation grouping removes all
 four status/iteration differences; the fast-96 gate now has no exceptions.
+
+Phase-6 public-parameter/API update: `tools/validate_parameter_defaults.py`
+checks all 59 field names, Rust scalar/enum types, and defaults against the
+pinned `parameters.proto`; `tools/validate_parameters.py` retains native
+validation-diagnostic coverage. Non-default `allow_simplex_algorithm_change`,
+`use_absl_random`, `num_omp_threads`, `log_search_progress`, and
+`log_to_stdout` fail explicitly because their runtime behavior is not ported.
+The `LPSolver` public interface includes a borrowed structured result, owned
+basis import/export, deterministic-time access, and parameter-preserving
+`clear()`. `glop/tests/phase6_public_api.rs` pins cold/warm public solves to
+`tools/phase6_warm_start_reference_adapter.cc` (2/0 iterations). These
+additions do not change the broader `lp_solver.{h,cc}` in-progress fidelity
+classification.
+
+Phase-7 public-solver differential update: `tools/phase7_netlib_audit.py`
+produces `baselines/phase7-netlib-report.json` from all 98 manifest-pinned
+Netlib models. It checks native model fingerprints and 98 bit-exact presolve
+hashes, then compares public status, iterations, objective, infeasibilities,
+primal/reduced-cost/dual/activity vectors, basis statuses, and deterministic
+time and live refactorization counts. A separate original-model KKT check
+passes for the 96 fast terminal solves. Ninety-seven models match on every
+compared field, including refactorization counts. The former `d2q06c` and
+`sierra` clock differences came from Rust scattering into a cached inverse
+while marking sparse-mask bits that upstream leaves clear; the corrected
+transposed-solve stages and formerly failing clock prefixes match bit-for-bit.
+The general scattered-vector preparation paths now likewise preserve the
+upstream mask protocol. The native terminal `qap15` trace is now a pinned
+fixture, so its P7-001 mismatch is compared as completed solve against
+completed solve: both are optimal and independently feasible, but the pivot
+counts, refactorization counts, and terminal bases differ. A 67,016/67,017
+fixed-cap pair provides a narrow reproducible capped-state comparison; cap
+cleanup prevents treating it as the first live pivot divergence. The Phase 7
+validation exit criteria are met with P7-001 explicitly open, while the broad
+`lp_solver` row remains in progress until that fidelity defect is repaired.
 
 ## Test inventory caveat
 

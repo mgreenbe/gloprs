@@ -115,6 +115,16 @@ impl<I: VectorIndex + Ord> ScatteredVector<I> {
         self.values[index] = value;
     }
 
+    /// Scatters a known sparse entry without populating the temporary mask.
+    /// GLOP uses direct `values[index]` writes plus `non_zeros.push_back()`
+    /// when preparing a solve; the mask is populated only when a kernel needs
+    /// it and must not retain input positions removed by an earlier stage.
+    pub fn scatter_entry_without_mask(&mut self, index: I, value: Fractional) {
+        self.values[index] = value;
+        self.non_zeros.push(index);
+        self.non_zeros_are_sorted = false;
+    }
+
     #[must_use]
     pub fn value(&self, index: I) -> Fractional {
         self.values[index]

@@ -254,10 +254,12 @@ impl PrimalEdgeNorms {
             {
                 self.direction_left_inverse.clear();
                 for entry in direction {
-                    self.direction_left_inverse.set(
-                        ColIndex::from_usize(entry.row().to_usize()),
-                        entry.coefficient(),
-                    );
+                    // GLOP writes through operator[] here. It does not mark
+                    // sparse-mask bits: the subsequent triangular solve may
+                    // remove an input position before the rank-one solve
+                    // repopulates its mask from the surviving positions.
+                    self.direction_left_inverse.values_mut()
+                        [ColIndex::from_usize(entry.row().to_usize())] = entry.coefficient();
                 }
             } else {
                 self.direction_left_inverse

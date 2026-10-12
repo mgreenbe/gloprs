@@ -169,6 +169,43 @@ impl Default for GlopParameters {
 }
 
 impl GlopParameters {
+    /// Reject options for which the port has no corresponding runtime behavior.
+    /// Defaults are accepted so ordinary GLOP parameter bundles remain usable.
+    ///
+    /// # Errors
+    /// Returns the upstream validation diagnostic or names the unsupported option.
+    pub fn validate_supported(&self) -> Result<(), String> {
+        self.validate()?;
+        let defaults = Self::default();
+        for (name, changed) in [
+            (
+                "allow_simplex_algorithm_change",
+                self.allow_simplex_algorithm_change != defaults.allow_simplex_algorithm_change,
+            ),
+            (
+                "use_absl_random",
+                self.use_absl_random != defaults.use_absl_random,
+            ),
+            (
+                "num_omp_threads",
+                self.num_omp_threads != defaults.num_omp_threads,
+            ),
+            (
+                "log_search_progress",
+                self.log_search_progress != defaults.log_search_progress,
+            ),
+            (
+                "log_to_stdout",
+                self.log_to_stdout != defaults.log_to_stdout,
+            ),
+        ] {
+            if changed {
+                return Err(format!("parameter '{name}' is not supported by gloprs"));
+            }
+        }
+        Ok(())
+    }
+
     /// Applies pinned GLOP's validation rules in source order.
     ///
     /// # Errors
@@ -289,5 +326,52 @@ mod tests {
             p.validate(),
             Err("markowitz_zlatev_parameter must be >= 1".into())
         );
+    }
+
+    #[test]
+    fn unsupported_runtime_options_are_named() {
+        let settings = [
+            (
+                GlopParameters {
+                    allow_simplex_algorithm_change: true,
+                    ..GlopParameters::default()
+                },
+                "allow_simplex_algorithm_change",
+            ),
+            (
+                GlopParameters {
+                    use_absl_random: true,
+                    ..GlopParameters::default()
+                },
+                "use_absl_random",
+            ),
+            (
+                GlopParameters {
+                    num_omp_threads: 2,
+                    ..GlopParameters::default()
+                },
+                "num_omp_threads",
+            ),
+            (
+                GlopParameters {
+                    log_search_progress: true,
+                    ..GlopParameters::default()
+                },
+                "log_search_progress",
+            ),
+            (
+                GlopParameters {
+                    log_to_stdout: false,
+                    ..GlopParameters::default()
+                },
+                "log_to_stdout",
+            ),
+        ];
+        for (parameters, name) in settings {
+            assert_eq!(
+                parameters.validate_supported(),
+                Err(format!("parameter '{name}' is not supported by gloprs"))
+            );
+        }
     }
 }

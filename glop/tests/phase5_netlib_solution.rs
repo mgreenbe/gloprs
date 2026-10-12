@@ -16,6 +16,8 @@ mod release_gate {
     use serde::Deserialize;
 
     const NATIVE: &[u8] = include_bytes!("../../baselines/phase5-netlib-solution-native.json.gz");
+    const QAP15_NATIVE: &[u8] =
+        include_bytes!("../../baselines/phase7-qap15-terminal-native.json.gz");
     const UPSTREAM_COMMIT: &str = "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5";
 
     #[derive(Deserialize)]
@@ -28,6 +30,12 @@ mod release_gate {
     #[derive(Deserialize)]
     struct Case {
         name: String,
+        lines: Vec<String>,
+    }
+
+    #[derive(Deserialize)]
+    struct Qap15Fixture {
+        upstream_commit: String,
         lines: Vec<String>,
     }
 
@@ -49,6 +57,82 @@ mod release_gate {
         }
     }
 
+    /// Recompute original-model equations, stationarity, and complementary
+    /// signs independently of the solver's residual and activity workspaces.
+    fn check_independent_kkt(name: &str, lp: &LinearProgram, solver: &LPSolver) {
+        let mut activities = vec![0.0; lp.num_constraints().to_usize()];
+        let mut scales = vec![0.0; activities.len()];
+        let mut objective = lp.objective_offset();
+        for column in 0..lp.num_variables().to_usize() {
+            let col = ColIndex::from_usize(column);
+            let x = solver.variable_values()[col];
+            let lower = lp.variable_lower_bounds()[col];
+            let upper = lp.variable_upper_bounds()[col];
+            let tolerance = 1e-6 * (1.0 + x.abs());
+            assert!(
+                x + tolerance >= lower && x - tolerance <= upper,
+                "{name}: variable {column} bound"
+            );
+            objective += lp.objective_coefficients()[col] * x;
+            let mut dual_dot = 0.0;
+            let mut dual_scale = 1.0 + lp.objective_coefficients()[col].abs();
+            for entry in lp.sparse_column(col) {
+                let row = entry.index().to_usize();
+                let coefficient = entry.coefficient();
+                activities[row] += coefficient * x;
+                scales[row] += (coefficient * x).abs();
+                let term = coefficient * solver.dual_values()[entry.index()];
+                dual_dot += term;
+                dual_scale += term.abs();
+            }
+            let reduced = lp.objective_coefficients()[col] - dual_dot;
+            assert!(
+                (reduced - solver.reduced_costs()[col]).abs() <= 1e-7 * dual_scale,
+                "{name}: variable {column} stationarity"
+            );
+            if !(upper.is_finite() && x >= upper - tolerance) {
+                assert!(
+                    reduced >= -1e-6 * dual_scale,
+                    "{name}: variable {column} lower-side sign"
+                );
+            }
+            if !(lower.is_finite() && x <= lower + tolerance) {
+                assert!(
+                    reduced <= 1e-6 * dual_scale,
+                    "{name}: variable {column} upper-side sign"
+                );
+            }
+        }
+        for row in 0..activities.len() {
+            let index = RowIndex::from_usize(row);
+            let activity = activities[row];
+            let tolerance = 1e-6 * (1.0 + scales[row]);
+            assert!(
+                (activity - solver.constraint_activities()[index]).abs() <= tolerance,
+                "{name}: row {row} equation"
+            );
+            let lower = lp.constraint_lower_bounds()[index];
+            let upper = lp.constraint_upper_bounds()[index];
+            assert!(
+                activity + tolerance >= lower && activity - tolerance <= upper,
+                "{name}: row {row} bound"
+            );
+            let dual = solver.dual_values()[index];
+            if !(upper.is_finite() && activity >= upper - tolerance) {
+                assert!(dual >= -1e-6, "{name}: row {row} lower-side sign");
+            }
+            if !(lower.is_finite() && activity <= lower + tolerance) {
+                assert!(dual <= 1e-6, "{name}: row {row} upper-side sign");
+            }
+        }
+        let expected_objective = lp.objective_scaling_factor() * objective;
+        assert!(
+            (expected_objective - solver.objective_value()).abs()
+                <= 1e-7 * (1.0 + expected_objective.abs()),
+            "{name}: objective recomputation"
+        );
+    }
+
     #[test]
     #[ignore = "requires ../datasets/netlib/mps; run in release mode"]
     fn fast_96_public_postsolve_matches_native() {
@@ -65,6 +149,9 @@ mod release_gate {
             let mut solver = LPSolver::new();
             let mut limit = TimeLimit::new(fixture.time_limit_seconds, f64::INFINITY);
             let status = solver.solve_with_time_limit(&lp, &mut limit);
+            if status.to_string() == "OPTIMAL" {
+                check_independent_kkt(&case.name, &lp, &solver);
+            }
             assert_eq!(case.lines.len(), 8);
             let header: Vec<_> = case.lines[0].split_whitespace().collect();
             assert_eq!(status.to_string(), header[0], "{} status", case.name);
@@ -146,6 +233,30 @@ mod release_gate {
                 assert_eq!(*native, rust.to_string(), "{} constraint status", case.name);
             }
         }
+    }
+
+    #[test]
+    #[ignore = "requires ../datasets/netlib/mps/qap15.mps; about two minutes in release mode"]
+    fn qap15_terminal_solution_satisfies_original_model_kkt() {
+        let mut decompressed = String::new();
+        GzDecoder::new(QAP15_NATIVE)
+            .read_to_string(&mut decompressed)
+            .unwrap();
+        let fixture: Qap15Fixture = serde_json::from_str(&decompressed).unwrap();
+        assert_eq!(fixture.upstream_commit, UPSTREAM_COMMIT);
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../datasets/netlib/mps");
+        let lp = parse_mps_file(root.join("qap15.mps")).unwrap();
+        let mut solver = LPSolver::new();
+        let mut limit = TimeLimit::new(180.0, f64::INFINITY);
+        let status = solver.solve_with_time_limit(&lp, &mut limit);
+        assert_eq!(status.to_string(), "OPTIMAL");
+        let native: Vec<_> = fixture.lines[0].split_whitespace().collect();
+        assert_eq!(native[0], "OPTIMAL");
+        assert!(close(
+            f64::from_bits(native[2].parse().unwrap()),
+            solver.objective_value()
+        ));
+        check_independent_kkt("qap15", &lp, &solver);
     }
 
     #[test]

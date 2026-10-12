@@ -310,6 +310,8 @@ pub struct BasisRepresentation {
     stats: StatsGroup,
 }
 
+pub type DiagnosticSolveStage = (Vec<f64>, Vec<usize>);
+
 impl BasisRepresentation {
     /// Factorizes an initial square basis.
     ///
@@ -648,6 +650,7 @@ impl BasisRepresentation {
         self.factorization.left_solve_upper_with_nonzeros(rhs)?;
         self.updates.left_solve_with_nonzeros(rhs);
         self.factorization.left_solve_lower_with_nonzeros(rhs)?;
+        rhs.sort_non_zeros_if_needed();
         self.bump_deterministic_time_for_solve(rhs.num_non_zeros_estimate());
         Ok(())
     }
@@ -764,7 +767,7 @@ impl BasisRepresentation {
             return Err(FactorizationError::DimensionMismatch);
         }
         result.clear();
-        result.set(ColIndex::from_usize(row), 1.0);
+        result.scatter_entry_without_mask(ColIndex::from_usize(row), 1.0);
         self.factorization.left_solve_upper_with_nonzeros(result)?;
         self.factorization.left_solve_lower_with_nonzeros(result)?;
         result.sort_non_zeros_if_needed();
@@ -814,7 +817,7 @@ impl BasisRepresentation {
                 tau.value.non_zeros_mut().clear();
             } else {
                 for entry in input {
-                    tau.value.set(
+                    tau.value.scatter_entry_without_mask(
                         lp_data::lp_types::RowIndex::from_usize(entry.index().to_usize()),
                         entry.coefficient(),
                     );
@@ -1018,7 +1021,7 @@ impl BasisRepresentation {
             let mut direction =
                 ScatteredColumn::new(lp_data::lp_types::RowIndex::from_usize(self.dimension()));
             for entry in &entering_column {
-                direction.set(entry.index(), entry.coefficient());
+                direction.scatter_entry_without_mask(entry.index(), entry.coefficient());
             }
             self.solve_with_nonzeros(&mut direction)?;
             let mut unit_left_inverse = ScatteredRow::new(ColIndex::from_usize(self.dimension()));
@@ -1029,7 +1032,7 @@ impl BasisRepresentation {
         let mut right_update =
             ScatteredColumn::new(lp_data::lp_types::RowIndex::from_usize(self.dimension()));
         for entry in &entering_column {
-            right_update.set(entry.index(), entry.coefficient());
+            right_update.scatter_entry_without_mask(entry.index(), entry.coefficient());
         }
         // With B = P^-1 L R U Q, replacing input-coordinate column e by a
         // gives R_new = R (I + u v^T), where
@@ -1048,7 +1051,7 @@ impl BasisRepresentation {
             .right_solve_upper_with_nonzeros(&mut direction)?;
         self.bump_deterministic_time_for_solve(direction.num_non_zeros_estimate());
         let mut left_update = ScatteredRow::new(ColIndex::from_usize(self.dimension()));
-        left_update.set(ColIndex::from_usize(leaving_column), 1.0);
+        left_update.scatter_entry_without_mask(ColIndex::from_usize(leaving_column), 1.0);
         self.factorization
             .left_solve_upper_with_nonzeros(&mut left_update)?;
         // RevisedSimplex computes the complete leaving-row inverse before
@@ -1160,11 +1163,11 @@ impl BasisRepresentation {
         let mut right_update =
             ScatteredColumn::new(lp_data::lp_types::RowIndex::from_usize(self.dimension()));
         for (row, value) in self.right_storage.get_mut().column(right_index).iter() {
-            right_update.set(row, value);
+            right_update.scatter_entry_without_mask(row, value);
         }
         let mut left_update = ScatteredRow::new(ColIndex::from_usize(self.dimension()));
         for (row, value) in self.left_storage.get_mut().column(left_index).iter() {
-            left_update.set(ColIndex::from_usize(row.to_usize()), value);
+            left_update.scatter_entry_without_mask(ColIndex::from_usize(row.to_usize()), value);
         }
         self.finish_column_replacement(leaving_column, entering_column, right_update, &left_update)
     }
@@ -1298,6 +1301,12 @@ impl BasisRepresentation {
         }
     }
 
+    /// Number of full refactorizations after initial basis construction.
+    #[must_use]
+    pub fn num_refactorizations(&self) -> i64 {
+        self.stats.count("refactorization_interval")
+    }
+
     #[must_use]
     pub fn diagnostic_refactorization_state(&self) -> (usize, usize, f64, f64) {
         (
@@ -1306,6 +1315,55 @@ impl BasisRepresentation {
             self.last_factorization_deterministic_time,
             self.updates.deterministic_time_since_last_reset(),
         )
+    }
+
+    #[must_use]
+    pub fn diagnostic_lu_row_permutation(&self) -> &[usize] {
+        self.factorization.inverse_row_permutation()
+    }
+
+    /// Diagnostic snapshots of the three upstream transpose-solve stages.
+    ///
+    /// # Errors
+    ///
+    /// Propagates a dimension mismatch from either triangular solve.
+    pub fn diagnostic_left_solve_stages(
+        &self,
+        direction: &ScatteredColumn,
+    ) -> Result<[DiagnosticSolveStage; 3], FactorizationError> {
+        let mut work = ScatteredRow::new(ColIndex::from_usize(self.dimension()));
+        for row in direction.non_zeros() {
+            work.values_mut()[ColIndex::from_usize(row.to_usize())] = direction.value(*row);
+            work.non_zeros_mut()
+                .push(ColIndex::from_usize(row.to_usize()));
+        }
+        self.factorization
+            .left_solve_upper_with_nonzeros(&mut work)?;
+        let upper = (
+            work.values().as_slice().to_vec(),
+            work.non_zeros()
+                .iter()
+                .map(|index| index.to_usize())
+                .collect(),
+        );
+        self.updates.left_solve_with_nonzeros(&mut work);
+        let updates = (
+            work.values().as_slice().to_vec(),
+            work.non_zeros()
+                .iter()
+                .map(|index| index.to_usize())
+                .collect(),
+        );
+        self.factorization
+            .left_solve_lower_with_nonzeros(&mut work)?;
+        let lower = (
+            work.values().as_slice().to_vec(),
+            work.non_zeros()
+                .iter()
+                .map(|index| index.to_usize())
+                .collect(),
+        );
+        Ok([upper, updates, lower])
     }
 
     #[must_use]
