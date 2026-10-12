@@ -1566,6 +1566,22 @@ kernel gap is entirely bounds checks: Rust still retains right-hand-side
 checks and uses 64-bit row indices versus native GLOP's 32-bit indices.
 The reproducible microbenchmark is `tools/benchmark_lower_transpose.py`.
 
+A later bounds-check audit revisited that dense lower-transpose kernel after
+triangular row bounds became construction invariants. `transpose_solve()` now
+rejects incomplete matrices, so a full-length RHS and each validated stored
+row index prove all hot RHS reads in range. One localized inlined unchecked
+read eliminates the repeated per-entry checks, while debug builds assert the
+invariant. In a five-trial matched microbenchmark at 3% lower-triangle
+density, the dimension-1024 Rust/native ratio fell from 1.492 to 1.248
+(7,684 to 6,364 ns per solve for Rust in separate contemporaneous runs);
+dimension 256 fell from 1.479 to 1.383. A five-trial A/B of direct Netlib
+solves against the prior committed build measured B/A median ratios 0.992
+(`dfl001`), 1.002 (`stocfor3`), 0.994 (`truss`), 0.962 (`fit2p`), and 0.987
+(`pilot87`). These are kernel and selected-solve results, not yet a full
+96-model aggregate comparison. Compact-column dot-product checks remain:
+its public slice API permits a vector shorter than matrix row count, so the
+factor-row invariant alone does not make unchecked reads sound there.
+
 The next Phase-8 pass tested the remaining row-width mismatch in that kernel.
 `TriangularMatrix` now stores non-diagonal row indices in 32 bits, as pinned
 GLOP does, while retaining the existing safe right-hand-side indexing and

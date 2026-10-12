@@ -791,7 +791,7 @@ impl TriangularMatrix {
     ///
     /// Returns an error for a dimension mismatch.
     pub fn transpose_solve(&self, rhs: &mut [f64]) -> Result<(), TriangularError> {
-        if rhs.len() != self.dimension() {
+        if rhs.len() != self.dimension() || self.num_rows != self.dimension() {
             return Err(TriangularError::DimensionMismatch);
         }
         match self.triangle {
@@ -811,6 +811,19 @@ impl TriangularMatrix {
             }
         }
         Ok(())
+    }
+
+    // Only used by the dense lower-transpose kernel after transpose_solve()
+    // checks rhs.len() == dimension(). All stored rows are checked to be below
+    // num_rows at insertion/permutation, and this matrix is square here.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    fn lower_transpose_rhs_value(rhs: &[f64], row: u32) -> f64 {
+        let row = usize::try_from(row).expect("row index fits usize");
+        debug_assert!(row < rhs.len());
+        // SAFETY: the caller has checked rhs length against the matrix's row
+        // count, and row came from its validated triangular storage.
+        unsafe { *rhs.get_unchecked(row) }
     }
 
     fn transpose_lower_solve<const UNIT_DIAGONAL: bool>(&self, rhs: &mut [f64]) {
@@ -841,10 +854,10 @@ impl TriangularMatrix {
                 let &[r0, r1, r2, r3] = r else {
                     unreachable!();
                 };
-                let mut four_term_sum = c2 * rhs[usize::try_from(r2).unwrap()];
-                four_term_sum = c3.mul_add(rhs[usize::try_from(r3).unwrap()], four_term_sum);
-                four_term_sum = c1.mul_add(rhs[usize::try_from(r1).unwrap()], four_term_sum);
-                four_term_sum = c0.mul_add(rhs[usize::try_from(r0).unwrap()], four_term_sum);
+                let mut four_term_sum = c2 * Self::lower_transpose_rhs_value(rhs, r2);
+                four_term_sum = c3.mul_add(Self::lower_transpose_rhs_value(rhs, r3), four_term_sum);
+                four_term_sum = c1.mul_add(Self::lower_transpose_rhs_value(rhs, r1), four_term_sum);
+                four_term_sum = c0.mul_add(Self::lower_transpose_rhs_value(rhs, r0), four_term_sum);
                 sum -= four_term_sum;
             }
             let mut tail = remainder
@@ -852,11 +865,12 @@ impl TriangularMatrix {
                 .rev()
                 .zip(rows[..remainder.len()].iter().rev());
             if let Some((&coefficient, &row)) = tail.next() {
-                sum = (-coefficient).mul_add(rhs[usize::try_from(row).unwrap()], sum);
+                sum = (-coefficient).mul_add(Self::lower_transpose_rhs_value(rhs, row), sum);
                 if let Some((&coefficient, &row)) = tail.next() {
-                    sum = (-coefficient).mul_add(rhs[usize::try_from(row).unwrap()], sum);
+                    sum = (-coefficient).mul_add(Self::lower_transpose_rhs_value(rhs, row), sum);
                     if let Some((&coefficient, &row)) = tail.next() {
-                        sum = (-coefficient).mul_add(rhs[usize::try_from(row).unwrap()], sum);
+                        sum =
+                            (-coefficient).mul_add(Self::lower_transpose_rhs_value(rhs, row), sum);
                     }
                 }
             }
@@ -1469,6 +1483,14 @@ mod tests {
                 triangular.add_column_with_diagonal([(2, 1.0)], 1.0);
             }))
             .is_err()
+        );
+
+        let mut partial = TriangularMatrix::empty(Triangle::Lower, true);
+        partial.reset(2, 2);
+        partial.add_column_with_diagonal([(1, 2.0)], 1.0);
+        assert_eq!(
+            partial.transpose_solve(&mut [1.0]),
+            Err(TriangularError::DimensionMismatch)
         );
     }
 
