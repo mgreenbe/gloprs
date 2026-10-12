@@ -7,6 +7,7 @@ import argparse
 import gzip
 import json
 import math
+import platform
 import statistics
 import subprocess
 from pathlib import Path
@@ -16,6 +17,7 @@ DATASET_ROOT = PROJECT_ROOT.parent / "datasets" / "netlib"
 FIXTURE = PROJECT_ROOT / "baselines" / "netlib-dual-trajectories.json.gz"
 NATIVE = PROJECT_ROOT / "target" / "native" / "netlib_timing_reference_adapter"
 RUST = PROJECT_ROOT / "target" / "release" / "examples" / "netlib_timing"
+MANIFEST = DATASET_ROOT / "manifest.json"
 
 
 def arguments() -> argparse.Namespace:
@@ -44,12 +46,25 @@ def run(
     return float(elapsed), status, int(iterations), float(objective)
 
 
+def version(command: list[str]) -> str:
+    return subprocess.run(command, check=True, capture_output=True, text=True).stdout.strip()
+
+
+def weighted_geometric_ratio(results: list[dict], weight: str) -> float:
+    total_weight = sum(item[weight] for item in results)
+    return math.exp(sum(item[weight] * math.log(item["ratio"])
+                        for item in results) / total_weight)
+
+
 def main() -> None:
     options = arguments()
     if options.iteration_limit is not None and options.iteration_limit < 0:
         raise ValueError("iteration limit must be nonnegative")
     with gzip.open(FIXTURE, "rt", encoding="utf-8") as stream:
         fixture = json.load(stream)
+    with MANIFEST.open(encoding="utf-8") as stream:
+        manifest = json.load(stream)
+    model_metadata = {item["name"]: item for item in manifest["problems"]}
     expected_results = fixture["results"]
     if options.models is not None:
         selected = set(options.models)
@@ -116,8 +131,17 @@ def main() -> None:
         rust = statistics.median(rust_times)
         result = {
             "name": expected["name"],
+            "nonzeros": model_metadata[expected["name"]]["nonzeros"],
             "native_seconds": native,
             "rust_seconds": rust,
+            "native_trials_seconds": native_times,
+            "rust_trials_seconds": rust_times,
+            "native_median_absolute_deviation_seconds": statistics.median(
+                abs(sample - native) for sample in native_times
+            ),
+            "rust_median_absolute_deviation_seconds": statistics.median(
+                abs(sample - rust) for sample in rust_times
+            ),
             "ratio": rust / native,
             **terminal,
         }
@@ -132,6 +156,16 @@ def main() -> None:
     rust_total = sum(result["rust_seconds"] for result in results)
     ratios = [result["ratio"] for result in results]
     summary = {
+        "machine": platform.platform(),
+        "processor": version(["sysctl", "-n", "machdep.cpu.brand_string"]),
+        "rustc": version(["rustc", "--version"]),
+        "clang": version(["clang++", "--version"]).splitlines()[0],
+        "gloprs_commit": version(["git", "rev-parse", "HEAD"]),
+        "upstream_commit": fixture.get("upstream_commit"),
+        "corpus": "Netlib fast 96 (qap12 and qap15 excluded)"
+        if options.models is None else f"selected Netlib models: {', '.join(options.models)}",
+        "model_count": len(results),
+        "timing_scope": "serial in-process direct RevisedSimplex solve; parsing and output excluded",
         "mode": options.mode,
         "iteration_limit": options.iteration_limit,
         "trials": options.trials,
@@ -140,6 +174,12 @@ def main() -> None:
         "rust_total_seconds": rust_total,
         "aggregate_ratio": rust_total / native_total,
         "median_model_ratio": statistics.median(ratios),
+        "nnz_weighted_geometric_ratio": weighted_geometric_ratio(results, "nonzeros"),
+        "sqrt_nnz_weighted_geometric_ratio": math.exp(
+            sum(math.sqrt(item["nonzeros"]) * math.log(item["ratio"])
+                for item in results)
+            / sum(math.sqrt(item["nonzeros"]) for item in results)
+        ),
         "results": results,
     }
     print(

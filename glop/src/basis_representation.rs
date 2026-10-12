@@ -3,7 +3,7 @@
 //! Like upstream `basis_representation`, this keeps a fresh LU plus eta updates
 //! and can refactorize from the current basis when the update chain grows.
 
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, Ref, RefCell};
 use std::rc::Rc;
 
 use lp_data::lp_types::{
@@ -785,7 +785,7 @@ impl BasisRepresentation {
     pub fn right_solve_for_tau(
         &self,
         input: &ScatteredRow,
-    ) -> Result<Vec<f64>, FactorizationError> {
+    ) -> Result<Ref<'_, [f64]>, FactorizationError> {
         if input.len().to_usize() != self.dimension() {
             return Err(FactorizationError::DimensionMismatch);
         }
@@ -801,7 +801,10 @@ impl BasisRepresentation {
             tau.value.non_zeros_mut().clear();
             tau.is_computed = true;
             self.bump_deterministic_time_for_solve(tau.value.num_non_zeros_estimate());
-            return Ok(solved);
+            drop(tau);
+            return Ok(Ref::map(self.tau.borrow(), |state| {
+                state.value.values().as_slice()
+            }));
         }
         if tau.computation_can_be_optimized {
             tau.computation_can_be_optimized = false;
@@ -831,7 +834,13 @@ impl BasisRepresentation {
             .right_solve_upper_with_nonzeros(&mut tau.value)?;
         tau.is_computed = true;
         self.bump_deterministic_time_for_solve(tau.value.num_non_zeros_estimate());
-        Ok(tau.value.values().as_slice().to_vec())
+        // Upstream returns the reusable tau_ storage by const reference. Keep
+        // the RefCell borrow alive for callers rather than copying n values
+        // after every dual pivot.
+        drop(tau);
+        Ok(Ref::map(self.tau.borrow(), |state| {
+            state.value.values().as_slice()
+        }))
     }
 
     /// Solves for a problem column and retains the post-lower, pre-upper
@@ -1743,7 +1752,11 @@ mod tests {
         let expected = basis.solve(input.values().as_slice()).unwrap();
         let actual = basis.right_solve_for_tau(&input).unwrap();
 
-        assert_eq!(actual, expected);
+        assert_eq!(actual.as_ref(), expected);
+        assert!(std::ptr::eq(
+            actual.as_ptr(),
+            basis.tau.borrow().value.values().as_slice().as_ptr()
+        ));
     }
 
     #[test]

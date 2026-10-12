@@ -330,6 +330,23 @@ impl<I: VectorIndex, T> TypedVec<I, T> {
     pub fn as_mut_slice(&mut self) -> &mut [T] {
         &mut self.values
     }
+
+    /// Exchanges contiguous storage with an untyped workspace without moving
+    /// individual elements. This is the safe Rust counterpart of GLOP's
+    /// `StrictITIVector::swap()` with a same-element-type scratch vector.
+    pub fn swap_storage_with_raw(&mut self, other: &mut Vec<T>) {
+        let _ = I::from_usize(other.len());
+        std::mem::swap(&mut self.values, other);
+    }
+
+    /// Exchanges storage between differently indexed vectors of the same
+    /// element type. GLOP reinterprets row/column vectors to do this; here the
+    /// index tags remain intact while only their Vec allocations are swapped.
+    pub fn swap_storage_with<J: VectorIndex>(&mut self, other: &mut TypedVec<J, T>) {
+        let _ = I::from_usize(other.values.len());
+        let _ = J::from_usize(self.values.len());
+        std::mem::swap(&mut self.values, &mut other.values);
+    }
 }
 
 impl<'a, I: VectorIndex, T> IntoIterator for &'a TypedVec<I, T> {

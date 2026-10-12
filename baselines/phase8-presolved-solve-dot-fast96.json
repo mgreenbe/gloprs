@@ -1,0 +1,2519 @@
+{
+  "machine": "macOS-15.6.1-arm64-arm-64bit-Mach-O",
+  "processor": "Apple M2",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "clang": "Apple clang version 17.0.0 (clang-1700.6.4.2)",
+  "gloprs_commit": "8f84b1418f6f39eee5f73f916374f094ae853bf6",
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "trials": 3,
+  "warmups": 1,
+  "presolve_repetitions": 3,
+  "solve_repetitions": 1,
+  "summary": {
+    "solve": {
+      "native_total_seconds": 9.836163212999999,
+      "rust_total_seconds": 12.697122417,
+      "aggregate_ratio": 1.2908612984602374,
+      "median_model_ratio": 1.2617323975204515,
+      "sqrt_nnz_weighted_geometric_ratio": 1.2867104265259948
+    }
+  },
+  "results": [
+    {
+      "name": "25fv47",
+      "nonzeros": 11127,
+      "solve": {
+        "native_seconds": 0.058051958,
+        "rust_seconds": 0.076261416,
+        "ratio": 1.3136751735402274,
+        "native_trials_seconds": [
+          0.057805125,
+          0.058051958,
+          0.058082875
+        ],
+        "rust_trials_seconds": [
+          0.0764255,
+          0.07621075,
+          0.076261416
+        ],
+        "native_median_absolute_deviation_seconds": 3.091699999999836e-05,
+        "rust_median_absolute_deviation_seconds": 5.066600000000476e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "1352",
+          "objective_bits": "4662771358229495723"
+        }
+      }
+    },
+    {
+      "name": "80bau3b",
+      "nonzeros": 29063,
+      "solve": {
+        "native_seconds": 0.097386209,
+        "rust_seconds": 0.134048708,
+        "ratio": 1.3764649982422048,
+        "native_trials_seconds": [
+          0.097386209,
+          0.097357833,
+          0.097725292
+        ],
+        "rust_trials_seconds": [
+          0.134054834,
+          0.134048708,
+          0.133818333
+        ],
+        "native_median_absolute_deviation_seconds": 2.8375999999996626e-05,
+        "rust_median_absolute_deviation_seconds": 6.126000000022946e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "4602",
+          "objective_bits": "4696727403333120448"
+        }
+      }
+    },
+    {
+      "name": "adlittle",
+      "nonzeros": 465,
+      "solve": {
+        "native_seconds": 0.00047875,
+        "rust_seconds": 0.00056,
+        "ratio": 1.1697127937336813,
+        "native_trials_seconds": [
+          0.000477959,
+          0.000490458,
+          0.00047875
+        ],
+        "rust_trials_seconds": [
+          0.00056,
+          0.000550125,
+          0.000563291
+        ],
+        "native_median_absolute_deviation_seconds": 7.909999999999862e-07,
+        "rust_median_absolute_deviation_seconds": 3.291000000000101e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "78",
+          "objective_bits": "4686987960775506531"
+        }
+      }
+    },
+    {
+      "name": "afiro",
+      "nonzeros": 88,
+      "solve": {
+        "native_seconds": 7.8542e-05,
+        "rust_seconds": 4.7667e-05,
+        "ratio": 0.6068982200606046,
+        "native_trials_seconds": [
+          7.9042e-05,
+          7.8542e-05,
+          7.7375e-05
+        ],
+        "rust_trials_seconds": [
+          4.7667e-05,
+          4.3208e-05,
+          5.2209e-05
+        ],
+        "native_median_absolute_deviation_seconds": 5.000000000000122e-07,
+        "rust_median_absolute_deviation_seconds": 4.459000000000006e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "5",
+          "objective_bits": "13870255676800256595"
+        }
+      }
+    },
+    {
+      "name": "agg",
+      "nonzeros": 2541,
+      "solve": {
+        "native_seconds": 0.000721917,
+        "rust_seconds": 0.000868459,
+        "ratio": 1.202990094429138,
+        "native_trials_seconds": [
+          0.000725125,
+          0.000721917,
+          0.000713042
+        ],
+        "rust_trials_seconds": [
+          0.0008675,
+          0.000900833,
+          0.000868459
+        ],
+        "native_median_absolute_deviation_seconds": 3.207999999999987e-06,
+        "rust_median_absolute_deviation_seconds": 9.590000000000293e-07,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "120",
+          "objective_bits": "13943471579943594153"
+        }
+      }
+    },
+    {
+      "name": "agg2",
+      "nonzeros": 4515,
+      "solve": {
+        "native_seconds": 0.001251875,
+        "rust_seconds": 0.001580875,
+        "ratio": 1.2628057913130306,
+        "native_trials_seconds": [
+          0.001251875,
+          0.001246125,
+          0.001268834
+        ],
+        "rust_trials_seconds": [
+          0.001580875,
+          0.001577625,
+          0.001589625
+        ],
+        "native_median_absolute_deviation_seconds": 5.749999999999896e-06,
+        "rust_median_absolute_deviation_seconds": 3.2499999999999977e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "206",
+          "objective_bits": "13939570180019590421"
+        }
+      }
+    },
+    {
+      "name": "agg3",
+      "nonzeros": 4531,
+      "solve": {
+        "native_seconds": 0.001218667,
+        "rust_seconds": 0.001539584,
+        "ratio": 1.2633344465715408,
+        "native_trials_seconds": [
+          0.001219666,
+          0.001218667,
+          0.001215083
+        ],
+        "rust_trials_seconds": [
+          0.001536042,
+          0.001539584,
+          0.001542417
+        ],
+        "native_median_absolute_deviation_seconds": 9.989999999997917e-07,
+        "rust_median_absolute_deviation_seconds": 2.8329999999998287e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "209",
+          "objective_bits": "4711797885688889439"
+        }
+      }
+    },
+    {
+      "name": "bandm",
+      "nonzeros": 2659,
+      "solve": {
+        "native_seconds": 0.002537291,
+        "rust_seconds": 0.003157834,
+        "ratio": 1.2445691093374784,
+        "native_trials_seconds": [
+          0.002538708,
+          0.002537291,
+          0.002536917
+        ],
+        "rust_trials_seconds": [
+          0.003157542,
+          0.003157834,
+          0.003165792
+        ],
+        "native_median_absolute_deviation_seconds": 3.7400000000003403e-07,
+        "rust_median_absolute_deviation_seconds": 2.919999999998271e-07,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "204",
+          "objective_bits": "13863157280643879351"
+        }
+      }
+    },
+    {
+      "name": "beaconfd",
+      "nonzeros": 3476,
+      "solve": {
+        "native_seconds": 0.000137958,
+        "rust_seconds": 0.000143416,
+        "ratio": 1.0395627654793487,
+        "native_trials_seconds": [
+          0.00014,
+          0.0001375,
+          0.000137958
+        ],
+        "rust_trials_seconds": [
+          0.000143416,
+          0.000136667,
+          0.000146958
+        ],
+        "native_median_absolute_deviation_seconds": 4.580000000000014e-07,
+        "rust_median_absolute_deviation_seconds": 3.5420000000000145e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "7",
+          "objective_bits": "4674849729677068933"
+        }
+      }
+    },
+    {
+      "name": "blend",
+      "nonzeros": 521,
+      "solve": {
+        "native_seconds": 0.000303208,
+        "rust_seconds": 0.000338334,
+        "ratio": 1.115847866810902,
+        "native_trials_seconds": [
+          0.000303208,
+          0.000304292,
+          0.000300209
+        ],
+        "rust_trials_seconds": [
+          0.000338334,
+          0.000333917,
+          0.000348292
+        ],
+        "native_median_absolute_deviation_seconds": 1.0839999999999917e-06,
+        "rust_median_absolute_deviation_seconds": 4.416999999999995e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "40",
+          "objective_bits": "13852738103697164446"
+        }
+      }
+    },
+    {
+      "name": "bnl1",
+      "nonzeros": 6129,
+      "solve": {
+        "native_seconds": 0.020255459,
+        "rust_seconds": 0.025433708,
+        "ratio": 1.2556470825963508,
+        "native_trials_seconds": [
+          0.020202833,
+          0.020255459,
+          0.020298
+        ],
+        "rust_trials_seconds": [
+          0.025431042,
+          0.025433708,
+          0.025534417
+        ],
+        "native_median_absolute_deviation_seconds": 4.2541000000000107e-05,
+        "rust_median_absolute_deviation_seconds": 2.665999999998392e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "860",
+          "objective_bits": "4656412522239663739"
+        }
+      }
+    },
+    {
+      "name": "bnl2",
+      "nonzeros": 16124,
+      "solve": {
+        "native_seconds": 0.050222375,
+        "rust_seconds": 0.064136,
+        "ratio": 1.2770403629856215,
+        "native_trials_seconds": [
+          0.050222375,
+          0.050180209,
+          0.05024
+        ],
+        "rust_trials_seconds": [
+          0.064136,
+          0.064023667,
+          0.064187167
+        ],
+        "native_median_absolute_deviation_seconds": 1.762500000000028e-05,
+        "rust_median_absolute_deviation_seconds": 5.1167000000004736e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "1526",
+          "objective_bits": "4655680717993459851"
+        }
+      }
+    },
+    {
+      "name": "boeing1",
+      "nonzeros": 3865,
+      "solve": {
+        "native_seconds": 0.003302458,
+        "rust_seconds": 0.004253709,
+        "ratio": 1.288043330149846,
+        "native_trials_seconds": [
+          0.003349958,
+          0.003302458,
+          0.003293417
+        ],
+        "rust_trials_seconds": [
+          0.004297417,
+          0.004253709,
+          0.004204583
+        ],
+        "native_median_absolute_deviation_seconds": 9.040999999999997e-06,
+        "rust_median_absolute_deviation_seconds": 4.370800000000081e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "419",
+          "objective_bits": "13867976792490584462"
+        }
+      }
+    },
+    {
+      "name": "boeing2",
+      "nonzeros": 1339,
+      "solve": {
+        "native_seconds": 0.000971875,
+        "rust_seconds": 0.001171416,
+        "ratio": 1.205315498392283,
+        "native_trials_seconds": [
+          0.000971875,
+          0.0009695,
+          0.000975375
+        ],
+        "rust_trials_seconds": [
+          0.001171416,
+          0.001162375,
+          0.001179542
+        ],
+        "native_median_absolute_deviation_seconds": 2.37499999999999e-06,
+        "rust_median_absolute_deviation_seconds": 8.12600000000001e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "160",
+          "objective_bits": "13867621521117105420"
+        }
+      }
+    },
+    {
+      "name": "bore3d",
+      "nonzeros": 1525,
+      "solve": {
+        "native_seconds": 0.000255167,
+        "rust_seconds": 0.000277708,
+        "ratio": 1.0883382255542449,
+        "native_trials_seconds": [
+          0.000252625,
+          0.000255417,
+          0.000255167
+        ],
+        "rust_trials_seconds": [
+          0.00029675,
+          0.000264208,
+          0.000277708
+        ],
+        "native_median_absolute_deviation_seconds": 2.500000000000332e-07,
+        "rust_median_absolute_deviation_seconds": 1.3500000000000003e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "27",
+          "objective_bits": "4653753686883565848"
+        }
+      }
+    },
+    {
+      "name": "brandy",
+      "nonzeros": 2150,
+      "solve": {
+        "native_seconds": 0.001544958,
+        "rust_seconds": 0.001918,
+        "ratio": 1.2414576965846322,
+        "native_trials_seconds": [
+          0.001544958,
+          0.001548292,
+          0.001542625
+        ],
+        "rust_trials_seconds": [
+          0.001918,
+          0.001909083,
+          0.001925292
+        ],
+        "native_median_absolute_deviation_seconds": 2.332999999999979e-06,
+        "rust_median_absolute_deviation_seconds": 7.292000000000106e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "133",
+          "objective_bits": "4654393292598678382"
+        }
+      }
+    },
+    {
+      "name": "capri",
+      "nonzeros": 1786,
+      "solve": {
+        "native_seconds": 0.001315708,
+        "rust_seconds": 0.001584375,
+        "ratio": 1.2041995640370051,
+        "native_trials_seconds": [
+          0.001315708,
+          0.00131975,
+          0.001311458
+        ],
+        "rust_trials_seconds": [
+          0.001584375,
+          0.001577167,
+          0.001609334
+        ],
+        "native_median_absolute_deviation_seconds": 4.041999999999891e-06,
+        "rust_median_absolute_deviation_seconds": 7.208000000000084e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "182",
+          "objective_bits": "4658133816028833752"
+        }
+      }
+    },
+    {
+      "name": "cycle",
+      "nonzeros": 21322,
+      "solve": {
+        "native_seconds": 0.013029125,
+        "rust_seconds": 0.016955417,
+        "ratio": 1.3013473276217704,
+        "native_trials_seconds": [
+          0.013035166,
+          0.013029125,
+          0.013023291
+        ],
+        "rust_trials_seconds": [
+          0.016955417,
+          0.016971042,
+          0.016938292
+        ],
+        "native_median_absolute_deviation_seconds": 5.834000000001435e-06,
+        "rust_median_absolute_deviation_seconds": 1.562499999999828e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "552",
+          "objective_bits": "13840942450702014923"
+        }
+      }
+    },
+    {
+      "name": "czprob",
+      "nonzeros": 14173,
+      "solve": {
+        "native_seconds": 0.009818042,
+        "rust_seconds": 0.014164333,
+        "ratio": 1.4426840911864096,
+        "native_trials_seconds": [
+          0.009803334,
+          0.009818042,
+          0.009818584
+        ],
+        "rust_trials_seconds": [
+          0.014185792,
+          0.014164333,
+          0.014133667
+        ],
+        "native_median_absolute_deviation_seconds": 5.419999999992098e-07,
+        "rust_median_absolute_deviation_seconds": 2.1458999999999714e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "722",
+          "objective_bits": "4701947085525885408"
+        }
+      }
+    },
+    {
+      "name": "d2q06c",
+      "nonzeros": 35674,
+      "solve": {
+        "native_seconds": 0.403537167,
+        "rust_seconds": 0.549249875,
+        "ratio": 1.3610886924821972,
+        "native_trials_seconds": [
+          0.403433084,
+          0.403537167,
+          0.403543209
+        ],
+        "rust_trials_seconds": [
+          0.549249875,
+          0.549642042,
+          0.548522208
+        ],
+        "native_median_absolute_deviation_seconds": 6.042000000039405e-06,
+        "rust_median_absolute_deviation_seconds": 0.0003921669999999988,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "4571",
+          "objective_bits": "4683174079929168668"
+        }
+      }
+    },
+    {
+      "name": "d6cube",
+      "nonzeros": 43888,
+      "solve": {
+        "native_seconds": 0.573031,
+        "rust_seconds": 0.771712416,
+        "ratio": 1.3467201879130448,
+        "native_trials_seconds": [
+          0.574611417,
+          0.573031,
+          0.572432417
+        ],
+        "rust_trials_seconds": [
+          0.771457208,
+          0.772925125,
+          0.771712416
+        ],
+        "native_median_absolute_deviation_seconds": 0.0005985829999999304,
+        "rust_median_absolute_deviation_seconds": 0.00025520800000000676,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "10046",
+          "objective_bits": "4644257804287073755"
+        }
+      }
+    },
+    {
+      "name": "degen2",
+      "nonzeros": 4449,
+      "solve": {
+        "native_seconds": 0.009688,
+        "rust_seconds": 0.012046833,
+        "ratio": 1.243479872006606,
+        "native_trials_seconds": [
+          0.009723542,
+          0.009685916,
+          0.009688
+        ],
+        "rust_trials_seconds": [
+          0.012070792,
+          0.012046833,
+          0.012040959
+        ],
+        "native_median_absolute_deviation_seconds": 2.0840000000011544e-06,
+        "rust_median_absolute_deviation_seconds": 5.873999999999463e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "467",
+          "objective_bits": "13877398831896840896"
+        }
+      }
+    },
+    {
+      "name": "degen3",
+      "nonzeros": 26230,
+      "solve": {
+        "native_seconds": 0.117695958,
+        "rust_seconds": 0.149025416,
+        "ratio": 1.2661897530924553,
+        "native_trials_seconds": [
+          0.117834542,
+          0.117695958,
+          0.117663167
+        ],
+        "rust_trials_seconds": [
+          0.149025416,
+          0.148951667,
+          0.149107291
+        ],
+        "native_median_absolute_deviation_seconds": 3.2791000000004233e-05,
+        "rust_median_absolute_deviation_seconds": 7.374899999998408e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "1784",
+          "objective_bits": "13875267582538025010"
+        }
+      }
+    },
+    {
+      "name": "dfl001",
+      "nonzeros": 41873,
+      "solve": {
+        "native_seconds": 2.961095709,
+        "rust_seconds": 3.836916584,
+        "ratio": 1.2957759427829423,
+        "native_trials_seconds": [
+          2.961095709,
+          2.958094959,
+          2.962388125
+        ],
+        "rust_trials_seconds": [
+          3.836916584,
+          3.833325916,
+          3.8409874999999998
+        ],
+        "native_median_absolute_deviation_seconds": 0.001292416000000074,
+        "rust_median_absolute_deviation_seconds": 0.0035906679999997415,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "16966",
+          "objective_bits": "4712310210922698543"
+        }
+      }
+    },
+    {
+      "name": "e226",
+      "nonzeros": 2767,
+      "solve": {
+        "native_seconds": 0.002094125,
+        "rust_seconds": 0.002702083,
+        "ratio": 1.2903160031039216,
+        "native_trials_seconds": [
+          0.002105084,
+          0.002094125,
+          0.002089709
+        ],
+        "rust_trials_seconds": [
+          0.002702083,
+          0.0027,
+          0.002718667
+        ],
+        "native_median_absolute_deviation_seconds": 4.416000000000142e-06,
+        "rust_median_absolute_deviation_seconds": 2.082999999999946e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "207",
+          "objective_bits": "13846113789485321460"
+        }
+      }
+    },
+    {
+      "name": "etamacro",
+      "nonzeros": 2489,
+      "solve": {
+        "native_seconds": 0.004994125,
+        "rust_seconds": 0.006294875,
+        "ratio": 1.2604560358421144,
+        "native_trials_seconds": [
+          0.004994125,
+          0.004982667,
+          0.005016208
+        ],
+        "rust_trials_seconds": [
+          0.006291667,
+          0.006294875,
+          0.006347375
+        ],
+        "native_median_absolute_deviation_seconds": 1.1458000000000648e-05,
+        "rust_median_absolute_deviation_seconds": 3.2080000000002037e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "459",
+          "objective_bits": "13873230594165555364"
+        }
+      }
+    },
+    {
+      "name": "fffff800",
+      "nonzeros": 6235,
+      "solve": {
+        "native_seconds": 0.001311583,
+        "rust_seconds": 0.001655292,
+        "ratio": 1.2620566140305265,
+        "native_trials_seconds": [
+          0.001311583,
+          0.001316292,
+          0.001307292
+        ],
+        "rust_trials_seconds": [
+          0.001663792,
+          0.001647125,
+          0.001655292
+        ],
+        "native_median_absolute_deviation_seconds": 4.291000000000017e-06,
+        "rust_median_absolute_deviation_seconds": 8.167000000000113e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "142",
+          "objective_bits": "4693020463208579654"
+        }
+      }
+    },
+    {
+      "name": "finnis",
+      "nonzeros": 2714,
+      "solve": {
+        "native_seconds": 0.002263166,
+        "rust_seconds": 0.002874792,
+        "ratio": 1.270252380956589,
+        "native_trials_seconds": [
+          0.002263166,
+          0.002254542,
+          0.002286042
+        ],
+        "rust_trials_seconds": [
+          0.002882625,
+          0.002870542,
+          0.002874792
+        ],
+        "native_median_absolute_deviation_seconds": 8.624000000000045e-06,
+        "rust_median_absolute_deviation_seconds": 4.250000000000347e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "339",
+          "objective_bits": "4685177068644138484"
+        }
+      }
+    },
+    {
+      "name": "fit1d",
+      "nonzeros": 14430,
+      "solve": {
+        "native_seconds": 0.011237959,
+        "rust_seconds": 0.016252917,
+        "ratio": 1.4462516725679457,
+        "native_trials_seconds": [
+          0.011267625,
+          0.011162042,
+          0.011237959
+        ],
+        "rust_trials_seconds": [
+          0.016252917,
+          0.016236917,
+          0.016309
+        ],
+        "native_median_absolute_deviation_seconds": 2.9665999999999373e-05,
+        "rust_median_absolute_deviation_seconds": 1.5999999999998654e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "493",
+          "objective_bits": "13889625925715565409"
+        }
+      }
+    },
+    {
+      "name": "fit1p",
+      "nonzeros": 10894,
+      "solve": {
+        "native_seconds": 0.009319709,
+        "rust_seconds": 0.012059458,
+        "ratio": 1.293973663769974,
+        "native_trials_seconds": [
+          0.009319709,
+          0.009309375,
+          0.009326125
+        ],
+        "rust_trials_seconds": [
+          0.012053583,
+          0.012059458,
+          0.012093208
+        ],
+        "native_median_absolute_deviation_seconds": 6.415999999998673e-06,
+        "rust_median_absolute_deviation_seconds": 5.875000000000671e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "342",
+          "objective_bits": "4666253888860789594"
+        }
+      }
+    },
+    {
+      "name": "fit2d",
+      "nonzeros": 138018,
+      "solve": {
+        "native_seconds": 1.251139666,
+        "rust_seconds": 1.819823291,
+        "ratio": 1.454532487822187,
+        "native_trials_seconds": [
+          1.108398666,
+          1.251139666,
+          1.253932708
+        ],
+        "rust_trials_seconds": [
+          1.757374083,
+          1.819823291,
+          1.866591541
+        ],
+        "native_median_absolute_deviation_seconds": 0.002793041999999968,
+        "rust_median_absolute_deviation_seconds": 0.046768249999999956,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "5642",
+          "objective_bits": "13902813280475602822"
+        }
+      }
+    },
+    {
+      "name": "fit2p",
+      "nonzeros": 60784,
+      "solve": {
+        "native_seconds": 0.323499417,
+        "rust_seconds": 0.464206917,
+        "ratio": 1.4349544160074947,
+        "native_trials_seconds": [
+          0.323499417,
+          0.321420333,
+          0.328299541
+        ],
+        "rust_trials_seconds": [
+          0.464206917,
+          0.46518575,
+          0.456456625
+        ],
+        "native_median_absolute_deviation_seconds": 0.002079084000000009,
+        "rust_median_absolute_deviation_seconds": 0.0009788330000000123,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "4602",
+          "objective_bits": "4679441243620827025"
+        }
+      }
+    },
+    {
+      "name": "forplan",
+      "nonzeros": 4916,
+      "solve": {
+        "native_seconds": 0.001710459,
+        "rust_seconds": 0.0021885,
+        "ratio": 1.2794811217339908,
+        "native_trials_seconds": [
+          0.001715166,
+          0.00170875,
+          0.001710459
+        ],
+        "rust_trials_seconds": [
+          0.002211375,
+          0.002173042,
+          0.0021885
+        ],
+        "native_median_absolute_deviation_seconds": 1.708999999999912e-06,
+        "rust_median_absolute_deviation_seconds": 1.5457999999999878e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "101",
+          "objective_bits": "13872425784444221849"
+        }
+      }
+    },
+    {
+      "name": "ganges",
+      "nonzeros": 7021,
+      "solve": {
+        "native_seconds": 0.002837292,
+        "rust_seconds": 0.003812917,
+        "ratio": 1.343857805259381,
+        "native_trials_seconds": [
+          0.002857333,
+          0.002836083,
+          0.002837292
+        ],
+        "rust_trials_seconds": [
+          0.003863084,
+          0.003809,
+          0.003812917
+        ],
+        "native_median_absolute_deviation_seconds": 1.2089999999998456e-06,
+        "rust_median_absolute_deviation_seconds": 3.916999999999983e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "338",
+          "objective_bits": "13905639124509884037"
+        }
+      }
+    },
+    {
+      "name": "gfrd-pnc",
+      "nonzeros": 3467,
+      "solve": {
+        "native_seconds": 0.004260458,
+        "rust_seconds": 0.005370041,
+        "ratio": 1.260437492870485,
+        "native_trials_seconds": [
+          0.004260458,
+          0.004266542,
+          0.004120709
+        ],
+        "rust_trials_seconds": [
+          0.00537775,
+          0.005370041,
+          0.005231041
+        ],
+        "native_median_absolute_deviation_seconds": 6.0839999999999506e-06,
+        "rust_median_absolute_deviation_seconds": 7.708999999999841e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "472",
+          "objective_bits": "4709169230446631826"
+        }
+      }
+    },
+    {
+      "name": "greenbea",
+      "nonzeros": 31499,
+      "solve": {
+        "native_seconds": 0.282546167,
+        "rust_seconds": 0.382787667,
+        "ratio": 1.3547791890590397,
+        "native_trials_seconds": [
+          0.282546167,
+          0.283055542,
+          0.282395
+        ],
+        "rust_trials_seconds": [
+          0.384895166,
+          0.382787667,
+          0.379489791
+        ],
+        "native_median_absolute_deviation_seconds": 0.0001511670000000076,
+        "rust_median_absolute_deviation_seconds": 0.0021074990000000127,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "4462",
+          "objective_bits": "13948013546618288183"
+        }
+      }
+    },
+    {
+      "name": "greenbeb",
+      "nonzeros": 31499,
+      "solve": {
+        "native_seconds": 0.141026625,
+        "rust_seconds": 0.188615291,
+        "ratio": 1.3374445499209813,
+        "native_trials_seconds": [
+          0.14216875,
+          0.139177833,
+          0.141026625
+        ],
+        "rust_trials_seconds": [
+          0.188672833,
+          0.188615291,
+          0.187427708
+        ],
+        "native_median_absolute_deviation_seconds": 0.0011421250000000216,
+        "rust_median_absolute_deviation_seconds": 5.754200000002152e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "1985",
+          "objective_bits": "13929749564609764310"
+        }
+      }
+    },
+    {
+      "name": "grow15",
+      "nonzeros": 5665,
+      "solve": {
+        "native_seconds": 0.011014708,
+        "rust_seconds": 0.013877583,
+        "ratio": 1.2599138352101573,
+        "native_trials_seconds": [
+          0.010958333,
+          0.011014708,
+          0.011014875
+        ],
+        "rust_trials_seconds": [
+          0.013911667,
+          0.013877583,
+          0.013874666
+        ],
+        "native_median_absolute_deviation_seconds": 1.6700000000056947e-07,
+        "rust_median_absolute_deviation_seconds": 2.9169999999998503e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "441",
+          "objective_bits": "13950316433803878133"
+        }
+      }
+    },
+    {
+      "name": "grow22",
+      "nonzeros": 8318,
+      "solve": {
+        "native_seconds": 0.021788792,
+        "rust_seconds": 0.026800167,
+        "ratio": 1.22999783558446,
+        "native_trials_seconds": [
+          0.0218335,
+          0.021788792,
+          0.021743709
+        ],
+        "rust_trials_seconds": [
+          0.026845417,
+          0.026757708,
+          0.026800167
+        ],
+        "native_median_absolute_deviation_seconds": 4.470799999999747e-05,
+        "rust_median_absolute_deviation_seconds": 4.2458999999998165e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "550",
+          "objective_bits": "13953044750773195389"
+        }
+      }
+    },
+    {
+      "name": "grow7",
+      "nonzeros": 2633,
+      "solve": {
+        "native_seconds": 0.002470041,
+        "rust_seconds": 0.00307825,
+        "ratio": 1.246234374247229,
+        "native_trials_seconds": [
+          0.002470041,
+          0.002543541,
+          0.002408083
+        ],
+        "rust_trials_seconds": [
+          0.0030815,
+          0.00307825,
+          0.002998875
+        ],
+        "native_median_absolute_deviation_seconds": 6.195799999999998e-05,
+        "rust_median_absolute_deviation_seconds": 3.2500000000002145e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "169",
+          "objective_bits": "13945054818239547335"
+        }
+      }
+    },
+    {
+      "name": "israel",
+      "nonzeros": 2358,
+      "solve": {
+        "native_seconds": 0.001193833,
+        "rust_seconds": 0.001557708,
+        "ratio": 1.304795561858317,
+        "native_trials_seconds": [
+          0.001193833,
+          0.001189333,
+          0.001194917
+        ],
+        "rust_trials_seconds": [
+          0.001557708,
+          0.001547167,
+          0.001580209
+        ],
+        "native_median_absolute_deviation_seconds": 1.0839999999999374e-06,
+        "rust_median_absolute_deviation_seconds": 1.0541000000000196e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "113",
+          "objective_bits": "13919321369319521198"
+        }
+      }
+    },
+    {
+      "name": "kb2",
+      "nonzeros": 291,
+      "solve": {
+        "native_seconds": 0.000206208,
+        "rust_seconds": 0.000226292,
+        "ratio": 1.097396803227809,
+        "native_trials_seconds": [
+          0.000205916,
+          0.000212625,
+          0.000206208
+        ],
+        "rust_trials_seconds": [
+          0.000218042,
+          0.000226292,
+          0.000255833
+        ],
+        "native_median_absolute_deviation_seconds": 2.9199999999998975e-07,
+        "rust_median_absolute_deviation_seconds": 8.25000000000001e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "34",
+          "objective_bits": "13878782994462242105"
+        }
+      }
+    },
+    {
+      "name": "lotfi",
+      "nonzeros": 1086,
+      "solve": {
+        "native_seconds": 0.000383042,
+        "rust_seconds": 0.000450208,
+        "ratio": 1.1753489173510998,
+        "native_trials_seconds": [
+          0.000379542,
+          0.0003855,
+          0.000383042
+        ],
+        "rust_trials_seconds": [
+          0.000450208,
+          0.000445208,
+          0.000476667
+        ],
+        "native_median_absolute_deviation_seconds": 2.4579999999999958e-06,
+        "rust_median_absolute_deviation_seconds": 5.000000000000013e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "100",
+          "objective_bits": "13851176637087273932"
+        }
+      }
+    },
+    {
+      "name": "maros",
+      "nonzeros": 10006,
+      "solve": {
+        "native_seconds": 0.011610459,
+        "rust_seconds": 0.015181125,
+        "ratio": 1.3075387458842067,
+        "native_trials_seconds": [
+          0.011661792,
+          0.011610459,
+          0.011556333
+        ],
+        "rust_trials_seconds": [
+          0.01518225,
+          0.015181125,
+          0.015179375
+        ],
+        "native_median_absolute_deviation_seconds": 5.133300000000063e-05,
+        "rust_median_absolute_deviation_seconds": 1.1249999999993904e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "619",
+          "objective_bits": "13901585070606929309"
+        }
+      }
+    },
+    {
+      "name": "maros-r7",
+      "nonzeros": 151120,
+      "solve": {
+        "native_seconds": 0.366775083,
+        "rust_seconds": 0.467923542,
+        "ratio": 1.2757778913787337,
+        "native_trials_seconds": [
+          0.366775083,
+          0.366496166,
+          0.366943291
+        ],
+        "rust_trials_seconds": [
+          0.467461959,
+          0.468749334,
+          0.467923542
+        ],
+        "native_median_absolute_deviation_seconds": 0.00016820800000000302,
+        "rust_median_absolute_deviation_seconds": 0.00046158300000004315,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "2430",
+          "objective_bits": "4699181173046143214"
+        }
+      }
+    },
+    {
+      "name": "modszk1",
+      "nonzeros": 4158,
+      "solve": {
+        "native_seconds": 0.009713875,
+        "rust_seconds": 0.013394041,
+        "ratio": 1.3788566354827503,
+        "native_trials_seconds": [
+          0.009546584,
+          0.009713875,
+          0.00978375
+        ],
+        "rust_trials_seconds": [
+          0.013346709,
+          0.013394041,
+          0.0134085
+        ],
+        "native_median_absolute_deviation_seconds": 6.987500000000049e-05,
+        "rust_median_absolute_deviation_seconds": 1.4458999999999653e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "596",
+          "objective_bits": "4644348018114801504"
+        }
+      }
+    },
+    {
+      "name": "nesm",
+      "nonzeros": 13988,
+      "solve": {
+        "native_seconds": 0.038611209,
+        "rust_seconds": 0.051446458,
+        "ratio": 1.3324228723322287,
+        "native_trials_seconds": [
+          0.038706708,
+          0.038574333,
+          0.038611209
+        ],
+        "rust_trials_seconds": [
+          0.051446458,
+          0.051551542,
+          0.051428667
+        ],
+        "native_median_absolute_deviation_seconds": 3.687599999999819e-05,
+        "rust_median_absolute_deviation_seconds": 1.779100000000311e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "1968",
+          "objective_bits": "4713818625148591396"
+        }
+      }
+    },
+    {
+      "name": "perold",
+      "nonzeros": 6026,
+      "solve": {
+        "native_seconds": 0.028069292,
+        "rust_seconds": 0.036382875,
+        "ratio": 1.296180715922582,
+        "native_trials_seconds": [
+          0.028069292,
+          0.028056417,
+          0.028123792
+        ],
+        "rust_trials_seconds": [
+          0.036382875,
+          0.036385958,
+          0.036350417
+        ],
+        "native_median_absolute_deviation_seconds": 1.2874999999998998e-05,
+        "rust_median_absolute_deviation_seconds": 3.083000000000946e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "821",
+          "objective_bits": "13889754775936109195"
+        }
+      }
+    },
+    {
+      "name": "pilot",
+      "nonzeros": 43220,
+      "solve": {
+        "native_seconds": 0.543117458,
+        "rust_seconds": 0.642911084,
+        "ratio": 1.1837422541479048,
+        "native_trials_seconds": [
+          0.512435,
+          0.544151208,
+          0.543117458
+        ],
+        "rust_trials_seconds": [
+          0.623763834,
+          0.642911084,
+          0.659462875
+        ],
+        "native_median_absolute_deviation_seconds": 0.0010337500000000555,
+        "rust_median_absolute_deviation_seconds": 0.016551791000000038,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "3567",
+          "objective_bits": "13871486984191368151"
+        }
+      }
+    },
+    {
+      "name": "pilot.ja",
+      "nonzeros": 14706,
+      "solve": {
+        "native_seconds": 0.066056083,
+        "rust_seconds": 0.086227375,
+        "ratio": 1.305366153787835,
+        "native_trials_seconds": [
+          0.066056083,
+          0.066137041,
+          0.066026292
+        ],
+        "rust_trials_seconds": [
+          0.085983917,
+          0.088696292,
+          0.086227375
+        ],
+        "native_median_absolute_deviation_seconds": 2.9791000000001233e-05,
+        "rust_median_absolute_deviation_seconds": 0.00024345799999998807,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "1361",
+          "objective_bits": "13886815516181956827"
+        }
+      }
+    },
+    {
+      "name": "pilot.we",
+      "nonzeros": 9218,
+      "solve": {
+        "native_seconds": 0.039257166,
+        "rust_seconds": 0.054322042,
+        "ratio": 1.3837484346170073,
+        "native_trials_seconds": [
+          0.039257166,
+          0.039296417,
+          0.039159375
+        ],
+        "rust_trials_seconds": [
+          0.054322042,
+          0.054509208,
+          0.054160625
+        ],
+        "native_median_absolute_deviation_seconds": 3.9250999999997094e-05,
+        "rust_median_absolute_deviation_seconds": 0.00016141700000000397,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "1155",
+          "objective_bits": "13926467834649789251"
+        }
+      }
+    },
+    {
+      "name": "pilot4",
+      "nonzeros": 5145,
+      "solve": {
+        "native_seconds": 0.012121959,
+        "rust_seconds": 0.015834416,
+        "ratio": 1.306258831596444,
+        "native_trials_seconds": [
+          0.012187375,
+          0.012095917,
+          0.012121959
+        ],
+        "rust_trials_seconds": [
+          0.015834416,
+          0.015845917,
+          0.015798125
+        ],
+        "native_median_absolute_deviation_seconds": 2.6042000000000426e-05,
+        "rust_median_absolute_deviation_seconds": 1.1501000000000566e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "483",
+          "objective_bits": "13881266437184602097"
+        }
+      }
+    },
+    {
+      "name": "pilot87",
+      "nonzeros": 73804,
+      "solve": {
+        "native_seconds": 1.570696583,
+        "rust_seconds": 1.698078459,
+        "ratio": 1.081098970596029,
+        "native_trials_seconds": [
+          1.56303125,
+          1.576551542,
+          1.570696583
+        ],
+        "rust_trials_seconds": [
+          1.690484875,
+          1.717377458,
+          1.698078459
+        ],
+        "native_median_absolute_deviation_seconds": 0.005854959000000104,
+        "rust_median_absolute_deviation_seconds": 0.0075935839999998755,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "5019",
+          "objective_bits": "4644015360753420216"
+        }
+      }
+    },
+    {
+      "name": "pilotnov",
+      "nonzeros": 13129,
+      "solve": {
+        "native_seconds": 0.039294167,
+        "rust_seconds": 0.050330375,
+        "ratio": 1.2808612280799845,
+        "native_trials_seconds": [
+          0.039448209,
+          0.039294167,
+          0.038875833
+        ],
+        "rust_trials_seconds": [
+          0.050359333,
+          0.050330375,
+          0.049960375
+        ],
+        "native_median_absolute_deviation_seconds": 0.00015404200000000007,
+        "rust_median_absolute_deviation_seconds": 2.8958000000002537e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "751",
+          "objective_bits": "13885038859018135452"
+        }
+      }
+    },
+    {
+      "name": "qap8",
+      "nonzeros": 8304,
+      "solve": {
+        "native_seconds": 0.131642334,
+        "rust_seconds": 0.174134541,
+        "ratio": 1.3227852751380116,
+        "native_trials_seconds": [
+          0.131642334,
+          0.134052667,
+          0.131180417
+        ],
+        "rust_trials_seconds": [
+          0.173809458,
+          0.174899833,
+          0.174134541
+        ],
+        "native_median_absolute_deviation_seconds": 0.00046191700000000613,
+        "rust_median_absolute_deviation_seconds": 0.0003250830000000038,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "1966",
+          "objective_bits": "4641364036284317699"
+        }
+      }
+    },
+    {
+      "name": "recipe",
+      "nonzeros": 752,
+      "solve": {
+        "native_seconds": 0.000151083,
+        "rust_seconds": 0.0001425,
+        "ratio": 0.9431901669943011,
+        "native_trials_seconds": [
+          0.000151083,
+          0.000151292,
+          0.00014625
+        ],
+        "rust_trials_seconds": [
+          0.0001425,
+          0.000137291,
+          0.000145792
+        ],
+        "native_median_absolute_deviation_seconds": 2.0900000000001104e-07,
+        "rust_median_absolute_deviation_seconds": 3.2920000000000085e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "22",
+          "objective_bits": "13866770011320804704"
+        }
+      }
+    },
+    {
+      "name": "sc105",
+      "nonzeros": 281,
+      "solve": {
+        "native_seconds": 0.000295459,
+        "rust_seconds": 0.0003425,
+        "ratio": 1.1592132918611382,
+        "native_trials_seconds": [
+          0.000297917,
+          0.000295459,
+          0.000279541
+        ],
+        "rust_trials_seconds": [
+          0.000351542,
+          0.0003425,
+          0.000341583
+        ],
+        "native_median_absolute_deviation_seconds": 2.4579999999999958e-06,
+        "rust_median_absolute_deviation_seconds": 9.169999999999643e-07,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "43",
+          "objective_bits": "13855915641146181966"
+        }
+      }
+    },
+    {
+      "name": "sc205",
+      "nonzeros": 552,
+      "solve": {
+        "native_seconds": 0.000783458,
+        "rust_seconds": 0.000988583,
+        "ratio": 1.2618200337478205,
+        "native_trials_seconds": [
+          0.000781625,
+          0.000787208,
+          0.000783458
+        ],
+        "rust_trials_seconds": [
+          0.000988583,
+          0.000987291,
+          0.001010375
+        ],
+        "native_median_absolute_deviation_seconds": 1.8330000000000212e-06,
+        "rust_median_absolute_deviation_seconds": 1.2919999999999598e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "96",
+          "objective_bits": "13855915641146181962"
+        }
+      }
+    },
+    {
+      "name": "sc50a",
+      "nonzeros": 131,
+      "solve": {
+        "native_seconds": 0.00015325,
+        "rust_seconds": 0.000147042,
+        "ratio": 0.9594910277324633,
+        "native_trials_seconds": [
+          0.00015325,
+          0.000155625,
+          0.000151083
+        ],
+        "rust_trials_seconds": [
+          0.000147292,
+          0.000140958,
+          0.000147042
+        ],
+        "native_median_absolute_deviation_seconds": 2.1670000000000218e-06,
+        "rust_median_absolute_deviation_seconds": 2.500000000000061e-07,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "23",
+          "objective_bits": "13857616520869432760"
+        }
+      }
+    },
+    {
+      "name": "sc50b",
+      "nonzeros": 119,
+      "solve": {
+        "native_seconds": 0.000134209,
+        "rust_seconds": 0.000114875,
+        "ratio": 0.8559411067812145,
+        "native_trials_seconds": [
+          0.000134209,
+          0.000134334,
+          0.000129167
+        ],
+        "rust_trials_seconds": [
+          0.000114875,
+          0.000108625,
+          0.00011775
+        ],
+        "native_median_absolute_deviation_seconds": 1.250000000000166e-07,
+        "rust_median_absolute_deviation_seconds": 2.875000000000002e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "18",
+          "objective_bits": "13857998265884082173"
+        }
+      }
+    },
+    {
+      "name": "scagr25",
+      "nonzeros": 2029,
+      "solve": {
+        "native_seconds": 0.002039583,
+        "rust_seconds": 0.002554625,
+        "ratio": 1.2525231873378038,
+        "native_trials_seconds": [
+          0.002047458,
+          0.002039583,
+          0.002035875
+        ],
+        "rust_trials_seconds": [
+          0.00257775,
+          0.002524,
+          0.002554625
+        ],
+        "native_median_absolute_deviation_seconds": 3.70800000000027e-06,
+        "rust_median_absolute_deviation_seconds": 2.3125000000000142e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "224",
+          "objective_bits": "13937554336519409877"
+        }
+      }
+    },
+    {
+      "name": "scagr7",
+      "nonzeros": 553,
+      "solve": {
+        "native_seconds": 0.000380875,
+        "rust_seconds": 0.000430417,
+        "ratio": 1.1300741713160487,
+        "native_trials_seconds": [
+          0.000380875,
+          0.000386792,
+          0.000378417
+        ],
+        "rust_trials_seconds": [
+          0.000430417,
+          0.000424584,
+          0.000436917
+        ],
+        "native_median_absolute_deviation_seconds": 2.4579999999999958e-06,
+        "rust_median_absolute_deviation_seconds": 5.83300000000001e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "73",
+          "objective_bits": "13925633069727067517"
+        }
+      }
+    },
+    {
+      "name": "scfxm1",
+      "nonzeros": 2612,
+      "solve": {
+        "native_seconds": 0.002252625,
+        "rust_seconds": 0.002730584,
+        "ratio": 1.2121786804283892,
+        "native_trials_seconds": [
+          0.00227775,
+          0.002252625,
+          0.002236333
+        ],
+        "rust_trials_seconds": [
+          0.002761792,
+          0.002710458,
+          0.002730584
+        ],
+        "native_median_absolute_deviation_seconds": 1.6291999999999782e-05,
+        "rust_median_absolute_deviation_seconds": 2.0126000000000085e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "249",
+          "objective_bits": "4670791574130238429"
+        }
+      }
+    },
+    {
+      "name": "scfxm2",
+      "nonzeros": 5229,
+      "solve": {
+        "native_seconds": 0.006394042,
+        "rust_seconds": 0.007938667,
+        "ratio": 1.2415725451912891,
+        "native_trials_seconds": [
+          0.006394042,
+          0.006393875,
+          0.0064435
+        ],
+        "rust_trials_seconds": [
+          0.007946375,
+          0.007935875,
+          0.007938667
+        ],
+        "native_median_absolute_deviation_seconds": 1.669999999997021e-07,
+        "rust_median_absolute_deviation_seconds": 2.7919999999997253e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "489",
+          "objective_bits": "4675271361566707573"
+        }
+      }
+    },
+    {
+      "name": "scfxm3",
+      "nonzeros": 7846,
+      "solve": {
+        "native_seconds": 0.012527584,
+        "rust_seconds": 0.015576542,
+        "ratio": 1.243379569436533,
+        "native_trials_seconds": [
+          0.012527584,
+          0.012558667,
+          0.012490167
+        ],
+        "rust_trials_seconds": [
+          0.015576542,
+          0.015600584,
+          0.015568125
+        ],
+        "native_median_absolute_deviation_seconds": 3.108300000000119e-05,
+        "rust_median_absolute_deviation_seconds": 8.417000000000147e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "756",
+          "objective_bits": "4677778384552822071"
+        }
+      }
+    },
+    {
+      "name": "scorpion",
+      "nonzeros": 1708,
+      "solve": {
+        "native_seconds": 0.000943333,
+        "rust_seconds": 0.001115958,
+        "ratio": 1.182994764309104,
+        "native_trials_seconds": [
+          0.000944,
+          0.000942542,
+          0.000943333
+        ],
+        "rust_trials_seconds": [
+          0.001115958,
+          0.001110167,
+          0.001134125
+        ],
+        "native_median_absolute_deviation_seconds": 6.669999999999853e-07,
+        "rust_median_absolute_deviation_seconds": 5.790999999999999e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "131",
+          "objective_bits": "4655974895770413021"
+        }
+      }
+    },
+    {
+      "name": "scrs8",
+      "nonzeros": 4029,
+      "solve": {
+        "native_seconds": 0.00383175,
+        "rust_seconds": 0.004882916,
+        "ratio": 1.274330527826711,
+        "native_trials_seconds": [
+          0.00383175,
+          0.003841792,
+          0.003826792
+        ],
+        "rust_trials_seconds": [
+          0.0048825,
+          0.004882916,
+          0.004903708
+        ],
+        "native_median_absolute_deviation_seconds": 4.958000000000219e-06,
+        "rust_median_absolute_deviation_seconds": 4.160000000004785e-07,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "284",
+          "objective_bits": "4651165495944312468"
+        }
+      }
+    },
+    {
+      "name": "scsd1",
+      "nonzeros": 3148,
+      "solve": {
+        "native_seconds": 0.001049375,
+        "rust_seconds": 0.0013095,
+        "ratio": 1.2478856462179868,
+        "native_trials_seconds": [
+          0.001044458,
+          0.001050208,
+          0.001049375
+        ],
+        "rust_trials_seconds": [
+          0.0013095,
+          0.00129525,
+          0.001310584
+        ],
+        "native_median_absolute_deviation_seconds": 8.329999999999969e-07,
+        "rust_median_absolute_deviation_seconds": 1.0840000000001543e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "84",
+          "objective_bits": "4621068517655392405"
+        }
+      }
+    },
+    {
+      "name": "scsd6",
+      "nonzeros": 5666,
+      "solve": {
+        "native_seconds": 0.002802334,
+        "rust_seconds": 0.003503,
+        "ratio": 1.2500294397455836,
+        "native_trials_seconds": [
+          0.002802334,
+          0.002783958,
+          0.002808666
+        ],
+        "rust_trials_seconds": [
+          0.003486041,
+          0.003503,
+          0.003513375
+        ],
+        "native_median_absolute_deviation_seconds": 6.331999999999952e-06,
+        "rust_median_absolute_deviation_seconds": 1.0374999999999968e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "200",
+          "objective_bits": "4632304060482300557"
+        }
+      }
+    },
+    {
+      "name": "scsd8",
+      "nonzeros": 11334,
+      "solve": {
+        "native_seconds": 0.011588709,
+        "rust_seconds": 0.014620834,
+        "ratio": 1.2616447612930826,
+        "native_trials_seconds": [
+          0.011588709,
+          0.011643042,
+          0.011562125
+        ],
+        "rust_trials_seconds": [
+          0.014620834,
+          0.014611375,
+          0.014688666
+        ],
+        "native_median_absolute_deviation_seconds": 2.658400000000137e-05,
+        "rust_median_absolute_deviation_seconds": 9.458999999999856e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "528",
+          "objective_bits": "4651171680003423992"
+        }
+      }
+    },
+    {
+      "name": "sctap1",
+      "nonzeros": 2052,
+      "solve": {
+        "native_seconds": 0.001028333,
+        "rust_seconds": 0.0012585,
+        "ratio": 1.2238253561832597,
+        "native_trials_seconds": [
+          0.001028333,
+          0.001048667,
+          0.001021542
+        ],
+        "rust_trials_seconds": [
+          0.001273708,
+          0.001250125,
+          0.0012585
+        ],
+        "native_median_absolute_deviation_seconds": 6.790999999999915e-06,
+        "rust_median_absolute_deviation_seconds": 8.375000000000136e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "130",
+          "objective_bits": "4653925956631658493"
+        }
+      }
+    },
+    {
+      "name": "sctap2",
+      "nonzeros": 8124,
+      "solve": {
+        "native_seconds": 0.003093792,
+        "rust_seconds": 0.00400325,
+        "ratio": 1.2939622314622314,
+        "native_trials_seconds": [
+          0.003093792,
+          0.00309,
+          0.0031475
+        ],
+        "rust_trials_seconds": [
+          0.004013708,
+          0.00397475,
+          0.00400325
+        ],
+        "native_median_absolute_deviation_seconds": 3.7920000000002917e-06,
+        "rust_median_absolute_deviation_seconds": 1.0458000000000515e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "292",
+          "objective_bits": "4655300597483321987"
+        }
+      }
+    },
+    {
+      "name": "sctap3",
+      "nonzeros": 10734,
+      "solve": {
+        "native_seconds": 0.006001667,
+        "rust_seconds": 0.007565542,
+        "ratio": 1.2605734373466573,
+        "native_trials_seconds": [
+          0.006010125,
+          0.006001667,
+          0.005989458
+        ],
+        "rust_trials_seconds": [
+          0.007565542,
+          0.007531125,
+          0.007572541
+        ],
+        "native_median_absolute_deviation_seconds": 8.45800000000025e-06,
+        "rust_median_absolute_deviation_seconds": 6.999000000000588e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "474",
+          "objective_bits": "4653977633678163968"
+        }
+      }
+    },
+    {
+      "name": "seba",
+      "nonzeros": 4874,
+      "solve": {
+        "native_seconds": 9.475e-05,
+        "rust_seconds": 6.5416e-05,
+        "ratio": 0.6904063324538259,
+        "native_trials_seconds": [
+          9.475e-05,
+          9.9167e-05,
+          9.45e-05
+        ],
+        "rust_trials_seconds": [
+          6.5416e-05,
+          5.8625e-05,
+          6.7292e-05
+        ],
+        "native_median_absolute_deviation_seconds": 2.499999999999925e-07,
+        "rust_median_absolute_deviation_seconds": 1.8760000000000071e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "19",
+          "objective_bits": "4669863157773946064"
+        }
+      }
+    },
+    {
+      "name": "share1b",
+      "nonzeros": 1182,
+      "solve": {
+        "native_seconds": 0.001456833,
+        "rust_seconds": 0.001771917,
+        "ratio": 1.2162801089761146,
+        "native_trials_seconds": [
+          0.001455917,
+          0.001461208,
+          0.001456833
+        ],
+        "rust_trials_seconds": [
+          0.001753917,
+          0.001772083,
+          0.001771917
+        ],
+        "native_median_absolute_deviation_seconds": 9.160000000001112e-07,
+        "rust_median_absolute_deviation_seconds": 1.6600000000001162e-07,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "161",
+          "objective_bits": "13903371627961679097"
+        }
+      }
+    },
+    {
+      "name": "share2b",
+      "nonzeros": 730,
+      "solve": {
+        "native_seconds": 0.000510459,
+        "rust_seconds": 0.000597459,
+        "ratio": 1.1704348439345764,
+        "native_trials_seconds": [
+          0.0005045,
+          0.000512625,
+          0.000510459
+        ],
+        "rust_trials_seconds": [
+          0.000597459,
+          0.000590875,
+          0.000609459
+        ],
+        "native_median_absolute_deviation_seconds": 2.165999999999952e-06,
+        "rust_median_absolute_deviation_seconds": 6.5839999999999085e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "75",
+          "objective_bits": "13869393291970171697"
+        }
+      }
+    },
+    {
+      "name": "shell",
+      "nonzeros": 4900,
+      "solve": {
+        "native_seconds": 0.002195333,
+        "rust_seconds": 0.002634416,
+        "ratio": 1.2000074703928745,
+        "native_trials_seconds": [
+          0.002194625,
+          0.002195333,
+          0.002216166
+        ],
+        "rust_trials_seconds": [
+          0.002634416,
+          0.002648833,
+          0.00261025
+        ],
+        "native_median_absolute_deviation_seconds": 7.079999999998719e-07,
+        "rust_median_absolute_deviation_seconds": 1.4417000000000076e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "342",
+          "objective_bits": "4742856988977790976"
+        }
+      }
+    },
+    {
+      "name": "ship04l",
+      "nonzeros": 8450,
+      "solve": {
+        "native_seconds": 0.002239292,
+        "rust_seconds": 0.002933417,
+        "ratio": 1.3099752064491812,
+        "native_trials_seconds": [
+          0.002239292,
+          0.002273666,
+          0.00221425
+        ],
+        "rust_trials_seconds": [
+          0.002983875,
+          0.002923125,
+          0.002933417
+        ],
+        "native_median_absolute_deviation_seconds": 2.504199999999986e-05,
+        "rust_median_absolute_deviation_seconds": 1.0291999999999853e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "302",
+          "objective_bits": "4700453081961753821"
+        }
+      }
+    },
+    {
+      "name": "ship04s",
+      "nonzeros": 5810,
+      "solve": {
+        "native_seconds": 0.001451958,
+        "rust_seconds": 0.001812,
+        "ratio": 1.2479699826028026,
+        "native_trials_seconds": [
+          0.001451958,
+          0.001447625,
+          0.001478625
+        ],
+        "rust_trials_seconds": [
+          0.001811916,
+          0.00182125,
+          0.001812
+        ],
+        "native_median_absolute_deviation_seconds": 4.333000000000028e-06,
+        "rust_median_absolute_deviation_seconds": 8.400000000002156e-08,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "216",
+          "objective_bits": "4700476232533304228"
+        }
+      }
+    },
+    {
+      "name": "ship08l",
+      "nonzeros": 17085,
+      "solve": {
+        "native_seconds": 0.005490833,
+        "rust_seconds": 0.00786975,
+        "ratio": 1.4332524773563502,
+        "native_trials_seconds": [
+          0.005525,
+          0.005490833,
+          0.005482333
+        ],
+        "rust_trials_seconds": [
+          0.007868833,
+          0.00787725,
+          0.00786975
+        ],
+        "native_median_absolute_deviation_seconds": 8.499999999999827e-06,
+        "rust_median_absolute_deviation_seconds": 9.169999999995848e-07,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "557",
+          "objective_bits": "4700950141419231517"
+        }
+      }
+    },
+    {
+      "name": "ship08s",
+      "nonzeros": 9501,
+      "solve": {
+        "native_seconds": 0.002328416,
+        "rust_seconds": 0.00306625,
+        "ratio": 1.316882378406608,
+        "native_trials_seconds": [
+          0.0023195,
+          0.002330541,
+          0.002328416
+        ],
+        "rust_trials_seconds": [
+          0.003047459,
+          0.003079625,
+          0.00306625
+        ],
+        "native_median_absolute_deviation_seconds": 2.1250000000003905e-06,
+        "rust_median_absolute_deviation_seconds": 1.3374999999999932e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "272",
+          "objective_bits": "4700997570739411146"
+        }
+      }
+    },
+    {
+      "name": "ship12l",
+      "nonzeros": 21597,
+      "solve": {
+        "native_seconds": 0.004769042,
+        "rust_seconds": 0.006567584,
+        "ratio": 1.3771285721534847,
+        "native_trials_seconds": [
+          0.004769042,
+          0.004767542,
+          0.004777
+        ],
+        "rust_trials_seconds": [
+          0.00653875,
+          0.006567584,
+          0.00659775
+        ],
+        "native_median_absolute_deviation_seconds": 1.5000000000006328e-06,
+        "rust_median_absolute_deviation_seconds": 2.8833999999999284e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "657",
+          "objective_bits": "4699065220752550310"
+        }
+      }
+    },
+    {
+      "name": "ship12s",
+      "nonzeros": 10941,
+      "solve": {
+        "native_seconds": 0.002021209,
+        "rust_seconds": 0.002636208,
+        "ratio": 1.3042728386821947,
+        "native_trials_seconds": [
+          0.002021209,
+          0.002061125,
+          0.002015708
+        ],
+        "rust_trials_seconds": [
+          0.002624833,
+          0.002636208,
+          0.002639709
+        ],
+        "native_median_absolute_deviation_seconds": 5.50099999999977e-06,
+        "rust_median_absolute_deviation_seconds": 3.500999999999938e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "342",
+          "objective_bits": "4699147032213352617"
+        }
+      }
+    },
+    {
+      "name": "sierra",
+      "nonzeros": 9252,
+      "solve": {
+        "native_seconds": 0.003387917,
+        "rust_seconds": 0.004218708,
+        "ratio": 1.2452217690102798,
+        "native_trials_seconds": [
+          0.003387917,
+          0.003393,
+          0.003378458
+        ],
+        "rust_trials_seconds": [
+          0.004196458,
+          0.004218708,
+          0.004249
+        ],
+        "native_median_absolute_deviation_seconds": 5.083000000000344e-06,
+        "rust_median_absolute_deviation_seconds": 2.22499999999997e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "313",
+          "objective_bits": "4714526395867353106"
+        }
+      }
+    },
+    {
+      "name": "stair",
+      "nonzeros": 3857,
+      "solve": {
+        "native_seconds": 0.005677042,
+        "rust_seconds": 0.006964459,
+        "ratio": 1.2267760217380812,
+        "native_trials_seconds": [
+          0.005677042,
+          0.005673208,
+          0.005754583
+        ],
+        "rust_trials_seconds": [
+          0.006998042,
+          0.006964459,
+          0.006959542
+        ],
+        "native_median_absolute_deviation_seconds": 3.8340000000003024e-06,
+        "rust_median_absolute_deviation_seconds": 4.917000000000116e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "224",
+          "objective_bits": "13866416723323415797"
+        }
+      }
+    },
+    {
+      "name": "standata",
+      "nonzeros": 3038,
+      "solve": {
+        "native_seconds": 0.000368875,
+        "rust_seconds": 0.000459917,
+        "ratio": 1.2468098949508641,
+        "native_trials_seconds": [
+          0.000365625,
+          0.000368875,
+          0.000378959
+        ],
+        "rust_trials_seconds": [
+          0.000456208,
+          0.00046025,
+          0.000459917
+        ],
+        "native_median_absolute_deviation_seconds": 3.2499999999999977e-06,
+        "rust_median_absolute_deviation_seconds": 3.329999999999848e-07,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "74",
+          "objective_bits": "4653246236344344117"
+        }
+      }
+    },
+    {
+      "name": "standgub",
+      "nonzeros": 3147,
+      "solve": {
+        "native_seconds": 0.000369333,
+        "rust_seconds": 0.000456708,
+        "ratio": 1.2365751232627467,
+        "native_trials_seconds": [
+          0.000369333,
+          0.000371125,
+          0.000364
+        ],
+        "rust_trials_seconds": [
+          0.000456708,
+          0.000450375,
+          0.000464
+        ],
+        "native_median_absolute_deviation_seconds": 1.791999999999972e-06,
+        "rust_median_absolute_deviation_seconds": 6.333000000000022e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "74",
+          "objective_bits": "4653246236344344117"
+        }
+      }
+    },
+    {
+      "name": "standmps",
+      "nonzeros": 3686,
+      "solve": {
+        "native_seconds": 0.001257416,
+        "rust_seconds": 0.001642375,
+        "ratio": 1.306150868129561,
+        "native_trials_seconds": [
+          0.001255875,
+          0.001258542,
+          0.001257416
+        ],
+        "rust_trials_seconds": [
+          0.0016415,
+          0.001642375,
+          0.001646209
+        ],
+        "native_median_absolute_deviation_seconds": 1.126000000000165e-06,
+        "rust_median_absolute_deviation_seconds": 8.750000000000077e-07,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "223",
+          "objective_bits": "4653898545806778041"
+        }
+      }
+    },
+    {
+      "name": "stocfor1",
+      "nonzeros": 474,
+      "solve": {
+        "native_seconds": 0.000215042,
+        "rust_seconds": 0.000235042,
+        "ratio": 1.0930050873782795,
+        "native_trials_seconds": [
+          0.000215042,
+          0.00021625,
+          0.000213292
+        ],
+        "rust_trials_seconds": [
+          0.000235042,
+          0.000228333,
+          0.00023875
+        ],
+        "native_median_absolute_deviation_seconds": 1.2079999999999925e-06,
+        "rust_median_absolute_deviation_seconds": 3.707999999999999e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "25",
+          "objective_bits": "13899257986203814691"
+        }
+      }
+    },
+    {
+      "name": "stocfor2",
+      "nonzeros": 9492,
+      "solve": {
+        "native_seconds": 0.010036416,
+        "rust_seconds": 0.013677042,
+        "ratio": 1.3627416400436172,
+        "native_trials_seconds": [
+          0.010105125,
+          0.010036416,
+          0.010015125
+        ],
+        "rust_trials_seconds": [
+          0.013677042,
+          0.013664417,
+          0.013745375
+        ],
+        "native_median_absolute_deviation_seconds": 2.129099999999967e-05,
+        "rust_median_absolute_deviation_seconds": 1.2625000000000483e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "594",
+          "objective_bits": "13898968324307290449"
+        }
+      }
+    },
+    {
+      "name": "stocfor3",
+      "nonzeros": 74004,
+      "solve": {
+        "native_seconds": 0.261736583,
+        "rust_seconds": 0.354442083,
+        "ratio": 1.354193895776503,
+        "native_trials_seconds": [
+          0.261736583,
+          0.261673292,
+          0.262430083
+        ],
+        "rust_trials_seconds": [
+          0.354442083,
+          0.354347208,
+          0.354561417
+        ],
+        "native_median_absolute_deviation_seconds": 6.329100000002086e-05,
+        "rust_median_absolute_deviation_seconds": 9.487499999999427e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "4801",
+          "objective_bits": "13899099217786371613"
+        }
+      }
+    },
+    {
+      "name": "truss",
+      "nonzeros": 36642,
+      "solve": {
+        "native_seconds": 0.174649042,
+        "rust_seconds": 0.232847208,
+        "ratio": 1.3332292312259004,
+        "native_trials_seconds": [
+          0.174722708,
+          0.174649042,
+          0.174521
+        ],
+        "rust_trials_seconds": [
+          0.233673667,
+          0.232405625,
+          0.232847208
+        ],
+        "native_median_absolute_deviation_seconds": 7.366600000000001e-05,
+        "rust_median_absolute_deviation_seconds": 0.0004415829999999954,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "3262",
+          "objective_bits": "4691626008699510870"
+        }
+      }
+    },
+    {
+      "name": "tuff",
+      "nonzeros": 4523,
+      "solve": {
+        "native_seconds": 0.001068042,
+        "rust_seconds": 0.001333583,
+        "ratio": 1.2486241177781399,
+        "native_trials_seconds": [
+          0.001081417,
+          0.001068042,
+          0.001066584
+        ],
+        "rust_trials_seconds": [
+          0.001333583,
+          0.001329666,
+          0.001339833
+        ],
+        "native_median_absolute_deviation_seconds": 1.4579999999999715e-06,
+        "rust_median_absolute_deviation_seconds": 3.916999999999983e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "60",
+          "objective_bits": "4598934486181956792"
+        }
+      }
+    },
+    {
+      "name": "vtp.base",
+      "nonzeros": 914,
+      "solve": {
+        "native_seconds": 0.00020025,
+        "rust_seconds": 0.000201583,
+        "ratio": 1.0066566791510612,
+        "native_trials_seconds": [
+          0.00020025,
+          0.000205667,
+          0.000198083
+        ],
+        "rust_trials_seconds": [
+          0.000201583,
+          0.000194166,
+          0.000219916
+        ],
+        "native_median_absolute_deviation_seconds": 2.1669999999999947e-06,
+        "rust_median_absolute_deviation_seconds": 7.416999999999987e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "29",
+          "objective_bits": "4683658363374789228"
+        }
+      }
+    },
+    {
+      "name": "wood1p",
+      "nonzeros": 70216,
+      "solve": {
+        "native_seconds": 0.020918084,
+        "rust_seconds": 0.027648417,
+        "ratio": 1.3217471064749526,
+        "native_trials_seconds": [
+          0.020880209,
+          0.020919541,
+          0.020918084
+        ],
+        "rust_trials_seconds": [
+          0.027644834,
+          0.027648417,
+          0.02765875
+        ],
+        "native_median_absolute_deviation_seconds": 1.4569999999998473e-06,
+        "rust_median_absolute_deviation_seconds": 3.583000000001446e-06,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "347",
+          "objective_bits": "4609177073935740909"
+        }
+      }
+    },
+    {
+      "name": "woodw",
+      "nonzeros": 37478,
+      "solve": {
+        "native_seconds": 0.018077166,
+        "rust_seconds": 0.025622375,
+        "ratio": 1.417388931428743,
+        "native_trials_seconds": [
+          0.018039334,
+          0.018089583,
+          0.018077166
+        ],
+        "rust_trials_seconds": [
+          0.025685416,
+          0.025622375,
+          0.025519833
+        ],
+        "native_median_absolute_deviation_seconds": 1.2417000000000677e-05,
+        "rust_median_absolute_deviation_seconds": 6.304099999999979e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "662",
+          "objective_bits": "4608553658300238677"
+        }
+      }
+    }
+  ]
+}

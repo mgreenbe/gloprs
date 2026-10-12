@@ -1,0 +1,3469 @@
+{
+  "machine": "macOS-15.6.1-arm64-arm-64bit-Mach-O",
+  "timing_scope": "whole process, including MPS parsing; macOS /usr/bin/time -l",
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "trials": 3,
+  "summary": {
+    "median_model_rss_ratio": 0.19412044149753377,
+    "maximum_native_peak_rss_bytes": 43565056,
+    "maximum_rust_peak_rss_bytes": 34930688
+  },
+  "results": [
+    {
+      "name": "25fv47",
+      "native_peak_rss_bytes": 20676608,
+      "rust_peak_rss_bytes": 5373952,
+      "rss_ratio": 0.25990491283676703,
+      "native_peak_footprint_bytes": 8389824,
+      "rust_peak_footprint_bytes": 4522816,
+      "native_trials": [
+        [
+          21184512,
+          8914176
+        ],
+        [
+          20676608,
+          8389824
+        ],
+        [
+          20676608,
+          8389824
+        ]
+      ],
+      "rust_trials": [
+        [
+          5373952,
+          4522816
+        ],
+        [
+          5373952,
+          4522816
+        ],
+        [
+          5373952,
+          4522816
+        ]
+      ]
+    },
+    {
+      "name": "80bau3b",
+      "native_peak_rss_bytes": 24510464,
+      "rust_peak_rss_bytes": 10797056,
+      "rss_ratio": 0.4405080213903743,
+      "native_peak_footprint_bytes": 12272896,
+      "rust_peak_footprint_bytes": 9438016,
+      "native_trials": [
+        [
+          24510464,
+          12272896
+        ],
+        [
+          24510464,
+          12272896
+        ],
+        [
+          24510464,
+          12256448
+        ]
+      ],
+      "rust_trials": [
+        [
+          10797056,
+          9438016
+        ],
+        [
+          10797056,
+          9438016
+        ],
+        [
+          10797056,
+          9438016
+        ]
+      ]
+    },
+    {
+      "name": "adlittle",
+      "native_peak_rss_bytes": 18055168,
+      "rust_peak_rss_bytes": 2228224,
+      "rss_ratio": 0.12341197822141561,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 1491776,
+      "native_trials": [
+        [
+          18055168,
+          6751360
+        ],
+        [
+          18055168,
+          6767808
+        ],
+        [
+          18055168,
+          6784256
+        ]
+      ],
+      "rust_trials": [
+        [
+          2228224,
+          1508224
+        ],
+        [
+          2228224,
+          1491776
+        ],
+        [
+          2228224,
+          1491776
+        ]
+      ]
+    },
+    {
+      "name": "afiro",
+      "native_peak_rss_bytes": 18006016,
+      "rust_peak_rss_bytes": 2031616,
+      "rss_ratio": 0.11282984531392175,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 1278720,
+      "native_trials": [
+        [
+          18006016,
+          6751360
+        ],
+        [
+          18006016,
+          6751360
+        ],
+        [
+          18006016,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          2031616,
+          1278720
+        ],
+        [
+          2031616,
+          1295168
+        ],
+        [
+          2031616,
+          1278720
+        ]
+      ]
+    },
+    {
+      "name": "agg",
+      "native_peak_rss_bytes": 18644992,
+      "rust_peak_rss_bytes": 2867200,
+      "rss_ratio": 0.15377855887521968,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 2130752,
+      "native_trials": [
+        [
+          18644992,
+          6767808
+        ],
+        [
+          18644992,
+          6767808
+        ],
+        [
+          18644992,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          2867200,
+          2130752
+        ],
+        [
+          2867200,
+          2130752
+        ],
+        [
+          2867200,
+          2147200
+        ]
+      ]
+    },
+    {
+      "name": "agg2",
+      "native_peak_rss_bytes": 18825216,
+      "rust_peak_rss_bytes": 3227648,
+      "rss_ratio": 0.17145343777197564,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 2491200,
+      "native_trials": [
+        [
+          18825216,
+          6751360
+        ],
+        [
+          18825216,
+          6784256
+        ],
+        [
+          18825216,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          3227648,
+          2491200
+        ],
+        [
+          3227648,
+          2491200
+        ],
+        [
+          3227648,
+          2491200
+        ]
+      ]
+    },
+    {
+      "name": "agg3",
+      "native_peak_rss_bytes": 18857984,
+      "rust_peak_rss_bytes": 3244032,
+      "rss_ratio": 0.17202432667245873,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 2507584,
+      "native_trials": [
+        [
+          18857984,
+          6784256
+        ],
+        [
+          18857984,
+          6751360
+        ],
+        [
+          18857984,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          3244032,
+          2507584
+        ],
+        [
+          3244032,
+          2507584
+        ],
+        [
+          3244032,
+          2507584
+        ]
+      ]
+    },
+    {
+      "name": "bandm",
+      "native_peak_rss_bytes": 18907136,
+      "rust_peak_rss_bytes": 3178496,
+      "rss_ratio": 0.1681109185441941,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 2442048,
+      "native_trials": [
+        [
+          18907136,
+          6751360
+        ],
+        [
+          18907136,
+          6751360
+        ],
+        [
+          18907136,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          3178496,
+          2442048
+        ],
+        [
+          3178496,
+          2442048
+        ],
+        [
+          3178496,
+          2442048
+        ]
+      ]
+    },
+    {
+      "name": "beaconfd",
+      "native_peak_rss_bytes": 18432000,
+      "rust_peak_rss_bytes": 2736128,
+      "rss_ratio": 0.14844444444444443,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 1999680,
+      "native_trials": [
+        [
+          18432000,
+          6767808
+        ],
+        [
+          18432000,
+          6784256
+        ],
+        [
+          18432000,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          2736128,
+          1999680
+        ],
+        [
+          2736128,
+          1999680
+        ],
+        [
+          2736128,
+          1999680
+        ]
+      ]
+    },
+    {
+      "name": "blend",
+      "native_peak_rss_bytes": 18006016,
+      "rust_peak_rss_bytes": 2179072,
+      "rss_ratio": 0.12101910828025478,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 1426176,
+      "native_trials": [
+        [
+          18006016,
+          6767808
+        ],
+        [
+          18006016,
+          6751360
+        ],
+        [
+          18006016,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          2179072,
+          1426176
+        ],
+        [
+          2179072,
+          1426176
+        ],
+        [
+          2179072,
+          1442624
+        ]
+      ]
+    },
+    {
+      "name": "bnl1",
+      "native_peak_rss_bytes": 19611648,
+      "rust_peak_rss_bytes": 4194304,
+      "rss_ratio": 0.21386800334168754,
+      "native_peak_footprint_bytes": 7324864,
+      "rust_peak_footprint_bytes": 3375936,
+      "native_trials": [
+        [
+          19611648,
+          7324864
+        ],
+        [
+          19611648,
+          7324864
+        ],
+        [
+          19611648,
+          7324864
+        ]
+      ],
+      "rust_trials": [
+        [
+          4194304,
+          3375936
+        ],
+        [
+          4194304,
+          3375936
+        ],
+        [
+          4194304,
+          3392384
+        ]
+      ]
+    },
+    {
+      "name": "bnl2",
+      "native_peak_rss_bytes": 21987328,
+      "rust_peak_rss_bytes": 7077888,
+      "rss_ratio": 0.32190760059612517,
+      "native_peak_footprint_bytes": 9700544,
+      "rust_peak_footprint_bytes": 5980992,
+      "native_trials": [
+        [
+          21987328,
+          9700544
+        ],
+        [
+          21987328,
+          9700544
+        ],
+        [
+          21987328,
+          9716992
+        ]
+      ],
+      "rust_trials": [
+        [
+          7077888,
+          5980992
+        ],
+        [
+          7077888,
+          5980992
+        ],
+        [
+          7077888,
+          5997440
+        ]
+      ]
+    },
+    {
+      "name": "boeing1",
+      "native_peak_rss_bytes": 18776064,
+      "rust_peak_rss_bytes": 3047424,
+      "rss_ratio": 0.16230366492146597,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 2310976,
+      "native_trials": [
+        [
+          18972672,
+          6751360
+        ],
+        [
+          18776064,
+          6751360
+        ],
+        [
+          18776064,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          3047424,
+          2310976
+        ],
+        [
+          3047424,
+          2310976
+        ],
+        [
+          3047424,
+          2310976
+        ]
+      ]
+    },
+    {
+      "name": "boeing2",
+      "native_peak_rss_bytes": 18202624,
+      "rust_peak_rss_bytes": 2424832,
+      "rss_ratio": 0.1332133213321332,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 1688384,
+      "native_trials": [
+        [
+          18202624,
+          6751360
+        ],
+        [
+          18202624,
+          6767808
+        ],
+        [
+          18202624,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          2424832,
+          1688384
+        ],
+        [
+          2424832,
+          1688384
+        ],
+        [
+          2424832,
+          1688384
+        ]
+      ]
+    },
+    {
+      "name": "bore3d",
+      "native_peak_rss_bytes": 18481152,
+      "rust_peak_rss_bytes": 2703360,
+      "rss_ratio": 0.14627659574468085,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 1966912,
+      "native_trials": [
+        [
+          18481152,
+          6751360
+        ],
+        [
+          18481152,
+          6767808
+        ],
+        [
+          18481152,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          2703360,
+          1966912
+        ],
+        [
+          2703360,
+          1966912
+        ],
+        [
+          2703360,
+          1966912
+        ]
+      ]
+    },
+    {
+      "name": "brandy",
+      "native_peak_rss_bytes": 18481152,
+      "rust_peak_rss_bytes": 2899968,
+      "rss_ratio": 0.15691489361702127,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 2147136,
+      "native_trials": [
+        [
+          18481152,
+          6751360
+        ],
+        [
+          18481152,
+          6767808
+        ],
+        [
+          18481152,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          2899968,
+          2147136
+        ],
+        [
+          2899968,
+          2147136
+        ],
+        [
+          2899968,
+          2147136
+        ]
+      ]
+    },
+    {
+      "name": "capri",
+      "native_peak_rss_bytes": 18366464,
+      "rust_peak_rss_bytes": 2719744,
+      "rss_ratio": 0.1480820695807315,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 1966912,
+      "native_trials": [
+        [
+          18366464,
+          6751360
+        ],
+        [
+          18366464,
+          6767808
+        ],
+        [
+          18366464,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          2719744,
+          1966912
+        ],
+        [
+          2719744,
+          1966912
+        ],
+        [
+          2719744,
+          1966912
+        ]
+      ]
+    },
+    {
+      "name": "cycle",
+      "native_peak_rss_bytes": 22790144,
+      "rust_peak_rss_bytes": 7716864,
+      "rss_ratio": 0.3386053199137311,
+      "native_peak_footprint_bytes": 10503424,
+      "rust_peak_footprint_bytes": 6619968,
+      "native_trials": [
+        [
+          22790144,
+          10503424
+        ],
+        [
+          22790144,
+          10486976
+        ],
+        [
+          22790144,
+          10503424
+        ]
+      ],
+      "rust_trials": [
+        [
+          7716864,
+          6619968
+        ],
+        [
+          7716864,
+          6619968
+        ],
+        [
+          7716864,
+          6636416
+        ]
+      ]
+    },
+    {
+      "name": "czprob",
+      "native_peak_rss_bytes": 20709376,
+      "rust_peak_rss_bytes": 5652480,
+      "rss_ratio": 0.27294303797468356,
+      "native_peak_footprint_bytes": 8439040,
+      "rust_peak_footprint_bytes": 4653888,
+      "native_trials": [
+        [
+          20709376,
+          8455488
+        ],
+        [
+          20709376,
+          8439040
+        ],
+        [
+          20709376,
+          8439040
+        ]
+      ],
+      "rust_trials": [
+        [
+          5652480,
+          4653888
+        ],
+        [
+          5652480,
+          4653888
+        ],
+        [
+          5652480,
+          4670336
+        ]
+      ]
+    },
+    {
+      "name": "d2q06c",
+      "native_peak_rss_bytes": 24723456,
+      "rust_peak_rss_bytes": 10076160,
+      "rss_ratio": 0.40755467196819084,
+      "native_peak_footprint_bytes": 12436672,
+      "rust_peak_footprint_bytes": 8864640,
+      "native_trials": [
+        [
+          24723456,
+          12453120
+        ],
+        [
+          24723456,
+          12436672
+        ],
+        [
+          24723456,
+          12436672
+        ]
+      ],
+      "rust_trials": [
+        [
+          10076160,
+          8864640
+        ],
+        [
+          10076160,
+          8864640
+        ],
+        [
+          10076160,
+          8848192
+        ]
+      ]
+    },
+    {
+      "name": "d6cube",
+      "native_peak_rss_bytes": 23330816,
+      "rust_peak_rss_bytes": 7897088,
+      "rss_ratio": 0.33848314606741575,
+      "native_peak_footprint_bytes": 11060416,
+      "rust_peak_footprint_bytes": 6751040,
+      "native_trials": [
+        [
+          23330816,
+          11060416
+        ],
+        [
+          23330816,
+          11060416
+        ],
+        [
+          23330816,
+          11076864
+        ]
+      ],
+      "rust_trials": [
+        [
+          7897088,
+          6751040
+        ],
+        [
+          7897088,
+          6751040
+        ],
+        [
+          7897088,
+          6751040
+        ]
+      ]
+    },
+    {
+      "name": "degen2",
+      "native_peak_rss_bytes": 19234816,
+      "rust_peak_rss_bytes": 3473408,
+      "rss_ratio": 0.18057921635434412,
+      "native_peak_footprint_bytes": 6964416,
+      "rust_peak_footprint_bytes": 2704192,
+      "native_trials": [
+        [
+          19234816,
+          6964416
+        ],
+        [
+          19234816,
+          6964416
+        ],
+        [
+          19234816,
+          6964416
+        ]
+      ],
+      "rust_trials": [
+        [
+          3473408,
+          2704192
+        ],
+        [
+          3473408,
+          2704192
+        ],
+        [
+          3473408,
+          2720640
+        ]
+      ]
+    },
+    {
+      "name": "degen3",
+      "native_peak_rss_bytes": 22593536,
+      "rust_peak_rss_bytes": 7585792,
+      "rss_ratio": 0.3357505438723713,
+      "native_peak_footprint_bytes": 10323200,
+      "rust_peak_footprint_bytes": 6669120,
+      "native_trials": [
+        [
+          22593536,
+          10306752
+        ],
+        [
+          22593536,
+          10323200
+        ],
+        [
+          22593536,
+          10323200
+        ]
+      ],
+      "rust_trials": [
+        [
+          7585792,
+          6669120
+        ],
+        [
+          7585792,
+          6685568
+        ],
+        [
+          7585792,
+          6669120
+        ]
+      ]
+    },
+    {
+      "name": "dfl001",
+      "native_peak_rss_bytes": 30900224,
+      "rust_peak_rss_bytes": 20512768,
+      "rss_ratio": 0.6638388123011665,
+      "native_peak_footprint_bytes": 18629952,
+      "rust_peak_footprint_bytes": 18596800,
+      "native_trials": [
+        [
+          30900224,
+          18629952
+        ],
+        [
+          31522816,
+          19269056
+        ],
+        [
+          30490624,
+          18187456
+        ]
+      ],
+      "rust_trials": [
+        [
+          20512768,
+          18596800
+        ],
+        [
+          22904832,
+          21071104
+        ],
+        [
+          18481152,
+          16532288
+        ]
+      ]
+    },
+    {
+      "name": "e226",
+      "native_peak_rss_bytes": 18595840,
+      "rust_peak_rss_bytes": 2883584,
+      "rss_ratio": 0.15506607929515417,
+      "native_peak_footprint_bytes": 6784256,
+      "rust_peak_footprint_bytes": 2147136,
+      "native_trials": [
+        [
+          18694144,
+          6767808
+        ],
+        [
+          18595840,
+          6784256
+        ],
+        [
+          18595840,
+          6784256
+        ]
+      ],
+      "rust_trials": [
+        [
+          2883584,
+          2163584
+        ],
+        [
+          2883584,
+          2147136
+        ],
+        [
+          2883584,
+          2147136
+        ]
+      ]
+    },
+    {
+      "name": "etamacro",
+      "native_peak_rss_bytes": 19087360,
+      "rust_peak_rss_bytes": 3309568,
+      "rss_ratio": 0.17339055793991417,
+      "native_peak_footprint_bytes": 6800576,
+      "rust_peak_footprint_bytes": 2540352,
+      "native_trials": [
+        [
+          19087360,
+          6800576
+        ],
+        [
+          19087360,
+          6817024
+        ],
+        [
+          19087360,
+          6800576
+        ]
+      ],
+      "rust_trials": [
+        [
+          3309568,
+          2540352
+        ],
+        [
+          3309568,
+          2540352
+        ],
+        [
+          3309568,
+          2540352
+        ]
+      ]
+    },
+    {
+      "name": "fffff800",
+      "native_peak_rss_bytes": 19480576,
+      "rust_peak_rss_bytes": 3850240,
+      "rss_ratio": 0.19764507989907484,
+      "native_peak_footprint_bytes": 7193792,
+      "rust_peak_footprint_bytes": 3081088,
+      "native_trials": [
+        [
+          19480576,
+          7193792
+        ],
+        [
+          19480576,
+          7193792
+        ],
+        [
+          19480576,
+          7193792
+        ]
+      ],
+      "rust_trials": [
+        [
+          3850240,
+          3081088
+        ],
+        [
+          3850240,
+          3081088
+        ],
+        [
+          3850240,
+          3081088
+        ]
+      ]
+    },
+    {
+      "name": "finnis",
+      "native_peak_rss_bytes": 18759680,
+      "rust_peak_rss_bytes": 3145728,
+      "rss_ratio": 0.16768558951965065,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 2392960,
+      "native_trials": [
+        [
+          18759680,
+          6751360
+        ],
+        [
+          18759680,
+          6751360
+        ],
+        [
+          18759680,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          3145728,
+          2392960
+        ],
+        [
+          3145728,
+          2376512
+        ],
+        [
+          3145728,
+          2392960
+        ]
+      ]
+    },
+    {
+      "name": "fit1d",
+      "native_peak_rss_bytes": 19283968,
+      "rust_peak_rss_bytes": 3538944,
+      "rss_ratio": 0.18351741716227699,
+      "native_peak_footprint_bytes": 6931648,
+      "rust_peak_footprint_bytes": 2736960,
+      "native_trials": [
+        [
+          19283968,
+          6931648
+        ],
+        [
+          19283968,
+          6948096
+        ],
+        [
+          19283968,
+          6931648
+        ]
+      ],
+      "rust_trials": [
+        [
+          3538944,
+          2736960
+        ],
+        [
+          3538944,
+          2736960
+        ],
+        [
+          3538944,
+          2736960
+        ]
+      ]
+    },
+    {
+      "name": "fit1p",
+      "native_peak_rss_bytes": 21741568,
+      "rust_peak_rss_bytes": 6602752,
+      "rss_ratio": 0.3036925395629239,
+      "native_peak_footprint_bytes": 9405632,
+      "rust_peak_footprint_bytes": 5669696,
+      "native_trials": [
+        [
+          21741568,
+          9422080
+        ],
+        [
+          21741568,
+          9405632
+        ],
+        [
+          21741568,
+          9405632
+        ]
+      ],
+      "rust_trials": [
+        [
+          6602752,
+          5686144
+        ],
+        [
+          6602752,
+          5669696
+        ],
+        [
+          6602752,
+          5669696
+        ]
+      ]
+    },
+    {
+      "name": "fit2d",
+      "native_peak_rss_bytes": 30621696,
+      "rust_peak_rss_bytes": 14336000,
+      "rss_ratio": 0.4681647940074906,
+      "native_peak_footprint_bytes": 17351936,
+      "rust_peak_footprint_bytes": 11076416,
+      "native_trials": [
+        [
+          30621696,
+          17351936
+        ],
+        [
+          30621696,
+          17335488
+        ],
+        [
+          30621696,
+          17351936
+        ]
+      ],
+      "rust_trials": [
+        [
+          14336000,
+          11076416
+        ],
+        [
+          14336000,
+          11076416
+        ],
+        [
+          14336000,
+          11076416
+        ]
+      ]
+    },
+    {
+      "name": "fit2p",
+      "native_peak_rss_bytes": 36782080,
+      "rust_peak_rss_bytes": 22904832,
+      "rss_ratio": 0.6227171492204899,
+      "native_peak_footprint_bytes": 22775040,
+      "rust_peak_footprint_bytes": 16778048,
+      "native_trials": [
+        [
+          36782080,
+          22758592
+        ],
+        [
+          36782080,
+          22775040
+        ],
+        [
+          36782080,
+          22775040
+        ]
+      ],
+      "rust_trials": [
+        [
+          22904832,
+          16794496
+        ],
+        [
+          22904832,
+          16778048
+        ],
+        [
+          22904832,
+          16778048
+        ]
+      ]
+    },
+    {
+      "name": "forplan",
+      "native_peak_rss_bytes": 18726912,
+      "rust_peak_rss_bytes": 2883584,
+      "rss_ratio": 0.15398075240594924,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 2163584,
+      "native_trials": [
+        [
+          18726912,
+          6767808
+        ],
+        [
+          18726912,
+          6751360
+        ],
+        [
+          18726912,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          2883584,
+          2163584
+        ],
+        [
+          2883584,
+          2163584
+        ],
+        [
+          2883584,
+          2147136
+        ]
+      ]
+    },
+    {
+      "name": "ganges",
+      "native_peak_rss_bytes": 20037632,
+      "rust_peak_rss_bytes": 4702208,
+      "rss_ratio": 0.2346688470973017,
+      "native_peak_footprint_bytes": 7750912,
+      "rust_peak_footprint_bytes": 3818304,
+      "native_trials": [
+        [
+          20267008,
+          7980288
+        ],
+        [
+          20037632,
+          7750912
+        ],
+        [
+          20037632,
+          7734464
+        ]
+      ],
+      "rust_trials": [
+        [
+          4702208,
+          3818304
+        ],
+        [
+          4702208,
+          3818304
+        ],
+        [
+          4702208,
+          3818304
+        ]
+      ]
+    },
+    {
+      "name": "gfrd-pnc",
+      "native_peak_rss_bytes": 18939904,
+      "rust_peak_rss_bytes": 3522560,
+      "rss_ratio": 0.18598615916955016,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 2704192,
+      "native_trials": [
+        [
+          18939904,
+          6751360
+        ],
+        [
+          18939904,
+          6751360
+        ],
+        [
+          18939904,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          3522560,
+          2704192
+        ],
+        [
+          3522560,
+          2704192
+        ],
+        [
+          3522560,
+          2720640
+        ]
+      ]
+    },
+    {
+      "name": "greenbea",
+      "native_peak_rss_bytes": 24756224,
+      "rust_peak_rss_bytes": 9846784,
+      "rss_ratio": 0.39774983454665785,
+      "native_peak_footprint_bytes": 12453056,
+      "rust_peak_footprint_bytes": 8454976,
+      "native_trials": [
+        [
+          24756224,
+          12453056
+        ],
+        [
+          24756224,
+          12453056
+        ],
+        [
+          24756224,
+          12453056
+        ]
+      ],
+      "rust_trials": [
+        [
+          9846784,
+          8454976
+        ],
+        [
+          9846784,
+          8454976
+        ],
+        [
+          9846784,
+          8454976
+        ]
+      ]
+    },
+    {
+      "name": "greenbeb",
+      "native_peak_rss_bytes": 24625152,
+      "rust_peak_rss_bytes": 9748480,
+      "rss_ratio": 0.3958749168330007,
+      "native_peak_footprint_bytes": 12321984,
+      "rust_peak_footprint_bytes": 8356672,
+      "native_trials": [
+        [
+          24625152,
+          12321984
+        ],
+        [
+          24625152,
+          12338432
+        ],
+        [
+          24625152,
+          12321984
+        ]
+      ],
+      "rust_trials": [
+        [
+          9748480,
+          8356672
+        ],
+        [
+          9748480,
+          8373120
+        ],
+        [
+          9748480,
+          8356672
+        ]
+      ]
+    },
+    {
+      "name": "grow15",
+      "native_peak_rss_bytes": 19628032,
+      "rust_peak_rss_bytes": 3932160,
+      "rss_ratio": 0.2003338898163606,
+      "native_peak_footprint_bytes": 7324864,
+      "rust_peak_footprint_bytes": 3130240,
+      "native_trials": [
+        [
+          19628032,
+          7324864
+        ],
+        [
+          19628032,
+          7324864
+        ],
+        [
+          19628032,
+          7324864
+        ]
+      ],
+      "rust_trials": [
+        [
+          3932160,
+          3130240
+        ],
+        [
+          3932160,
+          3130240
+        ],
+        [
+          3932160,
+          3130240
+        ]
+      ]
+    },
+    {
+      "name": "grow22",
+      "native_peak_rss_bytes": 20234240,
+      "rust_peak_rss_bytes": 4866048,
+      "rss_ratio": 0.24048582995951417,
+      "native_peak_footprint_bytes": 7947520,
+      "rust_peak_footprint_bytes": 4014912,
+      "native_trials": [
+        [
+          20234240,
+          7947520
+        ],
+        [
+          20234240,
+          7947520
+        ],
+        [
+          20234240,
+          7963968
+        ]
+      ],
+      "rust_trials": [
+        [
+          4866048,
+          4014912
+        ],
+        [
+          4866048,
+          4014912
+        ],
+        [
+          4866048,
+          4014912
+        ]
+      ]
+    },
+    {
+      "name": "grow7",
+      "native_peak_rss_bytes": 18694144,
+      "rust_peak_rss_bytes": 3047424,
+      "rss_ratio": 0.16301489921121823,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 2294592,
+      "native_trials": [
+        [
+          18694144,
+          6751360
+        ],
+        [
+          18694144,
+          6767808
+        ],
+        [
+          18694144,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          3047424,
+          2311040
+        ],
+        [
+          3047424,
+          2294592
+        ],
+        [
+          3047424,
+          2294592
+        ]
+      ]
+    },
+    {
+      "name": "israel",
+      "native_peak_rss_bytes": 18415616,
+      "rust_peak_rss_bytes": 2801664,
+      "rss_ratio": 0.152135231316726,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 2065216,
+      "native_trials": [
+        [
+          18415616,
+          6751360
+        ],
+        [
+          18415616,
+          6751360
+        ],
+        [
+          18415616,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          2801664,
+          2065216
+        ],
+        [
+          2801664,
+          2065216
+        ],
+        [
+          2801664,
+          2081664
+        ]
+      ]
+    },
+    {
+      "name": "kb2",
+      "native_peak_rss_bytes": 18006016,
+      "rust_peak_rss_bytes": 2113536,
+      "rss_ratio": 0.11737943585077343,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 1377088,
+      "native_trials": [
+        [
+          18219008,
+          6751360
+        ],
+        [
+          18006016,
+          6751360
+        ],
+        [
+          18006016,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          2113536,
+          1360640
+        ],
+        [
+          2113536,
+          1377088
+        ],
+        [
+          2113536,
+          1377088
+        ]
+      ]
+    },
+    {
+      "name": "lotfi",
+      "native_peak_rss_bytes": 18415616,
+      "rust_peak_rss_bytes": 2605056,
+      "rss_ratio": 0.14145907473309607,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 1868608,
+      "native_trials": [
+        [
+          18415616,
+          6751360
+        ],
+        [
+          18415616,
+          6751360
+        ],
+        [
+          18415616,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          2605056,
+          1868608
+        ],
+        [
+          2605056,
+          1868608
+        ],
+        [
+          2605056,
+          1868608
+        ]
+      ]
+    },
+    {
+      "name": "maros",
+      "native_peak_rss_bytes": 20267008,
+      "rust_peak_rss_bytes": 4653056,
+      "rss_ratio": 0.22958771220695232,
+      "native_peak_footprint_bytes": 7996672,
+      "rust_peak_footprint_bytes": 3818304,
+      "native_trials": [
+        [
+          20267008,
+          7996672
+        ],
+        [
+          20676608,
+          8389824
+        ],
+        [
+          20267008,
+          7980224
+        ]
+      ],
+      "rust_trials": [
+        [
+          4653056,
+          3818304
+        ],
+        [
+          4653056,
+          3818304
+        ],
+        [
+          4653056,
+          3818304
+        ]
+      ]
+    },
+    {
+      "name": "maros-r7",
+      "native_peak_rss_bytes": 43565056,
+      "rust_peak_rss_bytes": 34930688,
+      "rss_ratio": 0.8018051899210229,
+      "native_peak_footprint_bytes": 28935616,
+      "rust_peak_footprint_bytes": 20726592,
+      "native_trials": [
+        [
+          43565056,
+          28935616
+        ],
+        [
+          43974656,
+          29295936
+        ],
+        [
+          42565632,
+          27821376
+        ]
+      ],
+      "rust_trials": [
+        [
+          34930688,
+          20726592
+        ],
+        [
+          34930688,
+          20743040
+        ],
+        [
+          34930688,
+          20726592
+        ]
+      ]
+    },
+    {
+      "name": "modszk1",
+      "native_peak_rss_bytes": 19628032,
+      "rust_peak_rss_bytes": 4259840,
+      "rss_ratio": 0.21702838063439064,
+      "native_peak_footprint_bytes": 7341248,
+      "rust_peak_footprint_bytes": 3408704,
+      "native_trials": [
+        [
+          19628032,
+          7341248
+        ],
+        [
+          19628032,
+          7341248
+        ],
+        [
+          19628032,
+          7341248
+        ]
+      ],
+      "rust_trials": [
+        [
+          4259840,
+          3408704
+        ],
+        [
+          4259840,
+          3408704
+        ],
+        [
+          4259840,
+          3408704
+        ]
+      ]
+    },
+    {
+      "name": "nesm",
+      "native_peak_rss_bytes": 21053440,
+      "rust_peak_rss_bytes": 5636096,
+      "rss_ratio": 0.267704280155642,
+      "native_peak_footprint_bytes": 8635584,
+      "rust_peak_footprint_bytes": 4588352,
+      "native_trials": [
+        [
+          21053440,
+          8635584
+        ],
+        [
+          21053440,
+          8635584
+        ],
+        [
+          21053440,
+          8668480
+        ]
+      ],
+      "rust_trials": [
+        [
+          5636096,
+          4588352
+        ],
+        [
+          5636096,
+          4588352
+        ],
+        [
+          5636096,
+          4604800
+        ]
+      ]
+    },
+    {
+      "name": "perold",
+      "native_peak_rss_bytes": 19922944,
+      "rust_peak_rss_bytes": 4521984,
+      "rss_ratio": 0.22697368421052633,
+      "native_peak_footprint_bytes": 7636160,
+      "rust_peak_footprint_bytes": 3687232,
+      "native_trials": [
+        [
+          19922944,
+          7636160
+        ],
+        [
+          19922944,
+          7652608
+        ],
+        [
+          19922944,
+          7636160
+        ]
+      ],
+      "rust_trials": [
+        [
+          4521984,
+          3687232
+        ],
+        [
+          4521984,
+          3687232
+        ],
+        [
+          4521984,
+          3687232
+        ]
+      ]
+    },
+    {
+      "name": "pilot",
+      "native_peak_rss_bytes": 27230208,
+      "rust_peak_rss_bytes": 12189696,
+      "rss_ratio": 0.44765342960288806,
+      "native_peak_footprint_bytes": 14959936,
+      "rust_peak_footprint_bytes": 11076416,
+      "native_trials": [
+        [
+          26181632,
+          13894848
+        ],
+        [
+          27230208,
+          14976320
+        ],
+        [
+          27394048,
+          14959936
+        ]
+      ],
+      "rust_trials": [
+        [
+          12189696,
+          11076416
+        ],
+        [
+          12189696,
+          11076416
+        ],
+        [
+          13877248,
+          12862656
+        ]
+      ]
+    },
+    {
+      "name": "pilot.ja",
+      "native_peak_rss_bytes": 21266432,
+      "rust_peak_rss_bytes": 6750208,
+      "rss_ratio": 0.31741140215716485,
+      "native_peak_footprint_bytes": 8996096,
+      "rust_peak_footprint_bytes": 5932032,
+      "native_trials": [
+        [
+          22642688,
+          10438144
+        ],
+        [
+          21266432,
+          8996096
+        ],
+        [
+          21266432,
+          8996096
+        ]
+      ],
+      "rust_trials": [
+        [
+          6750208,
+          5932032
+        ],
+        [
+          7438336,
+          6685952
+        ],
+        [
+          6520832,
+          5686208
+        ]
+      ]
+    },
+    {
+      "name": "pilot.we",
+      "native_peak_rss_bytes": 21053440,
+      "rust_peak_rss_bytes": 5275648,
+      "rss_ratio": 0.25058365758754864,
+      "native_peak_footprint_bytes": 8783104,
+      "rust_peak_footprint_bytes": 4309888,
+      "native_trials": [
+        [
+          21053440,
+          8816000
+        ],
+        [
+          21053440,
+          8783104
+        ],
+        [
+          20709376,
+          8439040
+        ]
+      ],
+      "rust_trials": [
+        [
+          5275648,
+          4309888
+        ],
+        [
+          5275648,
+          4293440
+        ],
+        [
+          5668864,
+          4703104
+        ]
+      ]
+    },
+    {
+      "name": "pilot4",
+      "native_peak_rss_bytes": 19496960,
+      "rust_peak_rss_bytes": 4046848,
+      "rss_ratio": 0.20756302521008405,
+      "native_peak_footprint_bytes": 7226624,
+      "rust_peak_footprint_bytes": 3261248,
+      "native_trials": [
+        [
+          19496960,
+          7210176
+        ],
+        [
+          19496960,
+          7226624
+        ],
+        [
+          19496960,
+          7226624
+        ]
+      ],
+      "rust_trials": [
+        [
+          4046848,
+          3277696
+        ],
+        [
+          4046848,
+          3261248
+        ],
+        [
+          4046848,
+          3261248
+        ]
+      ]
+    },
+    {
+      "name": "pilot87",
+      "native_peak_rss_bytes": 37404672,
+      "rust_peak_rss_bytes": 25739264,
+      "rss_ratio": 0.6881296539640823,
+      "native_peak_footprint_bytes": 25167296,
+      "rust_peak_footprint_bytes": 20153216,
+      "native_trials": [
+        [
+          36601856,
+          21759296
+        ],
+        [
+          37404672,
+          25167296
+        ],
+        [
+          39518208,
+          27297280
+        ]
+      ],
+      "rust_trials": [
+        [
+          25690112,
+          20087616
+        ],
+        [
+          25739264,
+          20153216
+        ],
+        [
+          28049408,
+          22578496
+        ]
+      ]
+    },
+    {
+      "name": "pilotnov",
+      "native_peak_rss_bytes": 21413888,
+      "rust_peak_rss_bytes": 5865472,
+      "rss_ratio": 0.2739097169089518,
+      "native_peak_footprint_bytes": 9143552,
+      "rust_peak_footprint_bytes": 4948800,
+      "native_trials": [
+        [
+          21413888,
+          9127104
+        ],
+        [
+          21413888,
+          9143552
+        ],
+        [
+          21413888,
+          9143552
+        ]
+      ],
+      "rust_trials": [
+        [
+          5865472,
+          4948800
+        ],
+        [
+          5865472,
+          4948800
+        ],
+        [
+          5865472,
+          4965248
+        ]
+      ]
+    },
+    {
+      "name": "qap8",
+      "native_peak_rss_bytes": 20971520,
+      "rust_peak_rss_bytes": 5881856,
+      "rss_ratio": 0.28046875,
+      "native_peak_footprint_bytes": 8652032,
+      "rust_peak_footprint_bytes": 4981568,
+      "native_trials": [
+        [
+          20971520,
+          8652032
+        ],
+        [
+          20971520,
+          8652032
+        ],
+        [
+          20971520,
+          8635584
+        ]
+      ],
+      "rust_trials": [
+        [
+          5881856,
+          4981568
+        ],
+        [
+          5881856,
+          4981568
+        ],
+        [
+          5881856,
+          4981568
+        ]
+      ]
+    },
+    {
+      "name": "recipe",
+      "native_peak_rss_bytes": 18006016,
+      "rust_peak_rss_bytes": 2162688,
+      "rss_ratio": 0.12010919017288443,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 1409792,
+      "native_trials": [
+        [
+          18006016,
+          6751360
+        ],
+        [
+          18006016,
+          6751360
+        ],
+        [
+          18006016,
+          6784256
+        ]
+      ],
+      "rust_trials": [
+        [
+          2162688,
+          1409792
+        ],
+        [
+          2162688,
+          1409792
+        ],
+        [
+          2162688,
+          1426240
+        ]
+      ]
+    },
+    {
+      "name": "sc105",
+      "native_peak_rss_bytes": 18055168,
+      "rust_peak_rss_bytes": 2244608,
+      "rss_ratio": 0.12431941923774954,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 1524608,
+      "native_trials": [
+        [
+          18055168,
+          6751360
+        ],
+        [
+          18055168,
+          6767808
+        ],
+        [
+          18055168,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          2244608,
+          1524608
+        ],
+        [
+          2244608,
+          1524608
+        ],
+        [
+          2244608,
+          1508160
+        ]
+      ]
+    },
+    {
+      "name": "sc205",
+      "native_peak_rss_bytes": 18186240,
+      "rust_peak_rss_bytes": 2457600,
+      "rss_ratio": 0.13513513513513514,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 1721152,
+      "native_trials": [
+        [
+          18186240,
+          6751360
+        ],
+        [
+          18186240,
+          6751360
+        ],
+        [
+          18186240,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          2457600,
+          1721152
+        ],
+        [
+          2457600,
+          1721152
+        ],
+        [
+          2457600,
+          1721152
+        ]
+      ]
+    },
+    {
+      "name": "sc50a",
+      "native_peak_rss_bytes": 18006016,
+      "rust_peak_rss_bytes": 2080768,
+      "rss_ratio": 0.11555959963603275,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 1327872,
+      "native_trials": [
+        [
+          18006016,
+          6767808
+        ],
+        [
+          18006016,
+          6767808
+        ],
+        [
+          18006016,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          2080768,
+          1344320
+        ],
+        [
+          2080768,
+          1327872
+        ],
+        [
+          2080768,
+          1327872
+        ]
+      ]
+    },
+    {
+      "name": "sc50b",
+      "native_peak_rss_bytes": 18006016,
+      "rust_peak_rss_bytes": 2080768,
+      "rss_ratio": 0.11555959963603275,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 1344320,
+      "native_trials": [
+        [
+          18006016,
+          6751360
+        ],
+        [
+          18006016,
+          6767808
+        ],
+        [
+          18006016,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          2080768,
+          1344320
+        ],
+        [
+          2080768,
+          1344320
+        ],
+        [
+          2080768,
+          1327872
+        ]
+      ]
+    },
+    {
+      "name": "scagr25",
+      "native_peak_rss_bytes": 19005440,
+      "rust_peak_rss_bytes": 3489792,
+      "rss_ratio": 0.18362068965517242,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 2720576,
+      "native_trials": [
+        [
+          19005440,
+          6767808
+        ],
+        [
+          19005440,
+          6767808
+        ],
+        [
+          19005440,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          3489792,
+          2720576
+        ],
+        [
+          3489792,
+          2720576
+        ],
+        [
+          3489792,
+          2720576
+        ]
+      ]
+    },
+    {
+      "name": "scagr7",
+      "native_peak_rss_bytes": 18153472,
+      "rust_peak_rss_bytes": 2375680,
+      "rss_ratio": 0.13086642599277978,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 1639232,
+      "native_trials": [
+        [
+          18153472,
+          6751360
+        ],
+        [
+          18153472,
+          6784256
+        ],
+        [
+          18153472,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          2375680,
+          1639232
+        ],
+        [
+          2375680,
+          1639232
+        ],
+        [
+          2375680,
+          1639232
+        ]
+      ]
+    },
+    {
+      "name": "scfxm1",
+      "native_peak_rss_bytes": 18939904,
+      "rust_peak_rss_bytes": 3162112,
+      "rss_ratio": 0.16695501730103807,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 2409280,
+      "native_trials": [
+        [
+          18939904,
+          6751360
+        ],
+        [
+          18939904,
+          6751360
+        ],
+        [
+          18939904,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          3162112,
+          2409280
+        ],
+        [
+          3162112,
+          2409280
+        ],
+        [
+          3162112,
+          2425728
+        ]
+      ]
+    },
+    {
+      "name": "scfxm2",
+      "native_peak_rss_bytes": 19529728,
+      "rust_peak_rss_bytes": 3817472,
+      "rss_ratio": 0.19546979865771813,
+      "native_peak_footprint_bytes": 7259392,
+      "rust_peak_footprint_bytes": 3015488,
+      "native_trials": [
+        [
+          19529728,
+          7259392
+        ],
+        [
+          19529728,
+          7242944
+        ],
+        [
+          19529728,
+          7259392
+        ]
+      ],
+      "rust_trials": [
+        [
+          3817472,
+          3015488
+        ],
+        [
+          3817472,
+          3015488
+        ],
+        [
+          3817472,
+          3031936
+        ]
+      ]
+    },
+    {
+      "name": "scfxm3",
+      "native_peak_rss_bytes": 20152320,
+      "rust_peak_rss_bytes": 4931584,
+      "rss_ratio": 0.24471544715447155,
+      "native_peak_footprint_bytes": 7865536,
+      "rust_peak_footprint_bytes": 4080448,
+      "native_trials": [
+        [
+          20152320,
+          7865536
+        ],
+        [
+          20152320,
+          7865536
+        ],
+        [
+          20152320,
+          7865536
+        ]
+      ],
+      "rust_trials": [
+        [
+          4931584,
+          4080448
+        ],
+        [
+          4931584,
+          4096896
+        ],
+        [
+          4931584,
+          4080448
+        ]
+      ]
+    },
+    {
+      "name": "scorpion",
+      "native_peak_rss_bytes": 18432000,
+      "rust_peak_rss_bytes": 2768896,
+      "rss_ratio": 0.15022222222222223,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 2016064,
+      "native_trials": [
+        [
+          18432000,
+          6751360
+        ],
+        [
+          18432000,
+          6751360
+        ],
+        [
+          18432000,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          2768896,
+          2016064
+        ],
+        [
+          2768896,
+          2016064
+        ],
+        [
+          2768896,
+          2016064
+        ]
+      ]
+    },
+    {
+      "name": "scrs8",
+      "native_peak_rss_bytes": 19103744,
+      "rust_peak_rss_bytes": 3588096,
+      "rss_ratio": 0.18782161234991424,
+      "native_peak_footprint_bytes": 6816960,
+      "rust_peak_footprint_bytes": 2769728,
+      "native_trials": [
+        [
+          19103744,
+          6816960
+        ],
+        [
+          19103744,
+          6833408
+        ],
+        [
+          19103744,
+          6816960
+        ]
+      ],
+      "rust_trials": [
+        [
+          3588096,
+          2769728
+        ],
+        [
+          3588096,
+          2769728
+        ],
+        [
+          3899392,
+          3081024
+        ]
+      ]
+    },
+    {
+      "name": "scsd1",
+      "native_peak_rss_bytes": 18464768,
+      "rust_peak_rss_bytes": 2818048,
+      "rss_ratio": 0.1526175687666371,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 2048832,
+      "native_trials": [
+        [
+          18776064,
+          7013568
+        ],
+        [
+          18464768,
+          6767808
+        ],
+        [
+          18464768,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          2818048,
+          2048832
+        ],
+        [
+          2818048,
+          2065280
+        ],
+        [
+          2818048,
+          2048832
+        ]
+      ]
+    },
+    {
+      "name": "scsd6",
+      "native_peak_rss_bytes": 18989056,
+      "rust_peak_rss_bytes": 3620864,
+      "rss_ratio": 0.1906816220880069,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 2835328,
+      "native_trials": [
+        [
+          19185664,
+          6931712
+        ],
+        [
+          18989056,
+          6751360
+        ],
+        [
+          18989056,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          3620864,
+          2835328
+        ],
+        [
+          3817472,
+          3031936
+        ],
+        [
+          3391488,
+          2605952
+        ]
+      ]
+    },
+    {
+      "name": "scsd8",
+      "native_peak_rss_bytes": 20267008,
+      "rust_peak_rss_bytes": 4653056,
+      "rss_ratio": 0.22958771220695232,
+      "native_peak_footprint_bytes": 7996608,
+      "rust_peak_footprint_bytes": 3752768,
+      "native_trials": [
+        [
+          20267008,
+          7996608
+        ],
+        [
+          20267008,
+          7996608
+        ],
+        [
+          20267008,
+          7996608
+        ]
+      ],
+      "rust_trials": [
+        [
+          4653056,
+          3752768
+        ],
+        [
+          5128192,
+          4260736
+        ],
+        [
+          4653056,
+          3752768
+        ]
+      ]
+    },
+    {
+      "name": "sctap1",
+      "native_peak_rss_bytes": 18530304,
+      "rust_peak_rss_bytes": 2850816,
+      "rss_ratio": 0.15384615384615385,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 2114368,
+      "native_trials": [
+        [
+          18530304,
+          6767808
+        ],
+        [
+          18530304,
+          6751360
+        ],
+        [
+          18530304,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          2850816,
+          2114368
+        ],
+        [
+          2850816,
+          2114368
+        ],
+        [
+          2850816,
+          2114368
+        ]
+      ]
+    },
+    {
+      "name": "sctap2",
+      "native_peak_rss_bytes": 19759104,
+      "rust_peak_rss_bytes": 4653056,
+      "rss_ratio": 0.23548922056384744,
+      "native_peak_footprint_bytes": 7505152,
+      "rust_peak_footprint_bytes": 3752768,
+      "native_trials": [
+        [
+          19759104,
+          7505152
+        ],
+        [
+          19759104,
+          7521600
+        ],
+        [
+          19759104,
+          7505152
+        ]
+      ],
+      "rust_trials": [
+        [
+          4653056,
+          3769216
+        ],
+        [
+          4653056,
+          3752768
+        ],
+        [
+          4653056,
+          3752768
+        ]
+      ]
+    },
+    {
+      "name": "sctap3",
+      "native_peak_rss_bytes": 20447232,
+      "rust_peak_rss_bytes": 5357568,
+      "rss_ratio": 0.2620192307692308,
+      "native_peak_footprint_bytes": 8209728,
+      "rust_peak_footprint_bytes": 4424512,
+      "native_trials": [
+        [
+          20447232,
+          8209728
+        ],
+        [
+          20447232,
+          8176832
+        ],
+        [
+          20447232,
+          8209728
+        ]
+      ],
+      "rust_trials": [
+        [
+          5357568,
+          4424512
+        ],
+        [
+          5357568,
+          4424512
+        ],
+        [
+          5357568,
+          4440960
+        ]
+      ]
+    },
+    {
+      "name": "seba",
+      "native_peak_rss_bytes": 19038208,
+      "rust_peak_rss_bytes": 3670016,
+      "rss_ratio": 0.1927710843373494,
+      "native_peak_footprint_bytes": 6784256,
+      "rust_peak_footprint_bytes": 2884480,
+      "native_trials": [
+        [
+          19038208,
+          6784256
+        ],
+        [
+          19038208,
+          6767808
+        ],
+        [
+          19038208,
+          6784256
+        ]
+      ],
+      "rust_trials": [
+        [
+          3670016,
+          2868032
+        ],
+        [
+          3670016,
+          2884480
+        ],
+        [
+          3670016,
+          2884480
+        ]
+      ]
+    },
+    {
+      "name": "share1b",
+      "native_peak_rss_bytes": 18186240,
+      "rust_peak_rss_bytes": 2424832,
+      "rss_ratio": 0.13333333333333333,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 1704832,
+      "native_trials": [
+        [
+          18186240,
+          6784256
+        ],
+        [
+          18186240,
+          6751360
+        ],
+        [
+          18186240,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          2424832,
+          1704832
+        ],
+        [
+          2424832,
+          1688384
+        ],
+        [
+          2424832,
+          1704832
+        ]
+      ]
+    },
+    {
+      "name": "share2b",
+      "native_peak_rss_bytes": 18104320,
+      "rust_peak_rss_bytes": 2310144,
+      "rss_ratio": 0.12760180995475112,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 1590144,
+      "native_trials": [
+        [
+          18104320,
+          6751360
+        ],
+        [
+          18104320,
+          6767808
+        ],
+        [
+          18104320,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          2310144,
+          1590144
+        ],
+        [
+          2310144,
+          1590144
+        ],
+        [
+          2310144,
+          1590144
+        ]
+      ]
+    },
+    {
+      "name": "shell",
+      "native_peak_rss_bytes": 19152896,
+      "rust_peak_rss_bytes": 3915776,
+      "rss_ratio": 0.20444824636441403,
+      "native_peak_footprint_bytes": 6882560,
+      "rust_peak_footprint_bytes": 3064640,
+      "native_trials": [
+        [
+          19152896,
+          6899008
+        ],
+        [
+          19152896,
+          6882560
+        ],
+        [
+          19152896,
+          6866112
+        ]
+      ],
+      "rust_trials": [
+        [
+          3915776,
+          3064640
+        ],
+        [
+          3915776,
+          3064640
+        ],
+        [
+          3915776,
+          3064640
+        ]
+      ]
+    },
+    {
+      "name": "ship04l",
+      "native_peak_rss_bytes": 19529728,
+      "rust_peak_rss_bytes": 4079616,
+      "rss_ratio": 0.20889261744966442,
+      "native_peak_footprint_bytes": 7259392,
+      "rust_peak_footprint_bytes": 3212096,
+      "native_trials": [
+        [
+          19529728,
+          7259392
+        ],
+        [
+          19529728,
+          7259392
+        ],
+        [
+          19529728,
+          7242944
+        ]
+      ],
+      "rust_trials": [
+        [
+          4079616,
+          3228544
+        ],
+        [
+          4079616,
+          3212096
+        ],
+        [
+          4079616,
+          3212096
+        ]
+      ]
+    },
+    {
+      "name": "ship04s",
+      "native_peak_rss_bytes": 18890752,
+      "rust_peak_rss_bytes": 3555328,
+      "rss_ratio": 0.18820468343451865,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 2737024,
+      "native_trials": [
+        [
+          19169280,
+          6931776
+        ],
+        [
+          18890752,
+          6767808
+        ],
+        [
+          18890752,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          3555328,
+          2720576
+        ],
+        [
+          3555328,
+          2737024
+        ],
+        [
+          3555328,
+          2737024
+        ]
+      ]
+    },
+    {
+      "name": "ship08l",
+      "native_peak_rss_bytes": 21004288,
+      "rust_peak_rss_bytes": 6193152,
+      "rss_ratio": 0.2948517940717629,
+      "native_peak_footprint_bytes": 8750336,
+      "rust_peak_footprint_bytes": 5161856,
+      "native_trials": [
+        [
+          21004288,
+          8766784
+        ],
+        [
+          21004288,
+          8733888
+        ],
+        [
+          21004288,
+          8750336
+        ]
+      ],
+      "rust_trials": [
+        [
+          6193152,
+          5145408
+        ],
+        [
+          6193152,
+          5161856
+        ],
+        [
+          6193152,
+          5161856
+        ]
+      ]
+    },
+    {
+      "name": "ship08s",
+      "native_peak_rss_bytes": 19906560,
+      "rust_peak_rss_bytes": 4718592,
+      "rss_ratio": 0.23703703703703705,
+      "native_peak_footprint_bytes": 7652608,
+      "rust_peak_footprint_bytes": 3785536,
+      "native_trials": [
+        [
+          19906560,
+          7652608
+        ],
+        [
+          19906560,
+          7636160
+        ],
+        [
+          19906560,
+          7652608
+        ]
+      ],
+      "rust_trials": [
+        [
+          4718592,
+          3785536
+        ],
+        [
+          4718592,
+          3801984
+        ],
+        [
+          4718592,
+          3785536
+        ]
+      ]
+    },
+    {
+      "name": "ship12l",
+      "native_peak_rss_bytes": 21757952,
+      "rust_peak_rss_bytes": 6963200,
+      "rss_ratio": 0.3200301204819277,
+      "native_peak_footprint_bytes": 9487552,
+      "rust_peak_footprint_bytes": 5800768,
+      "native_trials": [
+        [
+          21757952,
+          9487552
+        ],
+        [
+          21757952,
+          9504000
+        ],
+        [
+          21757952,
+          9487552
+        ]
+      ],
+      "rust_trials": [
+        [
+          6963200,
+          5800768
+        ],
+        [
+          6963200,
+          5800768
+        ],
+        [
+          6963200,
+          5800768
+        ]
+      ]
+    },
+    {
+      "name": "ship12s",
+      "native_peak_rss_bytes": 20332544,
+      "rust_peak_rss_bytes": 5357568,
+      "rss_ratio": 0.2634971796937953,
+      "native_peak_footprint_bytes": 8078592,
+      "rust_peak_footprint_bytes": 4358976,
+      "native_trials": [
+        [
+          20332544,
+          8078592
+        ],
+        [
+          20332544,
+          8078592
+        ],
+        [
+          20332544,
+          8062144
+        ]
+      ],
+      "rust_trials": [
+        [
+          5357568,
+          4358976
+        ],
+        [
+          5357568,
+          4358976
+        ],
+        [
+          5357568,
+          4358976
+        ]
+      ]
+    },
+    {
+      "name": "sierra",
+      "native_peak_rss_bytes": 19939328,
+      "rust_peak_rss_bytes": 4816896,
+      "rss_ratio": 0.24157764995891537,
+      "native_peak_footprint_bytes": 7668992,
+      "rust_peak_footprint_bytes": 3883840,
+      "native_trials": [
+        [
+          20168704,
+          7898368
+        ],
+        [
+          19939328,
+          7652544
+        ],
+        [
+          19939328,
+          7668992
+        ]
+      ],
+      "rust_trials": [
+        [
+          4816896,
+          3883840
+        ],
+        [
+          4816896,
+          3883840
+        ],
+        [
+          4816896,
+          3883840
+        ]
+      ]
+    },
+    {
+      "name": "stair",
+      "native_peak_rss_bytes": 19136512,
+      "rust_peak_rss_bytes": 3670016,
+      "rss_ratio": 0.1917808219178082,
+      "native_peak_footprint_bytes": 6849728,
+      "rust_peak_footprint_bytes": 2917184,
+      "native_trials": [
+        [
+          19136512,
+          6866176
+        ],
+        [
+          19136512,
+          6849728
+        ],
+        [
+          19136512,
+          6849728
+        ]
+      ],
+      "rust_trials": [
+        [
+          3670016,
+          2917184
+        ],
+        [
+          3670016,
+          2933632
+        ],
+        [
+          3670016,
+          2917184
+        ]
+      ]
+    },
+    {
+      "name": "standata",
+      "native_peak_rss_bytes": 18808832,
+      "rust_peak_rss_bytes": 3194880,
+      "rss_ratio": 0.16986062717770034,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 2409280,
+      "native_trials": [
+        [
+          18808832,
+          6751360
+        ],
+        [
+          18808832,
+          6751360
+        ],
+        [
+          18808832,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          3194880,
+          2425728
+        ],
+        [
+          3194880,
+          2409280
+        ],
+        [
+          3194880,
+          2409280
+        ]
+      ]
+    },
+    {
+      "name": "standgub",
+      "native_peak_rss_bytes": 18923520,
+      "rust_peak_rss_bytes": 3358720,
+      "rss_ratio": 0.1774891774891775,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 2573120,
+      "native_trials": [
+        [
+          18923520,
+          6751360
+        ],
+        [
+          18923520,
+          6751360
+        ],
+        [
+          18923520,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          3358720,
+          2573120
+        ],
+        [
+          3358720,
+          2573120
+        ],
+        [
+          3358720,
+          2589568
+        ]
+      ]
+    },
+    {
+      "name": "standmps",
+      "native_peak_rss_bytes": 19021824,
+      "rust_peak_rss_bytes": 3538944,
+      "rss_ratio": 0.18604651162790697,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 2736960,
+      "native_trials": [
+        [
+          19021824,
+          6751360
+        ],
+        [
+          19021824,
+          6767808
+        ],
+        [
+          19021824,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          3538944,
+          2753408
+        ],
+        [
+          3538944,
+          2736960
+        ],
+        [
+          3538944,
+          2736960
+        ]
+      ]
+    },
+    {
+      "name": "stocfor1",
+      "native_peak_rss_bytes": 18087936,
+      "rust_peak_rss_bytes": 2375680,
+      "rss_ratio": 0.13134057971014493,
+      "native_peak_footprint_bytes": 6751360,
+      "rust_peak_footprint_bytes": 1639232,
+      "native_trials": [
+        [
+          18087936,
+          6751360
+        ],
+        [
+          18087936,
+          6751360
+        ],
+        [
+          18087936,
+          6751360
+        ]
+      ],
+      "rust_trials": [
+        [
+          2375680,
+          1639232
+        ],
+        [
+          2375680,
+          1639232
+        ],
+        [
+          2375680,
+          1639232
+        ]
+      ]
+    },
+    {
+      "name": "stocfor2",
+      "native_peak_rss_bytes": 21397504,
+      "rust_peak_rss_bytes": 6422528,
+      "rss_ratio": 0.3001531393568147,
+      "native_peak_footprint_bytes": 9110720,
+      "rust_peak_footprint_bytes": 5456704,
+      "native_trials": [
+        [
+          21397504,
+          9127168
+        ],
+        [
+          21397504,
+          9110720
+        ],
+        [
+          21397504,
+          9110720
+        ]
+      ],
+      "rust_trials": [
+        [
+          6422528,
+          5456704
+        ],
+        [
+          6422528,
+          5456704
+        ],
+        [
+          6422528,
+          5456704
+        ]
+      ]
+    },
+    {
+      "name": "stocfor3",
+      "native_peak_rss_bytes": 40599552,
+      "rust_peak_rss_bytes": 29442048,
+      "rss_ratio": 0.725181598062954,
+      "native_peak_footprint_bytes": 26625280,
+      "rust_peak_footprint_bytes": 24265600,
+      "native_trials": [
+        [
+          40599552,
+          26608832
+        ],
+        [
+          40599552,
+          26625280
+        ],
+        [
+          40599552,
+          26625280
+        ]
+      ],
+      "rust_trials": [
+        [
+          29442048,
+          24265600
+        ],
+        [
+          29442048,
+          24282048
+        ],
+        [
+          29442048,
+          24265600
+        ]
+      ]
+    },
+    {
+      "name": "truss",
+      "native_peak_rss_bytes": 24395776,
+      "rust_peak_rss_bytes": 9748480,
+      "rss_ratio": 0.39959704499664206,
+      "native_peak_footprint_bytes": 12125376,
+      "rust_peak_footprint_bytes": 8455040,
+      "native_trials": [
+        [
+          24838144,
+          12617088
+        ],
+        [
+          24395776,
+          12125376
+        ],
+        [
+          24395776,
+          12125376
+        ]
+      ],
+      "rust_trials": [
+        [
+          10485760,
+          9192320
+        ],
+        [
+          9748480,
+          8438592
+        ],
+        [
+          9748480,
+          8455040
+        ]
+      ]
+    },
+    {
+      "name": "tuff",
+      "native_peak_rss_bytes": 19136512,
+      "rust_peak_rss_bytes": 3424256,
+      "rss_ratio": 0.17893835616438356,
+      "native_peak_footprint_bytes": 6866176,
+      "rust_peak_footprint_bytes": 2687808,
+      "native_trials": [
+        [
+          19136512,
+          6882624
+        ],
+        [
+          19136512,
+          6849728
+        ],
+        [
+          19136512,
+          6866176
+        ]
+      ],
+      "rust_trials": [
+        [
+          3424256,
+          2704256
+        ],
+        [
+          3424256,
+          2687808
+        ],
+        [
+          3424256,
+          2687808
+        ]
+      ]
+    },
+    {
+      "name": "vtp.base",
+      "native_peak_rss_bytes": 18382848,
+      "rust_peak_rss_bytes": 2670592,
+      "rss_ratio": 0.14527629233511585,
+      "native_peak_footprint_bytes": 6767808,
+      "rust_peak_footprint_bytes": 1950592,
+      "native_trials": [
+        [
+          18382848,
+          6767808
+        ],
+        [
+          18382848,
+          6751360
+        ],
+        [
+          18382848,
+          6767808
+        ]
+      ],
+      "rust_trials": [
+        [
+          2670592,
+          1934144
+        ],
+        [
+          2670592,
+          1950592
+        ],
+        [
+          2670592,
+          1950592
+        ]
+      ]
+    },
+    {
+      "name": "wood1p",
+      "native_peak_rss_bytes": 24330240,
+      "rust_peak_rss_bytes": 8355840,
+      "rss_ratio": 0.3434343434343434,
+      "native_peak_footprint_bytes": 11666624,
+      "rust_peak_footprint_bytes": 5374784,
+      "native_trials": [
+        [
+          24330240,
+          11666624
+        ],
+        [
+          24330240,
+          11666624
+        ],
+        [
+          24330240,
+          11666624
+        ]
+      ],
+      "rust_trials": [
+        [
+          8355840,
+          5374784
+        ],
+        [
+          8355840,
+          5374784
+        ],
+        [
+          8355840,
+          5374784
+        ]
+      ]
+    },
+    {
+      "name": "woodw",
+      "native_peak_rss_bytes": 25182208,
+      "rust_peak_rss_bytes": 10452992,
+      "rss_ratio": 0.41509433962264153,
+      "native_peak_footprint_bytes": 12846336,
+      "rust_peak_footprint_bytes": 9274176,
+      "native_trials": [
+        [
+          25182208,
+          12846336
+        ],
+        [
+          25182208,
+          12846336
+        ],
+        [
+          25182208,
+          12829888
+        ]
+      ],
+      "rust_trials": [
+        [
+          10452992,
+          9274176
+        ],
+        [
+          10452992,
+          9274176
+        ],
+        [
+          10452992,
+          9274176
+        ]
+      ]
+    }
+  ]
+}

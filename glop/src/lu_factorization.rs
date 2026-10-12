@@ -904,25 +904,32 @@ impl LuFactorization {
             }
         }
         result_before_permutation.clear();
+        rhs.clear_sparse_mask();
+        rhs.values_mut()
+            .swap_storage_with(result_before_permutation.values_mut());
         if rhs.non_zeros().is_empty() {
             // An empty position list is GLOP's dense-vector sentinel. Preserve
             // it in the cached, pre-permutation result: rebuilding the exact
             // support here would make RightSolveForTau() select a different
             // numerical kernel from upstream.
-            result_before_permutation
-                .values_mut()
-                .as_mut_slice()
-                .copy_from_slice(rhs.values().as_slice());
-        } else {
-            for entry in rhs.iter() {
-                result_before_permutation.scatter_entry_without_mask(
-                    RowIndex::from_usize(entry.index().to_usize()),
-                    entry.coefficient(),
-                );
+            let input = result_before_permutation.values().as_slice();
+            let output = rhs.values_mut().as_mut_slice();
+            for (row, &value) in input.iter().enumerate() {
+                if value != 0.0 {
+                    output[self.inverse_row_permutation[row]] = value;
+                }
             }
-        }
-        self.permute_scattered(rhs, &self.inverse_row_permutation);
-        if !rhs.non_zeros().is_empty() {
+        } else {
+            let (input, cached_non_zeros) = result_before_permutation.mutable_parts();
+            cached_non_zeros.reserve(rhs.non_zeros().len());
+            let (output, non_zeros) = rhs.mutable_parts();
+            for index in non_zeros.iter_mut() {
+                let source = index.to_usize();
+                cached_non_zeros.push(RowIndex::from_usize(source));
+                let destination = self.inverse_row_permutation[source];
+                output[destination] = input[source];
+                *index = ColIndex::from_usize(destination);
+            }
             rhs.mark_non_zeros_unsorted();
         }
         Ok(true)
@@ -965,28 +972,27 @@ impl LuFactorization {
         let n = destination_by_source.len();
         let mut scratch = self.dense_zero_scratchpad.borrow_mut();
         scratch.resize(n, 0.0);
+        // GLOP swaps the solved vector with its reusable all-zero scratchpad.
+        // The old vector becomes the input, and the old scratch allocation is
+        // the already-zero destination; neither dense array is copied.
+        vector.values_mut().swap_storage_with_raw(&mut scratch);
         let (values, non_zeros) = vector.mutable_parts();
         if non_zeros.is_empty() {
             for source in 0..n {
-                scratch[destination_by_source[source]] = values[source];
-                values[source] = 0.0;
+                let value = scratch[source];
+                if value != 0.0 {
+                    values[destination_by_source[source]] = value;
+                }
             }
-            for destination in 0..n {
-                values[destination] = scratch[destination];
-                scratch[destination] = 0.0;
-            }
+            scratch.fill(0.0);
         } else {
             for source in non_zeros.iter_mut() {
                 let source_position = source.to_usize();
                 let destination = destination_by_source[source_position];
-                scratch[destination] = values[source_position];
-                values[source_position] = 0.0;
+                let value = scratch[source_position];
+                scratch[source_position] = 0.0;
+                values[destination] = value;
                 *source = I::from_usize(destination);
-            }
-            for &destination in non_zeros.iter() {
-                let position = destination.to_usize();
-                values[position] = scratch[position];
-                scratch[position] = 0.0;
             }
         }
     }
@@ -1464,6 +1470,62 @@ mod tests {
                 .collect::<Vec<_>>(),
             [1, 0]
         );
+    }
+
+    #[test]
+    fn scattered_permutation_swaps_reusable_zero_storage() {
+        let factorization = LuFactorization::new();
+        let mut vector = ScatteredColumn::new(RowIndex::new(4));
+        vector.set(RowIndex::new(0), 2.0);
+        vector.set(RowIndex::new(2), 3.0);
+        let old_storage = vector.values().as_slice().as_ptr();
+        factorization.permute_scattered(&mut vector, &[2, 0, 3, 1]);
+        assert_eq!(vector.values().as_slice(), &[0.0, 0.0, 2.0, 3.0]);
+        assert!(std::ptr::eq(
+            factorization.dense_zero_scratchpad.borrow().as_ptr(),
+            old_storage
+        ));
+        assert!(
+            factorization
+                .dense_zero_scratchpad
+                .borrow()
+                .iter()
+                .all(|&value| value.to_bits() == 0.0_f64.to_bits())
+        );
+
+        vector.clear();
+        vector.values_mut()[RowIndex::new(0)] = 5.0;
+        vector.values_mut()[RowIndex::new(3)] = -1.0;
+        assert!(vector.non_zeros().is_empty()); // GLOP's dense sentinel.
+        factorization.permute_scattered(&mut vector, &[2, 0, 3, 1]);
+        assert_eq!(vector.values().as_slice(), &[0.0, -1.0, 5.0, 0.0]);
+        assert!(
+            factorization
+                .dense_zero_scratchpad
+                .borrow()
+                .iter()
+                .all(|&value| value.to_bits() == 0.0_f64.to_bits())
+        );
+    }
+
+    #[test]
+    fn cached_left_solve_swaps_prepermutation_values() {
+        let factorization =
+            LuFactorization::factorize(&matrix(&[&[2.0, 1.0], &[1.0, 3.0]]), 0.1).unwrap();
+        let mut rhs = ScatteredRow::new(ColIndex::new(2));
+        rhs.set(ColIndex::new(0), 4.0);
+        let old_storage = rhs.values().as_slice().as_ptr();
+        let mut cache = ScatteredColumn::new(RowIndex::new(2));
+        assert!(
+            factorization
+                .left_solve_lower_with_nonzeros_and_cache(&mut rhs, &mut cache)
+                .unwrap()
+        );
+        assert!(std::ptr::eq(
+            cache.values().as_slice().as_ptr(),
+            old_storage
+        ));
+        assert!(cache.values().as_slice().iter().any(|&value| value != 0.0));
     }
 
     #[test]

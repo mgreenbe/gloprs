@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0.
 // Pinned GLOP public-solver result with its default presolve/scaling pipeline.
 
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <iomanip>
@@ -12,7 +13,6 @@
 #include "ortools/glop/preprocessor.h"
 #include "ortools/glop/revised_simplex.h"
 #include "ortools/lp_data/lp_data.h"
-#include "ortools/lp_data/lp_utils.h"
 #include "ortools/lp_data/lp_utils.h"
 #include "ortools/lp_data/mps_reader.h"
 #include "ortools/lp_data/proto_utils.h"
@@ -362,10 +362,48 @@ extern "C" __attribute__((used, noinline)) int diag_rc_recompute() {
 int main(int argc, char** argv) {
   namespace glop = operations_research::glop;
   if (argc < 2 || argc > 5) return EXIT_FAILURE;
+  const auto parse_start = std::chrono::steady_clock::now();
   const auto model = glop::MpsFileToMPModelProto(argv[1]);
   if (!model.ok()) return EXIT_FAILURE;
   glop::LinearProgram lp;
   glop::MPModelProtoToLinearProgram(*model, &lp);
+  if (argc >= 3 && std::strcmp(argv[2], "parse_timing") == 0) {
+    const double seconds = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - parse_start).count();
+    std::cout << std::setprecision(17) << "parse_seconds " << seconds
+              << " rows " << lp.num_constraints().value()
+              << " columns " << lp.num_variables().value()
+              << " nonzeros " << lp.num_entries().value() << '\n';
+    return EXIT_SUCCESS;
+  }
+  if (argc >= 3 && std::strcmp(argv[2], "presolve_timing") == 0) {
+    const int repetitions = argc >= 4 ? std::atoi(argv[3]) : 1;
+    if (repetitions <= 0) return EXIT_FAILURE;
+    glop::GlopParameters parameters;
+    const auto start = std::chrono::steady_clock::now();
+    glop::ProblemStatus status = glop::ProblemStatus::INIT;
+    int rows = 0, columns = 0, nonzeros = 0;
+    for (int repetition = 0; repetition < repetitions; ++repetition) {
+      glop::LinearProgram presolved;
+      presolved.PopulateFromLinearProgram(lp);
+      presolved.RemoveNearZeroEntries(parameters.drop_magnitude());
+      glop::MainLpPreprocessor preprocessor(&parameters);
+      operations_research::TimeLimit limit(20.0);
+      preprocessor.SetTimeLimit(&limit);
+      preprocessor.Run(&presolved);
+      status = preprocessor.status();
+      rows = presolved.num_constraints().value();
+      columns = presolved.num_variables().value();
+      nonzeros = presolved.num_entries().value();
+    }
+    const double seconds = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - start).count() / repetitions;
+    std::cout << std::setprecision(17) << "presolve_seconds " << seconds
+              << " status " << glop::GetProblemStatusString(status)
+              << " rows " << rows << " columns " << columns
+              << " nonzeros " << nonzeros << '\n';
+    return EXIT_SUCCESS;
+  }
   glop::LinearProgram presolved;
   presolved.PopulateFromLinearProgram(lp);
   glop::GlopParameters parameters;
@@ -374,6 +412,33 @@ int main(int argc, char** argv) {
   operations_research::TimeLimit presolve_limit(20.0);
   preprocessor.SetTimeLimit(&presolve_limit);
   preprocessor.Run(&presolved);
+  if (argc >= 3 && std::strcmp(argv[2], "presolved_solve_timing") == 0) {
+    const int repetitions = argc >= 4 ? std::atoi(argv[3]) : 1;
+    if (repetitions <= 0 || preprocessor.status() != glop::ProblemStatus::INIT)
+      return EXIT_FAILURE;
+    glop::ProblemStatus status = glop::ProblemStatus::INIT;
+    int iterations = 0;
+    double objective = 0.0;
+    const auto start = std::chrono::steady_clock::now();
+    for (int repetition = 0; repetition < repetitions; ++repetition) {
+      glop::RevisedSimplex simplex;
+      simplex.SetParameters(parameters);
+      operations_research::TimeLimit limit(20.0);
+      if (!simplex.Solve(presolved, &limit).ok()) return EXIT_FAILURE;
+      status = simplex.GetProblemStatus();
+      iterations = simplex.GetNumberOfIterations();
+      objective = simplex.GetObjectiveValue();
+    }
+    const double seconds = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - start).count() / repetitions;
+    uint64_t objective_bits;
+    std::memcpy(&objective_bits, &objective, sizeof(objective_bits));
+    std::cout << std::setprecision(17) << "solve_seconds " << seconds
+              << " status " << glop::GetProblemStatusString(status)
+              << " iterations " << iterations
+              << " objective_bits " << objective_bits << '\n';
+    return EXIT_SUCCESS;
+  }
   const auto bits = [](double value) {
     uint64_t result;
     std::memcpy(&result, &value, sizeof(result));

@@ -1,6 +1,7 @@
 //! Diagnostic default-presolve comparison with the pinned GLOP public solver.
 
 use std::env;
+use std::time::Instant;
 
 use glop::lp_solver::LPSolver;
 use glop::preprocessor::MainLpPreprocessor;
@@ -14,13 +15,81 @@ fn main() {
     let path = env::args()
         .nth(1)
         .expect("usage: full_presolve_netlib MODEL.mps");
+    let parse_start = Instant::now();
     let lp = parse_mps_file(path).expect("valid MPS model");
+    let parse_seconds = parse_start.elapsed().as_secs_f64();
+    if matches!(env::args().nth(2).as_deref(), Some("parse_timing")) {
+        println!(
+            "parse_seconds {parse_seconds:.17} rows {} columns {} nonzeros {}",
+            lp.num_constraints().value(),
+            lp.num_variables().value(),
+            lp.num_entries().value()
+        );
+        return;
+    }
+    if matches!(env::args().nth(2).as_deref(), Some("presolve_timing")) {
+        let repetitions: u32 = env::args()
+            .nth(3)
+            .map_or(1, |value| value.parse().expect("positive repetitions"));
+        assert!(repetitions > 0);
+        let parameters = glop::parameters::GlopParameters::default();
+        let start = Instant::now();
+        let mut result = (String::new(), 0, 0, 0);
+        for _ in 0..repetitions {
+            let mut presolved = lp.clone();
+            presolved.remove_near_zero_entries(parameters.drop_magnitude);
+            let mut preprocessor = MainLpPreprocessor::new();
+            let mut limit = TimeLimit::new(20.0, f64::INFINITY);
+            preprocessor.run(&mut presolved, &parameters, &mut limit);
+            result = (
+                preprocessor.status().to_string(),
+                presolved.num_constraints().value(),
+                presolved.num_variables().value(),
+                presolved.num_entries().value(),
+            );
+        }
+        let seconds = start.elapsed().as_secs_f64() / f64::from(repetitions);
+        println!(
+            "presolve_seconds {seconds:.17} status {} rows {} columns {} nonzeros {}",
+            result.0, result.1, result.2, result.3
+        );
+        return;
+    }
     let mut presolved = lp.clone();
     let parameters = glop::parameters::GlopParameters::default();
     presolved.remove_near_zero_entries(parameters.drop_magnitude);
     let mut preprocessor = MainLpPreprocessor::new();
     let mut presolve_limit = TimeLimit::new(20.0, f64::INFINITY);
     preprocessor.run(&mut presolved, &parameters, &mut presolve_limit);
+    if matches!(
+        env::args().nth(2).as_deref(),
+        Some("presolved_solve_timing")
+    ) {
+        let repetitions: u32 = env::args()
+            .nth(3)
+            .map_or(1, |value| value.parse().expect("positive repetitions"));
+        assert!(repetitions > 0);
+        assert_eq!(preprocessor.status().to_string(), "INIT");
+        let start = Instant::now();
+        let mut result = (String::new(), 0, 0);
+        for _ in 0..repetitions {
+            let mut simplex = RevisedSimplex::new();
+            simplex.set_parameters(&parameters);
+            let mut limit = TimeLimit::new(20.0, f64::INFINITY);
+            simplex.solve(&presolved, &mut limit).expect("direct solve");
+            result = (
+                simplex.problem_status().to_string(),
+                simplex.number_of_iterations(),
+                simplex.objective_value().to_bits(),
+            );
+        }
+        let seconds = start.elapsed().as_secs_f64() / f64::from(repetitions);
+        println!(
+            "solve_seconds {seconds:.17} status {} iterations {} objective_bits {}",
+            result.0, result.1, result.2
+        );
+        return;
+    }
     eprintln!(
         "presolved {} {} {} {}",
         preprocessor.status(),

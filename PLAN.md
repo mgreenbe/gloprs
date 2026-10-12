@@ -1661,6 +1661,65 @@ Benchmark entry point: `tools/benchmark_netlib_solve.py` with release-built
 output, and the benchmark checks native fixture status and iteration count on
 every trial. Local raw comparisons and profiles are in ignored `target/`.
 
+The October 2026 Phase-8 campaign now has reproducible per-model artifacts in
+`baselines/phase8-*.json` and a methods/results summary in
+`baselines/phase8-performance.md`. Three serial timed trials and one warm-up
+on the Apple M2 gave 1.086× Rust/native for the original 96-model direct-dual
+baseline (23.80 versus 25.84 seconds) and 1.347× for the public default
+pipeline (9.94 versus 13.38 seconds). Separate timers put parsing at 1.75×
+(an absolute excess of 0.16 seconds), preprocessing at 1.47× (0.12 seconds),
+and solving the already-presolved problems at 1.356× (3.38 seconds). Thus the
+public gap is principally inside simplex, not a preprocessing copy or MPS
+conversion. All 96 timed results retain native status and iteration count.
+
+Profiling identified another representation mismatch: GLOP swaps a scattered
+solution's storage with a reusable zero scratchpad when permuting and swaps
+the cached pre-permutation left-solve values with its caller, whereas Rust
+copied their dense arrays. Those swaps and `RightSolveForTau()`'s upstream
+const-reference return now have safe Rust counterparts. Storage-identity unit
+tests, six 300-case native basis-update suites, and the strict 96-model
+trajectory test pass. A repeat of the already-presolved solves is 1.340×
+(9.62 versus 12.89 seconds); the public pipeline remains 1.346× (9.68 versus
+13.04 seconds). The direct-dual repeat is 1.104× (23.74 versus 26.22 seconds),
+slightly worse than its prior 1.086× run, so no full-corpus speedup is claimed.
+The swap helps `stocfor3`'s presolved solve in a focused comparison, but does
+not account for the broader performance gap. A safe slice/chunk rewrite of
+`CompactSparseMatrix::column_scalar_product_slice()` had no measurable benefit
+and was reverted. Whole-process peak RSS, including parsing and runtime
+overhead, is lower for Rust on every one of the 96 direct-dual models; its
+median per-model ratio is 0.194. These memory numbers are not isolated solver
+heap measurements.
+
+A new matched profile of presolved `fit2d`, one of the largest absolute
+remaining regressions (about 0.77 seconds per solve before this edit), put
+about 73% of Rust samples in the compact-column scalar product used by update
+rows and primal edge norms. Native spends the same stage in inlined
+column-wise update code, but completes it faster. The new isolated benchmark
+`tools/benchmark_compact_dot.py` measured 2.25–2.38× Rust/native at 4–64
+entries per column. Disassembly found a redundant signedness check on each
+Rust row-index conversion, in addition to the necessary safe vector bounds
+check. Converting the 32-bit stored row directly as GLOP does preserves the
+four-accumulator fused arithmetic and panics on invalid indices via checked
+vector indexing. The isolated ratio fell to 1.81–2.11×, and a complete
+matched presolved-solve rerun fell from 1.340× to 1.291×. The public default
+pipeline fell from 1.346× to 1.301×, with all 96 statuses and iteration
+counts retained and the strict trajectory fixture passing. A direct-dual
+full-corpus rerun rose from 1.104× to 1.172×, driven largely by an anomalous
+`dfl001` trial; alternating old/new Rust binaries on `dfl001`, `fit2d`, and
+`stocfor3` instead measured the new code 4.5%, 9.5%, and 3.5% faster. Thus
+the direct aggregate difference cannot be attributed to the row conversion
+without better control of machine variability. The remaining scalar-product
+gap likely involves safe gather bounds checks and generated code. GLOP also
+declares this kernel inline in `sparse.h`, whereas Rust had retained an
+out-of-line cross-crate function. An explicit inline annotation (supported by
+the isolated benchmark) brings the kernel ratio to 1.73–1.83× and the full
+presolved-solve ratio to 1.254× (9.81 versus 12.31 seconds). The public default
+pipeline now measures 1.264× (10.32 versus 13.05 seconds). A direct-dual
+three-model alternating A/B check found the inline binary faster on `dfl001`
+and `fit2d` but slightly slower on `stocfor3`. The strict fast-96 trajectory
+and public-postsolve KKT gates still pass. The separate lower-transpose kernel
+gap also remains open.
+
 Benchmark native GLOP and `gloprs` on the same machine with pinned compilers and
 equivalent optimized settings. Use repeated runs, warm caches where appropriate,
 and report medians plus dispersion.
