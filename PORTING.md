@@ -786,6 +786,35 @@ unchanged. A five-trial isolated lower-transpose benchmark improved the
 dimension-1024 Rust/native ratio from 1.492 to 1.248, and selected direct
 Netlib A/B solves improved by 0.6–3.8% except for neutral `stocfor3`.
 
+The same validated-row helper now serves the dense upper-transpose kernel.
+This removes a repeated RHS bounds check without changing its four-term
+contraction order; a paired qap15 BTRAN probe fell from 2.580 to 2.306 seconds
+per 10,000 solves (native 1.916 seconds), with identical solution checksums.
+The lower-transpose kernel now follows GLOP's single reverse cursor across
+contiguous columns and uses a separate, debug-checked factor-entry helper for
+unchecked reads. Each cursor position is bounded by validated column starts,
+which in turn delimit both parallel factor-entry arrays. A safe-indexed cursor
+experiment was slower and was discarded; the measured version reduced a
+representative 200,000-solve qap15 FTRAN probe from 3.357 to 3.202 seconds
+(native 3.009 seconds) without changing its checksum. The workspace suite,
+strict linting, 1,000 native triangular traces, and 96-model strict trajectory
+fixture pass. A single serial sweep of the qap12/qap15 RHS corpus measured
+23,817 FTRAN solves at 0.371 seconds Rust versus 0.338 native (1.096) and
+1,759 BTRAN solves at 0.206 versus 0.177 seconds (1.161), with zero checksum
+mismatches. These are isolated solve timings, not full simplex timings.
+Across all 2,593 saved bases, a single serial ten-repetition pass measured
+161,608 FTRAN RHS at 0.4644 seconds Rust versus 0.4157 native (1.117), and
+5,809 BTRAN RHS at 0.2337 versus 0.2016 seconds (1.159), with no checksum
+mismatches. Extending the validated factor-entry helper to upper-transpose
+substitution removed its remaining repeated entry-array checks. A three-trial
+qap15 BTRAN microprobe improved from 2.261 to 1.904 seconds per 10,000
+solves, versus 1.917 seconds native, with identical checksums. Repeating the
+full corpus measured FTRAN at 0.4658 seconds Rust versus 0.4137 native
+(1.126), and BTRAN at 0.1996 versus 0.2019 seconds (0.989), with zero
+checksum mismatches. The 1,000 native triangular traces and strict 96-model
+trajectory fixture still pass. BTRAN has reached isolated-kernel parity on
+this machine; FTRAN has not.
+
 ## Test inventory caveat
 
 The pinned public tree does not contain the historical file-local unit tests for

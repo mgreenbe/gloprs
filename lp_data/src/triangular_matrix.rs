@@ -813,17 +813,34 @@ impl TriangularMatrix {
         Ok(())
     }
 
-    // Only used by the dense lower-transpose kernel after transpose_solve()
+    // Only used by the dense transpose kernels after transpose_solve()
     // checks rhs.len() == dimension(). All stored rows are checked to be below
     // num_rows at insertion/permutation, and this matrix is square here.
     #[allow(clippy::inline_always, unsafe_code)]
     #[inline(always)]
-    fn lower_transpose_rhs_value(rhs: &[f64], row: u32) -> f64 {
+    fn transpose_rhs_value(rhs: &[f64], row: u32) -> f64 {
         let row = usize::try_from(row).expect("row index fits usize");
         debug_assert!(row < rhs.len());
         // SAFETY: the caller has checked rhs length against the matrix's row
         // count, and row came from its validated triangular storage.
         unsafe { *rhs.get_unchecked(row) }
+    }
+
+    // Transpose substitution only calls this after checking the matrix is
+    // square. Every start offset is maintained within both parallel entry
+    // arrays by the matrix builders and their in-place permutations.
+    #[allow(clippy::inline_always, unsafe_code)]
+    #[inline(always)]
+    fn transpose_factor_entry(&self, position: usize) -> (u32, f64) {
+        debug_assert!(position < self.rows.len() && position < self.coefficients.len());
+        // SAFETY: position is drawn from the validated starts array and
+        // decremented only while above that column's start offset.
+        unsafe {
+            (
+                *self.rows.get_unchecked(position),
+                *self.coefficients.get_unchecked(position),
+            )
+        }
     }
 
     fn transpose_lower_solve<const UNIT_DIAGONAL: bool>(&self, rhs: &mut [f64]) {
@@ -835,42 +852,36 @@ impl TriangularMatrix {
         else {
             return;
         };
+        // As in GLOP, one cursor walks the contiguous columns backward.
+        // Keep it exclusive to avoid a signed -1 sentinel for empty columns.
+        let mut position = self.starts[last_nonzero + 1];
         for column in (self.first_non_identity_column..=last_nonzero).rev() {
             let start = self.starts[column];
-            let end = self.starts[column + 1];
             let mut sum = rhs[column];
-            // Fixed-size reverse chunks retain GLOP's four-entry arithmetic
-            // order while giving Rust a single checked slice per column.
-            // This avoids most repeated factor-storage bounds checks without
-            // changing the contiguous storage or symbolic traversal.
-            let coefficients = &self.coefficients[start..end];
-            let rows = &self.rows[start..end];
-            let coefficient_chunks = coefficients.rchunks_exact(4);
-            let remainder = coefficient_chunks.remainder();
-            for (c, r) in coefficient_chunks.zip(rows.rchunks_exact(4)) {
-                let &[c0, c1, c2, c3] = c else {
-                    unreachable!();
-                };
-                let &[r0, r1, r2, r3] = r else {
-                    unreachable!();
-                };
-                let mut four_term_sum = c2 * Self::lower_transpose_rhs_value(rhs, r2);
-                four_term_sum = c3.mul_add(Self::lower_transpose_rhs_value(rhs, r3), four_term_sum);
-                four_term_sum = c1.mul_add(Self::lower_transpose_rhs_value(rhs, r1), four_term_sum);
-                four_term_sum = c0.mul_add(Self::lower_transpose_rhs_value(rhs, r0), four_term_sum);
+            while position >= start + 4 {
+                position -= 4;
+                let (r0, c0) = self.transpose_factor_entry(position);
+                let (r1, c1) = self.transpose_factor_entry(position + 1);
+                let (r2, c2) = self.transpose_factor_entry(position + 2);
+                let (r3, c3) = self.transpose_factor_entry(position + 3);
+                let mut four_term_sum = c2 * Self::transpose_rhs_value(rhs, r2);
+                four_term_sum = c3.mul_add(Self::transpose_rhs_value(rhs, r3), four_term_sum);
+                four_term_sum = c1.mul_add(Self::transpose_rhs_value(rhs, r1), four_term_sum);
+                four_term_sum = c0.mul_add(Self::transpose_rhs_value(rhs, r0), four_term_sum);
                 sum -= four_term_sum;
             }
-            let mut tail = remainder
-                .iter()
-                .rev()
-                .zip(rows[..remainder.len()].iter().rev());
-            if let Some((&coefficient, &row)) = tail.next() {
-                sum = (-coefficient).mul_add(Self::lower_transpose_rhs_value(rhs, row), sum);
-                if let Some((&coefficient, &row)) = tail.next() {
-                    sum = (-coefficient).mul_add(Self::lower_transpose_rhs_value(rhs, row), sum);
-                    if let Some((&coefficient, &row)) = tail.next() {
-                        sum =
-                            (-coefficient).mul_add(Self::lower_transpose_rhs_value(rhs, row), sum);
+            if position > start {
+                position -= 1;
+                let (row, coefficient) = self.transpose_factor_entry(position);
+                sum = (-coefficient).mul_add(Self::transpose_rhs_value(rhs, row), sum);
+                if position > start {
+                    position -= 1;
+                    let (row, coefficient) = self.transpose_factor_entry(position);
+                    sum = (-coefficient).mul_add(Self::transpose_rhs_value(rhs, row), sum);
+                    if position > start {
+                        position -= 1;
+                        let (row, coefficient) = self.transpose_factor_entry(position);
+                        sum = (-coefficient).mul_add(Self::transpose_rhs_value(rhs, row), sum);
                     }
                 }
             }
@@ -891,33 +902,27 @@ impl TriangularMatrix {
             let mut sum = rhs[column];
             while position + 3 < end {
                 // Preserve the contraction order of the pinned native build.
-                let mut four_term_sum = self.coefficients[position + 1]
-                    * rhs[usize::try_from(self.rows[position + 1]).unwrap()];
-                four_term_sum = self.coefficients[position].mul_add(
-                    rhs[usize::try_from(self.rows[position]).unwrap()],
-                    four_term_sum,
-                );
-                four_term_sum = self.coefficients[position + 2].mul_add(
-                    rhs[usize::try_from(self.rows[position + 2]).unwrap()],
-                    four_term_sum,
-                );
-                four_term_sum = self.coefficients[position + 3].mul_add(
-                    rhs[usize::try_from(self.rows[position + 3]).unwrap()],
-                    four_term_sum,
-                );
+                let (r0, c0) = self.transpose_factor_entry(position);
+                let (r1, c1) = self.transpose_factor_entry(position + 1);
+                let (r2, c2) = self.transpose_factor_entry(position + 2);
+                let (r3, c3) = self.transpose_factor_entry(position + 3);
+                let mut four_term_sum = c1 * Self::transpose_rhs_value(rhs, r1);
+                four_term_sum = c0.mul_add(Self::transpose_rhs_value(rhs, r0), four_term_sum);
+                four_term_sum = c2.mul_add(Self::transpose_rhs_value(rhs, r2), four_term_sum);
+                four_term_sum = c3.mul_add(Self::transpose_rhs_value(rhs, r3), four_term_sum);
                 sum -= four_term_sum;
                 position += 4;
             }
             // GLOP handles the 1–3 remaining entries with fixed branches.
             if position < end {
-                sum = (-self.coefficients[position])
-                    .mul_add(rhs[usize::try_from(self.rows[position]).unwrap()], sum);
+                let (row, coefficient) = self.transpose_factor_entry(position);
+                sum = (-coefficient).mul_add(Self::transpose_rhs_value(rhs, row), sum);
                 if position + 1 < end {
-                    sum = (-self.coefficients[position + 1])
-                        .mul_add(rhs[usize::try_from(self.rows[position + 1]).unwrap()], sum);
+                    let (row, coefficient) = self.transpose_factor_entry(position + 1);
+                    sum = (-coefficient).mul_add(Self::transpose_rhs_value(rhs, row), sum);
                     if position + 2 < end {
-                        sum = (-self.coefficients[position + 2])
-                            .mul_add(rhs[usize::try_from(self.rows[position + 2]).unwrap()], sum);
+                        let (row, coefficient) = self.transpose_factor_entry(position + 2);
+                        sum = (-coefficient).mul_add(Self::transpose_rhs_value(rhs, row), sum);
                     }
                 }
                 position = end;

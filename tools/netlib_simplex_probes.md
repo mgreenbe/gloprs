@@ -53,3 +53,63 @@ For a single instance, the release example can also be run directly:
 ```sh
 target/release/examples/netlib_simplex_probe ../datasets/netlib/mps/afiro.mps 120
 ```
+
+## Sparse FTRAN/BTRAN benchmark
+
+The paired adapters benchmark the same sparse LU solve stages that GLOP uses
+after absorbing its factorization column permutation. They load
+`factorization-SSSS.mtx` and `basis-SSSS.mtx`, verify that the latter is the
+former in the absorbed column order, and factorize the former **before** the
+timer. Each right-hand side is read and scattered before its solve timer;
+FTRAN times `RightSolveLWithNonZeros` plus `RightSolveUWithNonZeros`, and BTRAN
+times `LeftSolveUWithNonZeros` plus `LeftSolveLWithNonZeros`. The harnesses do
+not time Matrix Market parsing, factorization, RHS preparation, or checksums.
+They benchmark a standardized sparse representation of every saved RHS;
+the probe format does not record whether the original simplex call used a
+dense, scattered, or specialized entry point.
+
+Build and compare serially:
+
+```sh
+cargo build --release --example netlib_solve_probe_benchmark
+python3 tools/build_glop_reference_adapter.py \
+  --source tools/netlib_solve_probe_reference_adapter.cc \
+  --output target/native/netlib_solve_probe_reference_adapter
+python3 tools/benchmark_netlib_solve_probes.py \
+  --trials 3 --repetitions 10 --warmups 1
+```
+
+The Python runner alternates native/Rust order by basis and trial, checks
+dimension, input nonzero count, and three solution summaries per RHS, and
+writes median per-RHS solve times to `target/netlib-solve-probe-timings.csv`.
+Use `--models qap15 qap12`, `--limit-groups`, or `--rhs-limit` for subsets.
+The printed totals sum the per-RHS medians; they are not wall times of the
+runner. Very small/zero RHS solves are susceptible to timer granularity, so
+inspect the nonzero-RHS totals and large-model breakdown as well.
+
+On 2026-10-12 (Apple M2, Rust 1.95.0 release with thin LTO, Apple Clang 17,
+native OR-Tools `100f66e6242ab8bf8d32feb8f3bf086db66ae2b5`), a complete
+one-trial/ten-repetition pass measured 161,608
+FTRAN RHS at 0.4134 s native versus 0.5385 s Rust (1.303), and 5,809 BTRAN
+RHS at 0.2008 s versus 0.2649 s (1.319). All solution summaries agreed.
+Three alternating trials on the four largest contributors gave 37,653 FTRAN
+RHS at 0.3605 s versus 0.4684 s (1.300), and 2,435 BTRAN RHS at 0.1871 s
+versus 0.2451 s (1.310). Those four models include more than 80% of the
+full-corpus native solve time. The detailed CSVs are in `target/` (ignored by
+Git). This is isolated sparse LU solve time, not a full simplex or original
+call-site representation benchmark.
+
+After the transpose-kernel bounds-check and traversal improvements, a new
+one-trial/ten-repetition full-corpus pass measured 0.4157 s native versus
+0.4644 s Rust for FTRAN (1.117), and 0.2016 s versus 0.2337 s for BTRAN
+(1.159). All 167,417 RHS solution summaries matched. The per-RHS results are
+in `target/netlib-solve-probe-full-after-kernels.csv`; this is a single serial
+pass, so repeat paired trials for confidence intervals before treating the
+small remaining gap as a stable hardware-independent ratio.
+
+The final upper-transpose factor-entry optimization brought the next complete
+serial pass to 0.4137 s native versus 0.4658 s Rust for FTRAN (1.126), and
+0.2019 s versus 0.1996 s for BTRAN (0.989). Every solution summary still
+matched. Per-RHS results are in `target/netlib-solve-probe-full-final.csv`.
+The remaining FTRAN gap is concentrated most strongly in `qap15`, `qap12`,
+`truss`, and `dfl001`; BTRAN is at parity for this isolated probe workload.

@@ -1634,6 +1634,48 @@ on `qap15`'s 522 large bases, while preserving the faster Rust paths on other
 models. Raw per-probe and per-model CSVs are written under `target/` by the
 runner; this is isolated factorization time, not full simplex time.
 
+Paired sparse solve-probe adapters and `tools/benchmark_netlib_solve_probes.py`
+now cover the same corpus's 161,608 FTRAN and 5,809 BTRAN right-hand sides.
+They factor the recorded input before timing, verify the saved solve basis
+against the LU column permutation, absorb that permutation exactly as GLOP's
+sparse solve API requires, and time only paired sparse LU solve stages. A
+complete one-trial, ten-repetition pass matched dimensions, input nonzeros,
+and three solution summaries for every RHS. Summed per-RHS solve time was
+0.4134 s native versus 0.5385 s Rust for FTRAN (1.303) and 0.2008 s versus
+0.2649 s for BTRAN (1.319). The qap15 and qap12 probes dominate absolute
+time. A three-trial alternating comparison of the four largest contributors (`qap15`, `qap12`,
+`truss`, `dfl001`) confirmed a 1.300 FTRAN ratio on 37,653 RHS and a 1.310
+BTRAN ratio on 2,435 RHS, again with no solution-summary mismatch. The probe
+format does not encode the original dense/scattered/specialized solve choice; this
+benchmark deliberately standardizes on the sparse two-stage path.
+
+A subsequent profile-guided transpose-kernel pass removed repeated validated
+RHS bounds checks from dense upper-transpose substitution and restored GLOP's
+single reverse entry cursor in lower-transpose substitution. The latter uses
+one documented unchecked factor-entry read helper; the safe-indexed cursor
+version was slower and discarded. A one-trial, ten-repetition serial sweep of
+`qap12`/`qap15` (23,817 FTRAN and 1,759 BTRAN RHS) now measures 0.3382 s
+native versus 0.3707 s Rust for FTRAN (1.096) and 0.1770 s versus 0.2056 s
+for BTRAN (1.161), with no solution-summary differences. All workspace tests,
+1,000 differential triangular traces, and the strict 96-model trajectory
+fixture pass. The remaining FTRAN/BTRAN gap is real; these isolated sparse
+solve probes do not include simplex basis updates or the original call-site
+choice among dense, sparse, and specialized solves. The complete 2,593-basis
+corpus follow-up (one serial trial, ten repetitions per RHS) measured 161,608
+FTRAN RHS at 0.4157 s native versus 0.4644 s Rust (1.117), and 5,809 BTRAN
+RHS at 0.2016 s versus 0.2337 s (1.159), with zero solution-summary
+mismatches. A final upper-transpose factor-entry change removed the matching
+validated factor-storage checks. Its three-trial qap15 BTRAN microprobe fell
+from 2.261 s to 1.904 s per 10,000 solves, versus 1.917 s native. Repeating
+the complete serial corpus then measured 0.4137 s native versus 0.4658 s Rust
+for FTRAN (1.126), and 0.2019 s versus 0.1996 s for BTRAN (0.989), again with
+zero mismatches. Thus isolated sparse BTRAN is at parity on this machine;
+FTRAN is much closer than the initial 1.303 but still about 13% slower.
+`qap15` accounts for about half the absolute FTRAN gap (25.5 ms), followed by
+`qap12` (6.8 ms), `truss` (3.4 ms), and `dfl001` (2.1 ms). These are single
+full-corpus passes, not confidence intervals; repeat paired trials and profile
+the residual FTRAN overhead before claiming full parity.
+
 Profiling localized much of the `qap15` gap to the numerical update in
 `TriangularMatrix::permuted_lower_sparse_solve`. Unlike upstream's unchecked
 scratch-vector access, Rust emitted a bounds check for every successor row.
@@ -1650,6 +1692,11 @@ factorization, alternating native/Rust order in 25-probe batches) measured
 31.547 s native versus 33.156 s Rust (1.051), with all determinants agreeing.
 This is an encouraging single trial, not yet a replacement for the earlier
 five-trial baseline.
+
+In a later single-basis qap15 profile, 200 LU factorizations of
+`factorization-0266.mtx` took 12.750 s Rust versus 12.337 s native (1.033),
+with matching determinants. The numerical candidate-column solve remains the
+dominant hotspot; no further LU change was justified by that local sample.
 
 The excluded `qap12` is now separately validated under matched settings.
 Unscaled direct dual simplex terminates `OPTIMAL` in 115,513 iterations in
