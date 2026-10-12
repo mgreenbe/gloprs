@@ -1618,6 +1618,23 @@ on `qap15`'s 522 large bases, while preserving the faster Rust paths on other
 models. Raw per-probe and per-model CSVs are written under `target/` by the
 runner; this is isolated factorization time, not full simplex time.
 
+Profiling localized much of the `qap15` gap to the numerical update in
+`TriangularMatrix::permuted_lower_sparse_solve`. Unlike upstream's unchecked
+scratch-vector access, Rust emitted a bounds check for every successor row.
+An isolated A/B/A/B build on `qap15-41066/factorization-0266.mtx` improved
+the 200-factorization time from about 13.01 s to 12.29 s (roughly 5.5%) when
+that check was removed. The production kernel now uses one documented unchecked
+access, with row bounds enforced at triangular-matrix construction and mutation
+boundaries; all other unsafe code remains denied. This addresses only part of
+the measured gap, so repeat the full serial comparison and continue profiling
+the remainder. All 522 `qap15` probes had matching native/Rust factor-entry
+counts and column-permutation fingerprints before this change. A first
+production-build pass over all 522 probes (one warm-up and one timed
+factorization, alternating native/Rust order in 25-probe batches) measured
+31.547 s native versus 33.156 s Rust (1.051), with all determinants agreeing.
+This is an encouraging single trial, not yet a replacement for the earlier
+five-trial baseline.
+
 The excluded `qap12` is now separately validated under matched settings.
 Unscaled direct dual simplex terminates `OPTIMAL` in 115,513 iterations in
 both pinned GLOP and Rust; sampled limits at 0, 1, 10, 100, 500, 1,000,

@@ -760,6 +760,23 @@ cleanup prevents treating it as the first live pivot divergence. The Phase 7
 validation exit criteria are met with P7-001 explicitly open, while the broad
 `lp_solver` row remains in progress until that fidelity defect is repaired.
 
+## Phase-8 triangular-kernel safety exception
+
+The `sparse.{h,cc}` / `triangular_matrix.rs` port now has one localized unsafe
+operation in `PermutedLowerSparseSolve`: unchecked access to its dense scratch
+vector while applying an already-stored lower-factor edge. Upstream's matching
+update is unchecked. The invariant is that stored row indices are below the
+matrix row count; constructors and incremental builders now reject out-of-range
+rows, the row-permutation path checks remapped rows, and the solve resizes the
+scratch vector to the row count. DFS pruning only exchanges stored entries.
+This does not change arithmetic or traversal order. A controlled qap15
+single-basis experiment measured roughly 5.5% less factorization time, while
+the builder invariant test and existing triangular/LU tests validate behavior.
+A first production-build pass over all 522 qap15 bases measured 31.547 s in
+GLOP versus 33.156 s in gloprs, with every determinant agreeing. The prior
+five-trial baseline was 31.451 s versus 34.939 s; repeat multiple paired
+trials before treating the new ratio as stable.
+
 ## Test inventory caveat
 
 The pinned public tree does not contain the historical file-local unit tests for

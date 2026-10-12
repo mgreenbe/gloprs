@@ -132,7 +132,7 @@ impl TriangularMatrix {
                         Triangle::Lower => row > column,
                         Triangle::Upper => row < column,
                     };
-                    if !valid {
+                    if !valid || row >= n {
                         return Err(TriangularError::WrongTriangle);
                     }
                     rows.push(u32::try_from(row).expect("triangular row fits in 32 bits"));
@@ -208,7 +208,7 @@ impl TriangularMatrix {
                     Triangle::Lower => row > column,
                     Triangle::Upper => row < column,
                 };
-                if !valid {
+                if !valid || row >= columns.len() {
                     return Err(TriangularError::WrongTriangle);
                 }
                 self.rows
@@ -289,6 +289,7 @@ impl TriangularMatrix {
             if entry.index() == diagonal_row {
                 diagonal_value = entry.coefficient();
             } else {
+                assert!(entry.index().to_usize() < self.num_rows);
                 debug_assert_ne!(entry.coefficient(), 0.0);
                 self.rows
                     .push(u32::try_from(entry.index().to_usize()).unwrap());
@@ -305,6 +306,7 @@ impl TriangularMatrix {
         diagonal_value: f64,
     ) {
         for entry in column {
+            assert!(entry.index().to_usize() < self.num_rows);
             debug_assert_ne!(entry.index(), diagonal_row);
             self.rows
                 .push(u32::try_from(entry.index().to_usize()).unwrap());
@@ -322,6 +324,7 @@ impl TriangularMatrix {
         diagonal_value: f64,
     ) {
         for (row, coefficient) in entries {
+            assert!(row < self.num_rows);
             self.rows.push(u32::try_from(row).unwrap());
             self.coefficients.push(coefficient);
         }
@@ -338,6 +341,7 @@ impl TriangularMatrix {
             if entry.index() == diagonal_row {
                 debug_assert_eq!(entry.coefficient(), diagonal_coefficient);
             } else if entry.coefficient() != 0.0 {
+                assert!(entry.index().to_usize() < self.num_rows);
                 self.rows
                     .push(u32::try_from(entry.index().to_usize()).unwrap());
                 self.coefficients
@@ -349,7 +353,9 @@ impl TriangularMatrix {
 
     pub fn apply_row_permutation_to_non_diagonal_entries(&mut self, permutation: &[usize]) {
         for row in &mut self.rows {
-            *row = u32::try_from(permutation[usize::try_from(*row).unwrap()]).unwrap();
+            let permuted_row = permutation[usize::try_from(*row).unwrap()];
+            assert!(permuted_row < self.num_rows);
+            *row = u32::try_from(permuted_row).unwrap();
         }
     }
 
@@ -547,8 +553,13 @@ impl TriangularMatrix {
                 .zip(&coefficients[starts[column]..end])
             {
                 let successor = usize::try_from(successor).expect("row index fits usize");
-                workspace.scratchpad[successor] =
-                    (-coefficient).mul_add(pivot, workspace.scratchpad[successor]);
+                debug_assert!(successor < *num_rows);
+                // SAFETY: every stored row is checked against num_rows when
+                // inserted (or permuted), and scratchpad was resized to
+                // num_rows above. DFS pruning only swaps existing row entries.
+                #[allow(unsafe_code)]
+                let value = unsafe { workspace.scratchpad.get_unchecked_mut(successor) };
+                *value = (-coefficient).mul_add(pivot, *value);
             }
         }
         lower.reserve(workspace.lower_rows.len());
@@ -1436,6 +1447,28 @@ mod tests {
         assert_eq!(
             sparse.look_up_value(RowIndex::new(2), ColIndex::new(2)),
             5.0
+        );
+    }
+
+    #[test]
+    fn triangular_builders_reject_rows_outside_the_matrix() {
+        assert!(matches!(
+            TriangularMatrix::from_columns(
+                &[vec![(2, 1.0)], vec![]],
+                &[1.0, 1.0],
+                Triangle::Lower,
+                true,
+            ),
+            Err(TriangularError::WrongTriangle)
+        ));
+
+        let mut triangular = TriangularMatrix::empty(Triangle::Lower, true);
+        triangular.reset(2, 2);
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                triangular.add_column_with_diagonal([(2, 1.0)], 1.0);
+            }))
+            .is_err()
         );
     }
 
