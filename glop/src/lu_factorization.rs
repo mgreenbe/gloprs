@@ -123,6 +123,7 @@ impl LuFactorization {
     }
 
     #[must_use]
+    #[inline]
     pub const fn is_identity_factorization(&self) -> bool {
         self.is_identity_factorization
     }
@@ -434,11 +435,13 @@ impl LuFactorization {
     }
 
     #[must_use]
+    #[inline]
     pub fn dimension(&self) -> usize {
         self.lower.dimension()
     }
 
     #[must_use]
+    #[inline]
     pub fn row_permutation(&self) -> &[usize] {
         &self.row_permutation
     }
@@ -465,16 +468,19 @@ impl LuFactorization {
     }
 
     #[must_use]
+    #[inline]
     pub const fn pivot_threshold(&self) -> f64 {
         self.parameters.lu_factorization_pivot_threshold
     }
 
     #[must_use]
+    #[inline]
     pub const fn parameters(&self) -> &GlopParameters {
         &self.parameters
     }
 
     #[must_use]
+    #[inline]
     pub const fn deterministic_time_of_last_factorization(&self) -> f64 {
         self.deterministic_time_of_last_factorization
     }

@@ -50,6 +50,7 @@ impl<'a> LpDecomposer<'a> {
     }
 
     #[must_use]
+    #[inline]
     pub fn number_of_problems(&self) -> usize {
         self.clusters.len()
     }

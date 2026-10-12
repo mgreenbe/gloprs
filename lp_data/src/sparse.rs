@@ -168,26 +168,31 @@ impl CompactSparseMatrix {
     }
 
     #[must_use]
+    #[inline]
     pub const fn num_rows(&self) -> RowIndex {
         self.num_rows
     }
 
     #[must_use]
+    #[inline]
     pub fn num_cols(&self) -> ColIndex {
         self.num_cols
     }
 
     #[must_use]
+    #[inline]
     pub fn num_entries(&self) -> EntryIndex {
         EntryIndex::new(i64::try_from(self.coefficients.len()).unwrap_or(i64::MAX))
     }
 
     #[must_use]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.coefficients.is_empty()
     }
 
     #[must_use]
+    #[inline]
     pub fn column_num_entries(&self, column: ColIndex) -> EntryIndex {
         EntryIndex::new(
             i64::try_from(self.starts[column.to_usize() + 1] - self.starts[column.to_usize()])
@@ -196,11 +201,13 @@ impl CompactSparseMatrix {
     }
 
     #[must_use]
+    #[inline]
     pub fn column_is_empty(&self, column: ColIndex) -> bool {
         self.starts[column.to_usize()] == self.starts[column.to_usize() + 1]
     }
 
     #[must_use]
+    #[inline]
     pub fn column(&self, column: ColIndex) -> CompactColumn<'_> {
         let start = self.starts[column.to_usize()];
         let end = self.starts[column.to_usize() + 1];
@@ -329,6 +336,7 @@ pub struct CompactColumn<'a> {
 }
 
 impl<'a> CompactColumn<'a> {
+    #[inline]
     pub fn iter(self) -> impl Iterator<Item = (RowIndex, Fractional)> + 'a {
         self.rows
             .iter()
@@ -337,21 +345,25 @@ impl<'a> CompactColumn<'a> {
     }
 
     #[must_use]
+    #[inline]
     pub const fn len(self) -> usize {
         self.rows.len()
     }
 
     #[must_use]
+    #[inline]
     pub const fn is_empty(self) -> bool {
         self.rows.is_empty()
     }
 
     #[must_use]
+    #[inline]
     pub fn entry_row(self, entry: usize) -> RowIndex {
         self.rows[entry]
     }
 
     #[must_use]
+    #[inline]
     pub fn entry_coefficient(self, entry: usize) -> Fractional {
         self.coefficients[entry]
     }
@@ -401,21 +413,25 @@ impl<'a> MatrixView<'a> {
     }
 
     #[must_use]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.columns.is_empty()
     }
 
     #[must_use]
+    #[inline]
     pub const fn num_rows(&self) -> RowIndex {
         self.num_rows
     }
 
     #[must_use]
+    #[inline]
     pub fn num_cols(&self) -> ColIndex {
         ColIndex::from_usize(self.columns.len())
     }
 
     #[must_use]
+    #[inline]
     pub fn column(&self, column: ColIndex) -> &'a SparseColumn {
         self.columns[column.to_usize()]
     }
@@ -466,21 +482,25 @@ impl<'a> CompactSparseMatrixView<'a> {
     }
 
     #[must_use]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.matrix.is_empty()
     }
 
     #[must_use]
+    #[inline]
     pub const fn num_rows(&self) -> RowIndex {
         self.matrix.num_rows()
     }
 
     #[must_use]
+    #[inline]
     pub fn num_cols(&self) -> ColIndex {
         ColIndex::from_usize(self.columns.len())
     }
 
     #[must_use]
+    #[inline]
     pub fn column(&self, column: ColIndex) -> CompactColumn<'a> {
         self.matrix.column(self.columns[column.to_usize()])
     }
@@ -572,6 +592,7 @@ impl SparseMatrix {
     }
 
     #[must_use]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.columns.is_empty() || self.num_rows.value() == 0
     }
@@ -718,11 +739,13 @@ impl SparseMatrix {
     }
 
     #[must_use]
+    #[inline]
     pub const fn num_rows(&self) -> RowIndex {
         self.num_rows
     }
 
     #[must_use]
+    #[inline]
     pub fn num_cols(&self) -> ColIndex {
         ColIndex::from_usize(self.columns.len())
     }
@@ -738,6 +761,7 @@ impl SparseMatrix {
     }
 
     #[must_use]
+    #[inline]
     pub fn column(&self, column: ColIndex) -> &SparseColumn {
         &self.columns[column.to_usize()]
     }

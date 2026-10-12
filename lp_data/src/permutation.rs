@@ -34,11 +34,13 @@ impl<I: VectorIndex> Permutation<I> {
     }
 
     #[must_use]
+    #[inline]
     pub fn len(&self) -> I {
         I::from_usize(self.values.len())
     }
 
     #[must_use]
+    #[inline]
     pub const fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
@@ -56,6 +58,7 @@ impl<I: VectorIndex> Permutation<I> {
     }
 
     #[must_use]
+    #[inline]
     pub fn as_slice(&self) -> &[I] {
         &self.values
     }
@@ -212,12 +215,14 @@ pub fn apply_column_permutation_to_row_indexed_vector<T: Clone>(
 impl<I: VectorIndex> Index<I> for Permutation<I> {
     type Output = I;
 
+    #[inline]
     fn index(&self, index: I) -> &Self::Output {
         &self.values[index.to_usize()]
     }
 }
 
 impl<I: VectorIndex> IndexMut<I> for Permutation<I> {
+    #[inline]
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         &mut self.values[index.to_usize()]
     }

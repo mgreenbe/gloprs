@@ -197,6 +197,7 @@ impl LpScalingHelper {
     }
 
     #[must_use]
+    #[inline]
     pub fn variable_scaling_factor(&self, col: ColIndex) -> Fractional {
         self.col_unscaling_factor(col) * self.bound_scaling_factor
     }
@@ -270,11 +271,13 @@ impl LpScalingHelper {
     }
 
     #[must_use]
+    #[inline]
     pub const fn bounds_scaling_factor(&self) -> Fractional {
         self.bound_scaling_factor
     }
 
     #[must_use]
+    #[inline]
     pub const fn objective_scaling_factor(&self) -> Fractional {
         self.objective_scaling_factor
     }

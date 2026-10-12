@@ -225,26 +225,31 @@ impl TriangularMatrix {
     }
 
     #[must_use]
+    #[inline]
     pub fn dimension(&self) -> usize {
         self.diagonal.len()
     }
 
     #[must_use]
+    #[inline]
     pub const fn num_rows(&self) -> usize {
         self.num_rows
     }
 
     #[must_use]
+    #[inline]
     pub fn num_cols(&self) -> usize {
         self.diagonal.len()
     }
 
     #[must_use]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.diagonal.is_empty()
     }
 
     #[must_use]
+    #[inline]
     pub const fn first_non_identity_column(&self) -> usize {
         self.first_non_identity_column
     }
@@ -411,6 +416,7 @@ impl TriangularMatrix {
         column
     }
 
+    #[inline]
     pub fn column(&self, column: usize) -> impl Iterator<Item = (usize, f64)> + '_ {
         let range = self.starts[column]..self.starts[column + 1];
         self.rows[range.clone()]
@@ -632,6 +638,7 @@ impl TriangularMatrix {
     }
 
     #[must_use]
+    #[inline]
     pub const fn num_fp_operations_in_last_permuted_lower_sparse_solve(&self) -> i64 {
         self.permuted_workspace.num_fp_operations
     }
@@ -642,6 +649,7 @@ impl TriangularMatrix {
     }
 
     #[must_use]
+    #[inline]
     pub fn num_entries(&self) -> usize {
         self.rows.len() + self.diagonal.len()
     }

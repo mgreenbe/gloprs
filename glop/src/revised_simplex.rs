@@ -496,6 +496,7 @@ impl RevisedSimplex {
     }
 
     #[must_use]
+    #[inline]
     pub const fn parameters(&self) -> &GlopParameters {
         &self.parameters
     }
@@ -508,6 +509,7 @@ impl RevisedSimplex {
     }
 
     #[must_use]
+    #[inline]
     pub fn trace(&self) -> &[IterationEvent] {
         &self.trace
     }
@@ -550,6 +552,7 @@ impl RevisedSimplex {
     }
 
     #[must_use]
+    #[inline]
     pub fn diagnostic_last_direction(&self) -> Option<&ScatteredColumn> {
         self.diagnostic_last_direction.as_ref()
     }
@@ -605,6 +608,7 @@ impl RevisedSimplex {
     }
 
     #[must_use]
+    #[inline]
     pub fn dual_phase_one_pricing_vector(&self) -> &DenseColumn {
         &self.dual_phase_one_pricing_vector
     }
@@ -4792,34 +4796,42 @@ impl RevisedSimplex {
     }
 
     #[must_use]
+    #[inline]
     pub const fn problem_status(&self) -> ProblemStatus {
         self.problem_status
     }
     #[must_use]
+    #[inline]
     pub const fn problem_num_rows(&self) -> RowIndex {
         self.num_rows
     }
     #[must_use]
+    #[inline]
     pub const fn problem_num_cols(&self) -> ColIndex {
         self.first_slack_col
     }
     #[must_use]
+    #[inline]
     pub const fn number_of_iterations(&self) -> u64 {
         self.num_iterations
     }
     #[must_use]
+    #[inline]
     pub fn objective_value(&self) -> f64 {
         self.solution_objective_value
     }
     #[must_use]
+    #[inline]
     pub const fn objective_limit_reached(&self) -> bool {
         self.objective_limit_reached
     }
     #[must_use]
+    #[inline]
     pub fn variable_value(&self, column: ColIndex) -> f64 {
         self.variable_values[column]
     }
     #[must_use]
+    #[inline]
     pub fn reduced_cost(&self, column: ColIndex) -> f64 {
         self.solution_reduced_costs[column]
     }
@@ -4906,18 +4918,22 @@ impl RevisedSimplex {
     }
     #[must_use]
     #[allow(clippy::misnamed_getters)] // Mirrors GLOP's final-solution getter.
+    #[inline]
     pub const fn reduced_costs(&self) -> &DenseRow {
         &self.solution_reduced_costs
     }
     #[must_use]
+    #[inline]
     pub fn dual_value(&self, row: RowIndex) -> f64 {
         self.solution_dual_values[row]
     }
     #[must_use]
+    #[inline]
     pub fn constraint_activity(&self, row: RowIndex) -> f64 {
         -self.variable_values[ColIndex::new(self.first_slack_col.value() + row.value())]
     }
     #[must_use]
+    #[inline]
     pub fn variable_status(&self, column: ColIndex) -> VariableStatus {
         self.variables_info.as_ref().unwrap().variable_statuses()[column]
     }
@@ -4932,18 +4948,22 @@ impl RevisedSimplex {
         }
     }
     #[must_use]
+    #[inline]
     pub const fn state(&self) -> &BasisState {
         &self.solution_state
     }
     #[must_use]
+    #[inline]
     pub const fn primal_ray(&self) -> &DenseRow {
         &self.primal_ray
     }
     #[must_use]
+    #[inline]
     pub const fn dual_ray(&self) -> &DenseColumn {
         &self.dual_ray
     }
     #[must_use]
+    #[inline]
     pub fn basis(&self, row: RowIndex) -> ColIndex {
         self.basis[row]
     }

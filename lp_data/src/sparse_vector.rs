@@ -17,11 +17,13 @@ pub struct SparseEntry<I> {
 
 impl<I: Copy> SparseEntry<I> {
     #[must_use]
+    #[inline]
     pub const fn index(self) -> I {
         self.index
     }
 
     #[must_use]
+    #[inline]
     pub const fn coefficient(self) -> Fractional {
         self.coefficient
     }
@@ -29,6 +31,7 @@ impl<I: Copy> SparseEntry<I> {
 
 impl SparseEntry<RowIndex> {
     #[must_use]
+    #[inline]
     pub const fn row(self) -> RowIndex {
         self.index
     }
@@ -36,6 +39,7 @@ impl SparseEntry<RowIndex> {
 
 impl SparseEntry<ColIndex> {
     #[must_use]
+    #[inline]
     pub const fn col(self) -> ColIndex {
         self.index
     }
@@ -61,6 +65,7 @@ pub struct SparseVectorIter<'a, I> {
 impl<I: Copy> Iterator for SparseVectorIter<'_, I> {
     type Item = SparseEntry<I>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         Some(SparseEntry {
             index: *self.indices.next()?,
@@ -74,6 +79,7 @@ impl<I: Copy> Iterator for SparseVectorIter<'_, I> {
 }
 
 impl<I: Copy> DoubleEndedIterator for SparseVectorIter<'_, I> {
+    #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         Some(SparseEntry {
             index: *self.indices.next_back()?,
@@ -123,11 +129,13 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
     }
 
     #[must_use]
+    #[inline]
     pub const fn is_empty(&self) -> bool {
         self.indices.is_empty()
     }
 
     #[must_use]
+    #[inline]
     pub const fn num_entries(&self) -> usize {
         self.indices.len()
     }
@@ -144,39 +152,47 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
     }
 
     #[must_use]
+    #[inline]
     pub fn index(&self, position: usize) -> I {
         self.indices[position]
     }
 
     #[must_use]
+    #[inline]
     pub fn coefficient(&self, position: usize) -> Fractional {
         self.coefficients[position]
     }
 
+    #[inline]
     pub fn mutable_index(&mut self, position: usize) -> &mut I {
         &mut self.indices[position]
     }
 
+    #[inline]
     pub fn mutable_coefficient(&mut self, position: usize) -> &mut Fractional {
         &mut self.coefficients[position]
     }
 
     #[must_use]
+    #[inline]
     pub fn first_index(&self) -> I {
         self.index(0)
     }
 
     #[must_use]
+    #[inline]
     pub fn first_coefficient(&self) -> Fractional {
         self.coefficient(0)
     }
 
     #[must_use]
+    #[inline]
     pub fn last_index(&self) -> I {
         self.index(self.num_entries() - 1)
     }
 
     #[must_use]
+    #[inline]
     pub fn last_coefficient(&self) -> Fractional {
         self.coefficient(self.num_entries() - 1)
     }
@@ -394,11 +410,13 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
     }
 
     #[must_use]
+    #[inline]
     pub fn first(&self) -> Option<SparseEntry<I>> {
         (!self.is_empty()).then(|| self.entry(0))
     }
 
     #[must_use]
+    #[inline]
     pub fn last(&self) -> Option<SparseEntry<I>> {
         (!self.is_empty()).then(|| self.entry(self.num_entries() - 1))
     }
@@ -472,6 +490,7 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
         }
     }
 
+    #[inline]
     pub fn iter(&self) -> SparseVectorIter<'_, I> {
         SparseVectorIter {
             indices: self.indices.iter(),
@@ -666,6 +685,7 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
     }
 
     #[must_use]
+    #[inline]
     pub fn entry(&self, position: usize) -> SparseEntry<I> {
         SparseEntry {
             index: self.indices[position],
@@ -724,11 +744,13 @@ pub type SparseColumn = SparseVector<RowIndex>;
 
 impl SparseVector<RowIndex> {
     #[must_use]
+    #[inline]
     pub fn entry_row(&self, position: usize) -> RowIndex {
         self.entry(position).index()
     }
 
     #[must_use]
+    #[inline]
     pub fn entry_coefficient(&self, position: usize) -> Fractional {
         self.entry(position).coefficient()
     }
@@ -737,6 +759,7 @@ impl SparseVector<RowIndex> {
     ///
     /// Panics if the column is empty, matching upstream's unchecked accessor.
     #[must_use]
+    #[inline]
     pub fn first_row(&self) -> RowIndex {
         self.first().unwrap().index()
     }
@@ -745,6 +768,7 @@ impl SparseVector<RowIndex> {
     ///
     /// Panics if the column is empty, matching upstream's unchecked accessor.
     #[must_use]
+    #[inline]
     pub fn last_row(&self) -> RowIndex {
         self.last().unwrap().index()
     }
@@ -783,16 +807,19 @@ impl<'a> ColumnView<'a> {
     }
 
     #[must_use]
+    #[inline]
     pub const fn num_entries(self) -> usize {
         self.rows.len()
     }
 
     #[must_use]
+    #[inline]
     pub fn entry_coefficient(self, position: usize) -> Fractional {
         self.coefficients[position]
     }
 
     #[must_use]
+    #[inline]
     pub fn entry_row(self, position: usize) -> RowIndex {
         self.rows[position]
     }
@@ -801,6 +828,7 @@ impl<'a> ColumnView<'a> {
     ///
     /// Panics if the view is empty, matching upstream's unchecked accessor.
     #[must_use]
+    #[inline]
     pub fn first_coefficient(self) -> Fractional {
         self.entry_coefficient(0)
     }
@@ -809,6 +837,7 @@ impl<'a> ColumnView<'a> {
     ///
     /// Panics if the view is empty, matching upstream's unchecked accessor.
     #[must_use]
+    #[inline]
     pub fn first_row(self) -> RowIndex {
         self.entry_row(0)
     }
@@ -825,6 +854,7 @@ impl<'a> ColumnView<'a> {
     }
 
     #[must_use]
+    #[inline]
     pub const fn is_empty(self) -> bool {
         self.rows.is_empty()
     }
@@ -919,11 +949,13 @@ impl RandomAccessSparseColumn {
     }
 
     #[must_use]
+    #[inline]
     pub fn num_rows(&self) -> RowIndex {
         self.column.len()
     }
 
     #[must_use]
+    #[inline]
     pub fn coefficient(&self, row: RowIndex) -> Fractional {
         self.column[row]
     }

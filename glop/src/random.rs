@@ -24,6 +24,7 @@ impl SharedRandom {
         Self(Rc::new(RefCell::new(Mt19937_64::new(seed))))
     }
 
+    #[inline]
     pub fn seed(&self, seed: u64) {
         *self.0.borrow_mut() = Mt19937_64::new(seed);
     }

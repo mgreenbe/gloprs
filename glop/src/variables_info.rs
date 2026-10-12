@@ -29,6 +29,7 @@ impl Default for BasisState {
 
 impl BasisState {
     #[must_use]
+    #[inline]
     pub const fn is_empty(&self) -> bool {
         self.statuses.is_empty()
     }
@@ -463,36 +464,43 @@ impl VariablesInfo {
     }
 
     #[must_use]
+    #[inline]
     pub fn variable_types(&self) -> &VariableTypeRow {
         &self.variable_type
     }
 
     #[must_use]
+    #[inline]
     pub fn variable_statuses(&self) -> &VariableStatusRow {
         &self.variable_status
     }
 
     #[must_use]
+    #[inline]
     pub const fn can_increase(&self) -> &ColBitVec {
         &self.can_increase
     }
 
     #[must_use]
+    #[inline]
     pub const fn can_decrease(&self) -> &ColBitVec {
         &self.can_decrease
     }
 
     #[must_use]
+    #[inline]
     pub const fn relevance(&self) -> &ColBitVec {
         &self.relevance
     }
 
     #[must_use]
+    #[inline]
     pub const fn is_basic(&self) -> &ColBitVec {
         &self.is_basic
     }
 
     #[must_use]
+    #[inline]
     pub const fn not_basic(&self) -> &ColBitVec {
         &self.not_basic
     }
@@ -503,21 +511,25 @@ impl VariablesInfo {
     }
 
     #[must_use]
+    #[inline]
     pub fn lower_bounds(&self) -> &[f64] {
         &self.lower_bounds
     }
 
     #[must_use]
+    #[inline]
     pub fn upper_bounds(&self) -> &[f64] {
         &self.upper_bounds
     }
 
     #[must_use]
+    #[inline]
     pub fn num_columns(&self) -> ColIndex {
         self.matrix.num_cols()
     }
 
     #[must_use]
+    #[inline]
     pub const fn num_entries_in_relevant_columns(&self) -> EntryIndex {
         self.num_entries_in_relevant_columns
     }

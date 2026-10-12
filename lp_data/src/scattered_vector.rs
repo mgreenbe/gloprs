@@ -15,11 +15,13 @@ pub struct ScatteredEntry<I> {
 
 impl<I: Copy> ScatteredEntry<I> {
     #[must_use]
+    #[inline]
     pub const fn index(self) -> I {
         self.index
     }
 
     #[must_use]
+    #[inline]
     pub const fn coefficient(self) -> Fractional {
         self.coefficient
     }
@@ -27,6 +29,7 @@ impl<I: Copy> ScatteredEntry<I> {
 
 impl ScatteredEntry<RowIndex> {
     #[must_use]
+    #[inline]
     pub const fn row(self) -> RowIndex {
         self.index
     }
@@ -34,6 +37,7 @@ impl ScatteredEntry<RowIndex> {
 
 impl ScatteredEntry<ColIndex> {
     #[must_use]
+    #[inline]
     pub const fn column(self) -> ColIndex {
         self.index
     }
@@ -48,6 +52,7 @@ pub struct ScatteredIter<'a, I> {
 impl<I: VectorIndex> Iterator for ScatteredIter<'_, I> {
     type Item = ScatteredEntry<I>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let index = *self.positions.next()?;
         Some(ScatteredEntry {
@@ -62,6 +67,7 @@ impl<I: VectorIndex> Iterator for ScatteredIter<'_, I> {
 }
 
 impl<I: VectorIndex> DoubleEndedIterator for ScatteredIter<'_, I> {
+    #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         let index = *self.positions.next_back()?;
         Some(ScatteredEntry {
@@ -93,10 +99,12 @@ impl<I: VectorIndex + Ord> ScatteredVector<I> {
     }
 
     #[must_use]
+    #[inline]
     pub fn len(&self) -> I {
         self.values.len()
     }
 
+    #[inline]
     pub fn add(&mut self, index: I, value: Fractional) {
         self.values[index] += value;
         if value != 0.0 && !self.is_non_zero.contains(index) {
@@ -106,6 +114,7 @@ impl<I: VectorIndex + Ord> ScatteredVector<I> {
         }
     }
 
+    #[inline]
     pub fn set(&mut self, index: I, value: Fractional) {
         if value != 0.0 && !self.is_non_zero.contains(index) {
             self.is_non_zero.set(index);
@@ -119,6 +128,7 @@ impl<I: VectorIndex + Ord> ScatteredVector<I> {
     /// GLOP uses direct `values[index]` writes plus `non_zeros.push_back()`
     /// when preparing a solve; the mask is populated only when a kernel needs
     /// it and must not retain input positions removed by an earlier stage.
+    #[inline]
     pub fn scatter_entry_without_mask(&mut self, index: I, value: Fractional) {
         self.values[index] = value;
         self.non_zeros.push(index);
@@ -126,29 +136,35 @@ impl<I: VectorIndex + Ord> ScatteredVector<I> {
     }
 
     #[must_use]
+    #[inline]
     pub fn value(&self, index: I) -> Fractional {
         self.values[index]
     }
 
     #[must_use]
+    #[inline]
     pub fn non_zeros(&self) -> &[I] {
         &self.non_zeros
     }
 
     #[must_use]
+    #[inline]
     pub fn values(&self) -> &TypedVec<I, Fractional> {
         &self.values
     }
 
+    #[inline]
     pub fn values_mut(&mut self) -> &mut TypedVec<I, Fractional> {
         &mut self.values
     }
 
+    #[inline]
     pub fn non_zeros_mut(&mut self) -> &mut Vec<I> {
         self.non_zeros_are_sorted = false;
         &mut self.non_zeros
     }
 
+    #[inline]
     pub fn mutable_parts(&mut self) -> (&mut [Fractional], &mut Vec<I>) {
         // These fields are public in GLOP's `ScatteredVector`; taking mutable
         // references does not itself invalidate its temporary sortedness flag.
@@ -290,6 +306,7 @@ pub struct TransposedScatteredView<'a, Target, Source> {
 
 impl<'a, Target: VectorIndex, Source: VectorIndex> TransposedScatteredView<'a, Target, Source> {
     #[must_use]
+    #[inline]
     pub fn values(self) -> &'a [Fractional] {
         self.values
     }

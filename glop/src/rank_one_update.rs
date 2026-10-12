@@ -59,6 +59,7 @@ impl RankOneUpdateElementaryMatrix {
     }
 
     #[must_use]
+    #[inline]
     pub fn is_singular(&self) -> bool {
         self.mu == 0.0
     }
@@ -94,6 +95,7 @@ impl RankOneUpdateElementaryMatrix {
     }
 
     #[must_use]
+    #[inline]
     pub fn num_entries(&self) -> usize {
         self.u.len() + self.v.len()
     }
@@ -250,16 +252,19 @@ impl RankOneUpdateFactorization {
     }
 
     #[must_use]
+    #[inline]
     pub const fn num_entries(&self) -> usize {
         self.num_entries
     }
 
     #[must_use]
+    #[inline]
     pub fn len(&self) -> usize {
         self.elementary_matrices.len()
     }
 
     #[must_use]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         self.elementary_matrices.is_empty()
     }
@@ -272,6 +277,7 @@ impl RankOneUpdateFactorization {
     }
 
     #[must_use]
+    #[inline]
     pub fn deterministic_time_since_last_reset(&self) -> f64 {
         self.deterministic_time.get()
     }

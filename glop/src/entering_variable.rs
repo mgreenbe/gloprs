@@ -376,6 +376,7 @@ impl EnteringVariable {
     }
 
     #[must_use]
+    #[inline]
     pub fn deterministic_time(&self) -> f64 {
         lp_data::lp_types::deterministic_time_for_fp_operations(self.num_operations)
     }

@@ -123,6 +123,7 @@ impl TimeLimit {
         (self.wall_limit_seconds - self.elapsed_time()).max(0.0)
     }
     #[must_use]
+    #[inline]
     pub fn deterministic_time_left(&self) -> f64 {
         (self.deterministic_limit - self.elapsed_deterministic_time).max(0.0)
     }
@@ -131,10 +132,12 @@ impl TimeLimit {
         self.start.elapsed().as_secs_f64()
     }
     #[must_use]
+    #[inline]
     pub const fn elapsed_deterministic_time(&self) -> f64 {
         self.elapsed_deterministic_time
     }
     #[must_use]
+    #[inline]
     pub const fn deterministic_limit(&self) -> f64 {
         self.deterministic_limit
     }

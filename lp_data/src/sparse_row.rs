@@ -22,11 +22,13 @@ impl SparseRow {
     }
 
     #[must_use]
+    #[inline]
     pub fn entry_col(&self, position: usize) -> ColIndex {
         self.vector.entry(position).index()
     }
 
     #[must_use]
+    #[inline]
     pub fn entry_coefficient(&self, position: usize) -> f64 {
         self.vector.entry(position).coefficient()
     }
@@ -35,6 +37,7 @@ impl SparseRow {
     ///
     /// Panics if the row is empty, matching upstream's unchecked accessor.
     #[must_use]
+    #[inline]
     pub fn first_col(&self) -> ColIndex {
         self.vector.first().unwrap().index()
     }
@@ -43,6 +46,7 @@ impl SparseRow {
     ///
     /// Panics if the row is empty, matching upstream's unchecked accessor.
     #[must_use]
+    #[inline]
     pub fn last_col(&self) -> ColIndex {
         self.vector.last().unwrap().index()
     }

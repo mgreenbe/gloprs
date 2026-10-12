@@ -56,16 +56,19 @@ impl Status {
     }
 
     #[must_use]
+    #[inline]
     pub const fn error_code(&self) -> ErrorCode {
         self.error_code
     }
 
     #[must_use]
+    #[inline]
     pub fn error_message(&self) -> &str {
         &self.error_message
     }
 
     #[must_use]
+    #[inline]
     pub const fn is_ok(&self) -> bool {
         matches!(self.error_code, ErrorCode::GlopOk)
     }

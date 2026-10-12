@@ -67,6 +67,7 @@ impl DynamicMaximum {
     }
 
     #[must_use]
+    #[inline]
     pub const fn size(&self) -> usize {
         self.values.len()
     }

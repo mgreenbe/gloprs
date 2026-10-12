@@ -15,11 +15,13 @@ pub const INFINITY: Fractional = Fractional::INFINITY;
 pub const EPSILON: Fractional = Fractional::EPSILON;
 
 #[must_use]
+#[inline]
 pub const fn to_double(value: Fractional) -> f64 {
     value
 }
 
 #[must_use]
+#[inline]
 pub fn is_finite(value: Fractional) -> bool {
     value.is_finite()
 }
@@ -32,11 +34,13 @@ macro_rules! strong_index {
 
         impl $name {
             #[must_use]
+            #[inline]
             pub const fn new(value: $storage) -> Self {
                 Self(value)
             }
 
             #[must_use]
+            #[inline]
             pub const fn value(self) -> $storage {
                 self.0
             }
@@ -58,21 +62,25 @@ pub const INVALID_ROW: RowIndex = RowIndex::new(-1);
 pub const INVALID_COL: ColIndex = ColIndex::new(-1);
 
 #[must_use]
+#[inline]
 pub const fn row_to_col_index(row: RowIndex) -> ColIndex {
     ColIndex::new(row.value())
 }
 
 #[must_use]
+#[inline]
 pub const fn col_to_row_index(column: ColIndex) -> RowIndex {
     RowIndex::new(column.value())
 }
 
 #[must_use]
+#[inline]
 pub const fn col_to_int_index(column: ColIndex) -> GlopIndex {
     column.value()
 }
 
 #[must_use]
+#[inline]
 pub const fn row_to_int_index(row: RowIndex) -> GlopIndex {
     row.value()
 }
@@ -108,20 +116,24 @@ impl<'a, I: VectorIndex, T> TypedSlice<'a, I, T> {
     }
 
     #[must_use]
+    #[inline]
     pub fn len(self) -> I {
         I::from_usize(self.values.len())
     }
 
     #[must_use]
+    #[inline]
     pub const fn is_empty(self) -> bool {
         self.values.is_empty()
     }
 
     #[must_use]
+    #[inline]
     pub const fn as_slice(self) -> &'a [T] {
         self.values
     }
 
+    #[inline]
     pub fn iter(self) -> std::slice::Iter<'a, T> {
         self.values.iter()
     }
@@ -130,6 +142,7 @@ impl<'a, I: VectorIndex, T> TypedSlice<'a, I, T> {
 impl<I: VectorIndex, T> Index<I> for TypedSlice<'_, I, T> {
     type Output = T;
 
+    #[inline]
     fn index(&self, index: I) -> &Self::Output {
         &self.values[index.to_usize()]
     }
@@ -161,28 +174,34 @@ impl<'a, I: VectorIndex, T> TypedSliceMut<'a, I, T> {
     }
 
     #[must_use]
+    #[inline]
     pub fn len(&self) -> I {
         I::from_usize(self.values.len())
     }
 
     #[must_use]
+    #[inline]
     pub const fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
 
     #[must_use]
+    #[inline]
     pub fn as_slice(&self) -> &[T] {
         self.values
     }
 
+    #[inline]
     pub fn as_mut_slice(&mut self) -> &mut [T] {
         self.values
     }
 
+    #[inline]
     pub fn iter(&self) -> std::slice::Iter<'_, T> {
         self.values.iter()
     }
 
+    #[inline]
     pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
         self.values.iter_mut()
     }
@@ -191,12 +210,14 @@ impl<'a, I: VectorIndex, T> TypedSliceMut<'a, I, T> {
 impl<I: VectorIndex, T> Index<I> for TypedSliceMut<'_, I, T> {
     type Output = T;
 
+    #[inline]
     fn index(&self, index: I) -> &Self::Output {
         &self.values[index.to_usize()]
     }
 }
 
 impl<I: VectorIndex, T> IndexMut<I> for TypedSliceMut<'_, I, T> {
+    #[inline]
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         &mut self.values[index.to_usize()]
     }
@@ -223,14 +244,17 @@ impl<'b, I: VectorIndex, T> IntoIterator for &'b mut TypedSliceMut<'_, I, T> {
 macro_rules! vector_index {
     ($name:ident) => {
         impl VectorIndex for $name {
+            #[inline]
             fn to_usize(self) -> usize {
                 usize::try_from(self.value()).expect("vector index must be nonnegative")
             }
 
+            #[inline]
             fn from_usize(value: usize) -> Self {
                 Self::new(i32::try_from(value).expect("vector is too large for its index type"))
             }
 
+            #[inline]
             fn value_i64(self) -> i64 {
                 i64::from(self.value())
             }
@@ -260,11 +284,13 @@ impl<I: VectorIndex, T> TypedVec<I, T> {
     }
 
     #[must_use]
+    #[inline]
     pub fn len(&self) -> I {
         I::from_usize(self.values.len())
     }
 
     #[must_use]
+    #[inline]
     pub const fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
@@ -279,6 +305,7 @@ impl<I: VectorIndex, T> TypedVec<I, T> {
     }
 
     #[must_use]
+    #[inline]
     pub fn capacity(&self) -> I {
         I::from_usize(self.values.capacity())
     }
@@ -302,31 +329,37 @@ impl<I: VectorIndex, T> TypedVec<I, T> {
         self.values.truncate(size.to_usize());
     }
 
+    #[inline]
     pub fn iter(&self) -> std::slice::Iter<'_, T> {
         self.values.iter()
     }
 
     #[must_use]
+    #[inline]
     pub fn view(&self) -> TypedSlice<'_, I, T> {
         TypedSlice::new(&self.values)
     }
 
     #[must_use]
+    #[inline]
     pub fn view_mut(&mut self) -> TypedSliceMut<'_, I, T> {
         TypedSliceMut::new(&mut self.values)
     }
 
     #[must_use]
+    #[inline]
     pub fn back(&self) -> Option<&T> {
         self.values.last()
     }
 
     #[must_use]
+    #[inline]
     pub fn as_slice(&self) -> &[T] {
         &self.values
     }
 
     #[must_use]
+    #[inline]
     pub fn as_mut_slice(&mut self) -> &mut [T] {
         &mut self.values
     }
@@ -389,12 +422,14 @@ impl<I: VectorIndex, T: Default + Clone> TypedVec<I, T> {
 impl<I: VectorIndex, T> Index<I> for TypedVec<I, T> {
     type Output = T;
 
+    #[inline]
     fn index(&self, index: I) -> &Self::Output {
         &self.values[index.to_usize()]
     }
 }
 
 impl<I: VectorIndex, T> IndexMut<I> for TypedVec<I, T> {
+    #[inline]
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         &mut self.values[index.to_usize()]
     }
@@ -430,6 +465,7 @@ pub struct BitSlice<'a, I> {
 
 impl<I: VectorIndex> BitSlice<'_, I> {
     #[must_use]
+    #[inline]
     pub fn contains(self, index: I) -> bool {
         let position = index.to_usize();
         self.words[position / 64] & (1_u64 << (position % 64)) != 0
@@ -444,16 +480,19 @@ pub struct BitSliceMut<'a, I> {
 
 impl<I: VectorIndex> BitSliceMut<'_, I> {
     #[must_use]
+    #[inline]
     pub fn contains(&self, index: I) -> bool {
         let position = index.to_usize();
         self.words[position / 64] & (1_u64 << (position % 64)) != 0
     }
 
+    #[inline]
     pub fn set(&mut self, index: I) {
         let position = index.to_usize();
         self.words[position / 64] |= 1_u64 << (position % 64);
     }
 
+    #[inline]
     pub fn clear(&mut self, index: I) {
         let position = index.to_usize();
         self.words[position / 64] &= !(1_u64 << (position % 64));
@@ -499,11 +538,13 @@ impl<I: VectorIndex> BitVec<I> {
     }
 
     #[must_use]
+    #[inline]
     pub fn len(&self) -> I {
         I::from_usize(self.len)
     }
 
     #[must_use]
+    #[inline]
     pub fn view(&self) -> BitSlice<'_, I> {
         BitSlice {
             words: &self.words,
@@ -512,6 +553,7 @@ impl<I: VectorIndex> BitVec<I> {
     }
 
     #[must_use]
+    #[inline]
     pub fn view_mut(&mut self) -> BitSliceMut<'_, I> {
         BitSliceMut {
             words: &mut self.words,
@@ -520,11 +562,13 @@ impl<I: VectorIndex> BitVec<I> {
     }
 
     #[must_use]
+    #[inline]
     pub fn contains(&self, index: I) -> bool {
         let position = index.to_usize();
         self.words[position / 64] & (1_u64 << (position % 64)) != 0
     }
 
+    #[inline]
     pub fn set(&mut self, index: I) {
         let position = index.to_usize();
         self.words[position / 64] |= 1_u64 << (position % 64);
@@ -545,11 +589,13 @@ impl<I: VectorIndex> BitVec<I> {
         self.set_to(I::from_usize(position), value);
     }
 
+    #[inline]
     pub fn clear_bit(&mut self, index: I) {
         let position = index.to_usize();
         self.words[position / 64] &= !(1_u64 << (position % 64));
     }
 
+    #[inline]
     pub fn clear_bucket(&mut self, index: I) {
         self.words[index.to_usize() / 64] = 0;
     }
@@ -635,6 +681,7 @@ impl<I: VectorIndex> BitVec<I> {
     }
 
     #[must_use]
+    #[inline]
     pub fn iter_ones(&self) -> BitOnesIter<'_, I> {
         BitOnesIter::new(&self.words)
     }

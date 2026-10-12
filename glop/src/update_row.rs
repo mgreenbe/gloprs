@@ -326,6 +326,7 @@ impl UpdateRow {
     }
 
     #[must_use]
+    #[inline]
     pub fn is_computed_for(&self, leaving_row: usize) -> bool {
         self.update_row_computed_for == Some(leaving_row)
     }
@@ -351,16 +352,19 @@ impl UpdateRow {
     }
 
     #[must_use]
+    #[inline]
     pub fn coefficient(&self, column: usize) -> f64 {
         self.coefficients[column]
     }
 
     #[must_use]
+    #[inline]
     pub const fn num_operations(&self) -> i64 {
         self.num_operations
     }
 
     #[must_use]
+    #[inline]
     pub fn deterministic_time(&self) -> f64 {
         deterministic_time_for_fp_operations(self.num_operations)
     }

@@ -87,6 +87,7 @@ impl SimplexProbe {
     }
 
     #[must_use]
+    #[inline]
     pub fn should_capture_rhs(&self, basis_has_updates: bool) -> bool {
         matches!(self.active, Some((pivot, _)) if pivot == self.pivot) && !basis_has_updates
     }

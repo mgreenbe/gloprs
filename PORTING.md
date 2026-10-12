@@ -815,6 +815,17 @@ checksum mismatches. The 1,000 native triangular traces and strict 96-model
 trajectory fixture still pass. BTRAN has reached isolated-kernel parity on
 this machine; FTRAN has not.
 
+The shared typed-index, bitset, sparse-entry/iterator, compact-column, and
+factor-view accessors now use ordinary `#[inline]` hints where their bodies
+are small and frequently cross the `lp_data`/`glop` crate boundary. Matching
+small property getters in `glop` are annotated too. This changes neither
+algorithms nor arithmetic. Workspace tests, strict linting, and the fast-96
+strict trajectory fixture pass. A serial full-corpus solve pass after the
+annotations measured FTRAN at 0.4590 seconds Rust versus 0.4157 native
+(1.104) and BTRAN at 0.1999 versus 0.2020 seconds (0.989), with zero
+checksum mismatches; treat the small timing difference from the preceding
+single pass as indicative, not a confidence interval.
+
 ## Test inventory caveat
 
 The pinned public tree does not contain the historical file-local unit tests for

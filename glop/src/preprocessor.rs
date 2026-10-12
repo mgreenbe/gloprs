@@ -520,6 +520,7 @@ impl SingletonPreprocessor {
     }
 
     #[must_use]
+    #[inline]
     pub const fn status(&self) -> ProblemStatus {
         self.status
     }
@@ -989,6 +990,7 @@ impl MainLpPreprocessor {
     }
 
     #[must_use]
+    #[inline]
     pub const fn status(&self) -> ProblemStatus {
         self.status
     }
@@ -1298,6 +1300,7 @@ impl ForcingAndImpliedFreeConstraintPreprocessor {
     }
 
     #[must_use]
+    #[inline]
     pub const fn status(&self) -> ProblemStatus {
         self.status
     }
@@ -1519,6 +1522,7 @@ impl ImpliedFreePreprocessor {
     }
 
     #[must_use]
+    #[inline]
     pub const fn status(&self) -> ProblemStatus {
         self.status
     }
@@ -1938,6 +1942,7 @@ impl DoubletonEqualityRowPreprocessor {
     }
 
     #[must_use]
+    #[inline]
     pub const fn status(&self) -> ProblemStatus {
         self.status
     }
@@ -2208,6 +2213,7 @@ impl ProportionalRowPreprocessor {
     }
 
     #[must_use]
+    #[inline]
     pub const fn status(&self) -> ProblemStatus {
         self.status
     }
@@ -2492,6 +2498,7 @@ impl ProportionalColumnPreprocessor {
     }
 
     #[must_use]
+    #[inline]
     pub const fn status(&self) -> ProblemStatus {
         self.status
     }
@@ -3053,6 +3060,7 @@ impl UnconstrainedVariablePreprocessor {
     }
 
     #[must_use]
+    #[inline]
     pub const fn status(&self) -> ProblemStatus {
         self.status
     }
@@ -3200,6 +3208,7 @@ impl EmptyConstraintPreprocessor {
     }
 
     #[must_use]
+    #[inline]
     pub const fn status(&self) -> ProblemStatus {
         self.status
     }
@@ -3281,6 +3290,7 @@ impl EmptyColumnPreprocessor {
     }
 
     #[must_use]
+    #[inline]
     pub const fn status(&self) -> ProblemStatus {
         self.status
     }

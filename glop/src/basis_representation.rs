@@ -600,6 +600,7 @@ impl BasisRepresentation {
     }
 
     #[must_use]
+    #[inline]
     pub fn dimension(&self) -> usize {
         self.basis.dimension()
     }
@@ -1414,6 +1415,7 @@ impl BasisRepresentation {
 
     /// Number of full refactorizations after initial basis construction.
     #[must_use]
+    #[inline]
     pub fn num_refactorizations(&self) -> i64 {
         self.stats.count("refactorization_interval")
     }
@@ -1429,6 +1431,7 @@ impl BasisRepresentation {
     }
 
     #[must_use]
+    #[inline]
     pub fn diagnostic_lu_row_permutation(&self) -> &[usize] {
         self.factorization.inverse_row_permutation()
     }
@@ -1649,6 +1652,7 @@ impl BasisRepresentation {
     }
 
     #[must_use]
+    #[inline]
     pub fn deterministic_time(&self) -> f64 {
         self.deterministic_time.get()
     }
@@ -1665,21 +1669,25 @@ impl BasisRepresentation {
     }
 
     #[must_use]
+    #[inline]
     pub fn number_of_entries_in_lu(&self) -> usize {
         self.factorization.number_of_entries()
     }
 
     #[must_use]
+    #[inline]
     pub fn number_of_entries_in_updates(&self) -> usize {
         self.updates.num_entries()
     }
 
     #[must_use]
+    #[inline]
     pub fn last_update_entry_counts(&self) -> Option<(usize, usize)> {
         self.updates.last_entry_counts()
     }
 
     #[allow(clippy::float_cmp)] // Pinned GLOP requires an exact unit coefficient.
+    #[inline]
     pub fn is_identity_basis(&self) -> bool {
         self.basis.is_identity()
     }

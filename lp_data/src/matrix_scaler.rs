@@ -54,21 +54,25 @@ impl SparseMatrixScaler {
     }
 
     #[must_use]
+    #[inline]
     pub fn row_scaling_factor(&self, row: RowIndex) -> Fractional {
         1.0 / self.row_unscaling_factor(row)
     }
 
     #[must_use]
+    #[inline]
     pub fn col_scaling_factor(&self, col: ColIndex) -> Fractional {
         1.0 / self.col_unscaling_factor(col)
     }
 
     #[must_use]
+    #[inline]
     pub const fn row_scales(&self) -> &DenseColumn {
         &self.row_scales
     }
 
     #[must_use]
+    #[inline]
     pub const fn col_scales(&self) -> &DenseRow {
         &self.col_scales
     }

@@ -344,21 +344,25 @@ impl LinearProgram {
     }
 
     #[must_use]
+    #[inline]
     pub fn num_variables(&self) -> ColIndex {
         self.matrix.num_cols()
     }
 
     #[must_use]
+    #[inline]
     pub fn num_constraints(&self) -> RowIndex {
         self.matrix.num_rows()
     }
 
     #[must_use]
+    #[inline]
     pub fn num_entries(&self) -> EntryIndex {
         self.matrix.num_entries()
     }
 
     #[must_use]
+    #[inline]
     pub fn matrix(&self) -> &SparseMatrix {
         &self.matrix
     }
@@ -669,36 +673,43 @@ impl LinearProgram {
     }
 
     #[must_use]
+    #[inline]
     pub fn constraint_lower_bounds(&self) -> &DenseColumn {
         &self.constraint_lower_bounds
     }
 
     #[must_use]
+    #[inline]
     pub fn constraint_upper_bounds(&self) -> &DenseColumn {
         &self.constraint_upper_bounds
     }
 
     #[must_use]
+    #[inline]
     pub fn objective_coefficients(&self) -> &DenseRow {
         &self.objective_coefficients
     }
 
     #[must_use]
+    #[inline]
     pub fn variable_lower_bounds(&self) -> &DenseRow {
         &self.variable_lower_bounds
     }
 
     #[must_use]
+    #[inline]
     pub fn variable_upper_bounds(&self) -> &DenseRow {
         &self.variable_upper_bounds
     }
 
     #[must_use]
+    #[inline]
     pub fn variable_types(&self) -> &TypedVec<ColIndex, ModelVariableType> {
         &self.variable_types
     }
 
     #[must_use]
+    #[inline]
     pub fn variable_type(&self, column: ColIndex) -> ModelVariableType {
         self.variable_types[column]
     }
@@ -724,16 +735,19 @@ impl LinearProgram {
     }
 
     #[must_use]
+    #[inline]
     pub const fn objective_offset(&self) -> Fractional {
         self.objective_offset
     }
 
     #[must_use]
+    #[inline]
     pub const fn objective_scaling_factor(&self) -> Fractional {
         self.objective_scaling_factor
     }
 
     #[must_use]
+    #[inline]
     pub const fn is_maximization_problem(&self) -> bool {
         self.maximize
     }
@@ -1034,6 +1048,7 @@ impl LinearProgram {
     }
 
     #[must_use]
+    #[inline]
     pub const fn first_slack_variable(&self) -> Option<ColIndex> {
         self.first_slack_variable
     }

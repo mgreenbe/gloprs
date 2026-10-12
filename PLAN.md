@@ -1676,6 +1676,19 @@ FTRAN is much closer than the initial 1.303 but still about 13% slower.
 full-corpus passes, not confidence intervals; repeat paired trials and profile
 the residual FTRAN overhead before claiming full parity.
 
+Small cross-crate accessors in `lp_data` and `glop` now carry ordinary
+`#[inline]` hints, including typed-index conversion, bitset operations, sparse
+iterators, and factor/view getters. No numerical algorithm or arithmetic
+order changed. The workspace suite, strict linting, and the 96-model strict
+trajectory fixture pass. On three paired qap15 trials, the 50-factorization
+median moved from 3.084 to 3.065 s; 10,000 repetitions of a selected FTRAN
+RHS moved from 1.853 to 1.830 s, and BTRAN was effectively unchanged. A
+one-trial serial full-corpus solve pass measured 0.4157 s native versus
+0.4590 s Rust for
+FTRAN (1.104) and 0.2020 s versus 0.1999 s for BTRAN (0.989), with zero
+checksum mismatches. The modest FTRAN gain is encouraging but these passes
+do not establish a stable percentage improvement.
+
 Profiling localized much of the `qap15` gap to the numerical update in
 `TriangularMatrix::permuted_lower_sparse_solve`. Unlike upstream's unchecked
 scratch-vector access, Rust emitted a bounds check for every successor row.

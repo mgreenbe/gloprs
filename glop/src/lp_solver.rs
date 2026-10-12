@@ -105,16 +105,19 @@ impl LPSolver {
     }
 
     #[must_use]
+    #[inline]
     pub const fn parameters(&self) -> &GlopParameters {
         &self.parameters
     }
 
+    #[inline]
     pub fn parameters_mut(&mut self) -> &mut GlopParameters {
         &mut self.parameters
     }
 
     /// Diagnostic for an unsupported Phase-5 option or a pre-solve failure.
     #[must_use]
+    #[inline]
     pub fn last_error(&self) -> Option<&str> {
         self.last_error.as_deref()
     }
@@ -282,6 +285,7 @@ impl LPSolver {
 
     /// Cumulative deterministic work since construction or [`Self::clear`].
     #[must_use]
+    #[inline]
     pub fn deterministic_time(&self) -> f64 {
         self.revised_simplex.deterministic_time()
     }
@@ -719,34 +723,42 @@ impl LPSolver {
     }
 
     #[must_use]
+    #[inline]
     pub const fn objective_value(&self) -> f64 {
         self.problem_objective_value
     }
     #[must_use]
+    #[inline]
     pub const fn variable_values(&self) -> &DenseRow {
         &self.primal_values
     }
     #[must_use]
+    #[inline]
     pub const fn reduced_costs(&self) -> &DenseRow {
         &self.reduced_costs
     }
     #[must_use]
+    #[inline]
     pub const fn variable_statuses(&self) -> &VariableStatusRow {
         &self.variable_statuses
     }
     #[must_use]
+    #[inline]
     pub const fn dual_values(&self) -> &DenseColumn {
         &self.dual_values
     }
     #[must_use]
+    #[inline]
     pub const fn constraint_activities(&self) -> &DenseColumn {
         &self.constraint_activities
     }
     #[must_use]
+    #[inline]
     pub const fn constraint_statuses(&self) -> &ConstraintStatusColumn {
         &self.constraint_statuses
     }
     #[must_use]
+    #[inline]
     pub const fn primal_ray(&self) -> &DenseRow {
         &self.primal_ray
     }
@@ -755,14 +767,17 @@ impl LPSolver {
         &self.constraints_dual_ray
     }
     #[must_use]
+    #[inline]
     pub const fn variable_bounds_dual_ray(&self) -> &DenseRow {
         &self.variable_bounds_dual_ray
     }
     #[must_use]
+    #[inline]
     pub const fn maximum_primal_infeasibility(&self) -> f64 {
         self.max_absolute_primal_infeasibility
     }
     #[must_use]
+    #[inline]
     pub const fn maximum_dual_infeasibility(&self) -> f64 {
         self.max_absolute_dual_infeasibility
     }
@@ -771,6 +786,7 @@ impl LPSolver {
         self.may_have_multiple_solutions
     }
     #[must_use]
+    #[inline]
     pub const fn number_of_simplex_iterations(&self) -> u64 {
         self.num_revised_simplex_iterations
     }

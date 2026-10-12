@@ -371,6 +371,7 @@ impl<'a> ReducedCosts<'a> {
     }
 
     #[must_use]
+    #[inline]
     pub const fn has_cost_shift(&self) -> bool {
         self.has_cost_shift
     }
@@ -398,6 +399,7 @@ impl<'a> ReducedCosts<'a> {
     }
 
     #[must_use]
+    #[inline]
     pub const fn dual_feasibility_tolerance(&self) -> f64 {
         self.dual_feasibility_tolerance
     }
@@ -412,11 +414,13 @@ impl<'a> ReducedCosts<'a> {
     }
 
     #[must_use]
+    #[inline]
     pub fn cost_perturbations(&self) -> &[f64] {
         &self.cost_perturbations
     }
 
     #[must_use]
+    #[inline]
     pub const fn deterministic_time(&self) -> f64 {
         self.deterministic_time
     }
