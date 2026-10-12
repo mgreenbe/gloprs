@@ -28,6 +28,7 @@ pub enum FactorizationError {
     IllConditioned { upper_bound: f64 },
     DimensionMismatch,
     InvalidParameters(String),
+    ProbeIo(String),
 }
 
 impl fmt::Display for FactorizationError {
@@ -44,6 +45,7 @@ impl fmt::Display for FactorizationError {
             ),
             Self::DimensionMismatch => formatter.write_str("right-hand side dimension mismatch"),
             Self::InvalidParameters(message) => formatter.write_str(message),
+            Self::ProbeIo(message) => write!(formatter, "simplex probe I/O: {message}"),
         }
     }
 }
@@ -202,7 +204,13 @@ impl LuFactorization {
         Ok(result)
     }
 
-    pub(crate) fn compute_factorization_selected_compact_with_parameters(
+    /// Refactorizes selected columns of a compact matrix, retaining allocated
+    /// LU and Markowitz workspaces across calls as in simplex basis rebuilds.
+    ///
+    /// # Errors
+    ///
+    /// Returns an invalid-parameter, shape, coefficient, or singularity error.
+    pub fn compute_factorization_selected_compact_with_parameters(
         &mut self,
         matrix: &CompactSparseMatrix,
         selected_columns: &[usize],

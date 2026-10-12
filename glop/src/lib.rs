@@ -22,6 +22,7 @@ pub mod random;
 pub mod rank_one_update;
 pub mod reduced_costs;
 pub mod revised_simplex;
+pub mod simplex_probe;
 pub mod stats;
 pub mod status;
 pub mod time_limit;

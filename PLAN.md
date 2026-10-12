@@ -1580,6 +1580,44 @@ artifact is `baselines/phase8-presolved-solve-u32-fast96.json`. Further work
 should profile update-row and factorization costs on the largest absolute
 outliers; storage width alone is not a performance-parity solution.
 
+For the next numerical-kernel campaign, `glop/examples/netlib_simplex_probe.rs`
+and `tools/generate_netlib_simplex_probes.py` provide opt-in Matrix Market
+snapshots under `../datasets/netlib-simplex-probes/<instance>-<pivot>/`.
+Each successful LU construction records its exact square input; subsequent
+FTRAN/BTRAN right-hand sides are retained only before the next pivot and
+before any rank-one update. A second square matrix records the solve basis
+when post-LU column-permutation absorption changes its order. This diagnostic
+is outside the pinned upstream algorithm and stays disabled in ordinary
+solves. The format, naming, scope, and reproduction commands are in
+`tools/netlib_simplex_probes.md`.
+The complete 98-instance corpus was generated and validated: all 2,593 LU
+construction counts agree with the pinned Phase 7 Rust report (one initial
+construction plus each refactorization), and the 96 fast-model trajectory
+gate still agrees with upstream.
+`lp_data/src/matrix_market.rs` and the paired native/Rust LU harnesses now
+read those exact inputs without reordering columns and time only factorization,
+not file loading. `tools/benchmark_netlib_factorizations.py` runs the two
+solvers serially and records per-matrix timings; build and measurement commands
+are in `tools/netlib_factorization_benchmark.md`.
+Two one-trial, one-factorization, no-warm-up full-corpus smoke tests succeeded
+on all 2,593 probes with matching dimensions, nonzero counts, and determinant
+finiteness (and close finite determinants). Timed totals varied: 44.608 s
+native versus 43.740 s Rust in the first pass, and 37.550 s versus 41.582 s
+in the second. These were coverage checks, not stable performance estimates;
+the five-trial comparison below supersedes them. Both used
+release builds on Apple M2 with Rust 1.95.0 and Apple Clang 17 against upstream
+commit `100f66e6242ab8bf8d32feb8f3bf086db66ae2b5`.
+A subsequent five-trial serial comparison (one untimed warm-up and one timed
+factorization per matrix, alternating native/Rust order) produced paired
+aggregate ratios 1.095, 1.093, 1.093, 1.088, and 1.114. The sum of
+per-matrix medians was 36.720 s native versus 40.134 s Rust (1.093). The
+`qap15` probes contributed 31.451 s versus 34.939 s (1.111), more than the
+whole net difference; excluding `qap15` gave about 0.986, and excluding both
+`qap15` and `qap12` gave about 0.86. Thus the next LU profile should focus
+on `qap15`'s 522 large bases, while preserving the faster Rust paths on other
+models. Raw per-probe and per-model CSVs are written under `target/` by the
+runner; this is isolated factorization time, not full simplex time.
+
 The excluded `qap12` is now separately validated under matched settings.
 Unscaled direct dual simplex terminates `OPTIMAL` in 115,513 iterations in
 both pinned GLOP and Rust; sampled limits at 0, 1, 10, 100, 500, 1,000,

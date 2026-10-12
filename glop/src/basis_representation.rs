@@ -19,6 +19,7 @@ use crate::parameters::GlopParameters;
 use crate::rank_one_update::{
     RankOneUpdateElementaryMatrix, RankOneUpdateFactorization, sparse_scalar_product,
 };
+use crate::simplex_probe::{SimplexProbe, SolveKind};
 use crate::stats::{DistributionKind, StatsGroup};
 
 /// Classical product-form update from upstream `basis_representation.h`.
@@ -175,6 +176,27 @@ enum ReplacementColumn {
 }
 
 impl BasisMatrix {
+    fn probe_entries(&self) -> Vec<(usize, usize, f64)> {
+        let mut entries = Vec::new();
+        match self {
+            Self::Owned(matrix) => {
+                for column in 0..matrix.num_cols().to_usize() {
+                    for entry in matrix.column(ColIndex::from_usize(column)) {
+                        entries.push((entry.index().to_usize(), column, entry.coefficient()));
+                    }
+                }
+            }
+            Self::CompactView { matrix, columns } => {
+                for (column, &source) in columns.iter().enumerate() {
+                    for (row, value) in matrix.column(ColIndex::from_usize(source)).iter() {
+                        entries.push((row.to_usize(), column, value));
+                    }
+                }
+            }
+        }
+        entries
+    }
+
     fn dimension(&self) -> usize {
         match self {
             Self::Owned(matrix) => matrix.num_rows().to_usize(),
@@ -308,6 +330,7 @@ pub struct BasisRepresentation {
     right_storage: RefCell<CompactSparseMatrix>,
     right_pool_mapping: RefCell<Vec<Option<ColIndex>>>,
     stats: StatsGroup,
+    probe: Option<Rc<RefCell<SimplexProbe>>>,
 }
 
 pub type DiagnosticSolveStage = (Vec<f64>, Vec<usize>);
@@ -381,7 +404,9 @@ impl BasisRepresentation {
                 last_factorization_deterministic_time;
         }
         std::mem::swap(&mut replacement.stats, &mut self.stats);
+        replacement.probe.clone_from(&self.probe);
         *self = replacement;
+        self.record_probe_basis()?;
         Ok(())
     }
 
@@ -491,7 +516,69 @@ impl BasisRepresentation {
             right_storage: RefCell::new(right_storage),
             right_pool_mapping: RefCell::new(Vec::new()),
             stats: StatsGroup::new("BasisFactorization"),
+            probe: None,
         })
+    }
+
+    pub(crate) fn attach_probe(
+        &mut self,
+        probe: Rc<RefCell<SimplexProbe>>,
+    ) -> Result<(), FactorizationError> {
+        self.probe = Some(probe);
+        self.record_probe_basis()
+    }
+
+    fn record_probe_basis(&self) -> Result<(), FactorizationError> {
+        if let Some(probe) = &self.probe {
+            probe
+                .borrow_mut()
+                .record_basis(self.dimension(), &self.basis.probe_entries())
+                .map_err(|error| FactorizationError::ProbeIo(error.to_string()))?;
+        }
+        Ok(())
+    }
+
+    fn record_probe_rhs(&self, kind: SolveKind, rhs: &[f64]) -> Result<(), FactorizationError> {
+        if let Some(probe) = &self.probe {
+            let basis_has_updates = !self.is_refactorized();
+            let mut probe = probe.borrow_mut();
+            if !probe.should_capture_rhs(basis_has_updates) {
+                return Ok(());
+            }
+            if !probe.solve_basis_recorded() {
+                probe
+                    .ensure_solve_basis(self.dimension(), &self.basis.probe_entries())
+                    .map_err(|error| FactorizationError::ProbeIo(error.to_string()))?;
+            }
+            probe
+                .record_rhs(kind, rhs, basis_has_updates)
+                .map_err(|error| FactorizationError::ProbeIo(error.to_string()))?;
+        }
+        Ok(())
+    }
+
+    fn record_probe_unit_rhs(&self, kind: SolveKind, row: usize) -> Result<(), FactorizationError> {
+        if self.probe.is_some() {
+            let mut rhs = vec![0.0; self.dimension()];
+            rhs[row] = 1.0;
+            self.record_probe_rhs(kind, &rhs)?;
+        }
+        Ok(())
+    }
+
+    fn record_probe_sparse_rhs(
+        &self,
+        kind: SolveKind,
+        entries: &[(usize, f64)],
+    ) -> Result<(), FactorizationError> {
+        if self.probe.is_some() {
+            let mut rhs = vec![0.0; self.dimension()];
+            for &(row, value) in entries {
+                rhs[row] = value;
+            }
+            self.record_probe_rhs(kind, &rhs)?;
+        }
+        Ok(())
     }
 
     /// Updates the controls used by subsequent updates and refactorizations.
@@ -565,6 +652,7 @@ impl BasisRepresentation {
     ///
     /// Returns a dimension mismatch from the factorization.
     pub fn solve(&self, rhs: &[f64]) -> Result<Vec<f64>, FactorizationError> {
+        self.record_probe_rhs(SolveKind::Ftran, rhs)?;
         if !self.parameters.use_middle_product_form_update {
             let mut result = self.factorization.solve(rhs)?;
             self.eta_updates.right_solve(&mut result);
@@ -587,6 +675,7 @@ impl BasisRepresentation {
         if rhs.len() != self.dimension() {
             return Err(FactorizationError::DimensionMismatch);
         }
+        self.record_probe_rhs(SolveKind::Btran, rhs)?;
         if !self.parameters.use_middle_product_form_update {
             let mut transformed = rhs.to_vec();
             self.eta_updates.left_solve(&mut transformed);
@@ -607,6 +696,7 @@ impl BasisRepresentation {
     ///
     /// Returns a dimension mismatch from the factorization.
     pub fn solve_with_nonzeros(&self, rhs: &mut ScatteredColumn) -> Result<(), FactorizationError> {
+        self.record_probe_rhs(SolveKind::Ftran, rhs.values().as_slice())?;
         if !self.parameters.use_middle_product_form_update {
             if rhs.len().to_usize() != self.dimension() {
                 return Err(FactorizationError::DimensionMismatch);
@@ -635,6 +725,7 @@ impl BasisRepresentation {
         &self,
         rhs: &mut ScatteredRow,
     ) -> Result<(), FactorizationError> {
+        self.record_probe_rhs(SolveKind::Btran, rhs.values().as_slice())?;
         if !self.parameters.use_middle_product_form_update {
             if rhs.len().to_usize() != self.dimension() {
                 return Err(FactorizationError::DimensionMismatch);
@@ -668,6 +759,7 @@ impl BasisRepresentation {
         if row >= self.dimension() || result.len().to_usize() != self.dimension() {
             return Err(FactorizationError::DimensionMismatch);
         }
+        self.record_probe_unit_rhs(SolveKind::Btran, row)?;
         clear_and_resize_vector_with_non_zeros(ColIndex::from_usize(self.dimension()), result);
         if !self.parameters.use_middle_product_form_update {
             let column = ColIndex::from_usize(row);
@@ -766,6 +858,7 @@ impl BasisRepresentation {
         if row >= self.dimension() || result.len().to_usize() != self.dimension() {
             return Err(FactorizationError::DimensionMismatch);
         }
+        self.record_probe_unit_rhs(SolveKind::Btran, row)?;
         result.clear();
         result.scatter_entry_without_mask(ColIndex::from_usize(row), 1.0);
         self.factorization.left_solve_upper_with_nonzeros(result)?;
@@ -789,6 +882,7 @@ impl BasisRepresentation {
         if input.len().to_usize() != self.dimension() {
             return Err(FactorizationError::DimensionMismatch);
         }
+        self.record_probe_rhs(SolveKind::Ftran, input.values().as_slice())?;
         let mut tau = self.tau.borrow_mut();
         if !self.parameters.use_middle_product_form_update {
             let mut solved = self.factorization.solve(input.values().as_slice())?;
@@ -886,6 +980,13 @@ impl BasisRepresentation {
     {
         if result.len().to_usize() != self.dimension() {
             return Err(FactorizationError::DimensionMismatch);
+        }
+        if self.probe.is_some() {
+            let mut rhs = vec![0.0; self.dimension()];
+            for (row, value) in entries() {
+                rhs[row.to_usize()] = value;
+            }
+            self.record_probe_rhs(SolveKind::Ftran, &rhs)?;
         }
         if !self.parameters.use_middle_product_form_update {
             let mut dense = vec![0.0; self.dimension()];
@@ -1288,6 +1389,7 @@ impl BasisRepresentation {
         );
         self.basis
             .compute_factorization(&mut self.factorization, &self.parameters)?;
+        self.record_probe_basis()?;
         self.last_factorization_deterministic_time = self
             .factorization
             .deterministic_time_of_last_factorization();
@@ -1423,6 +1525,7 @@ impl BasisRepresentation {
             .into_iter()
             .map(|entry| (entry.index().to_usize(), entry.coefficient()))
             .collect();
+        self.record_probe_sparse_rhs(SolveKind::Ftran, &entries)?;
         self.bump_deterministic_time_for_solve(column.num_entries());
         self.factorization.right_solve_squared_norm(&entries)
     }
@@ -1436,6 +1539,7 @@ impl BasisRepresentation {
             .iter()
             .map(|(row, value)| (row.to_usize(), value))
             .collect();
+        self.record_probe_sparse_rhs(SolveKind::Ftran, &entries)?;
         self.bump_deterministic_time_for_solve(column.len());
         self.factorization.right_solve_squared_norm(&entries)
     }

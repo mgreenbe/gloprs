@@ -9,6 +9,7 @@ pub mod lp_parser;
 pub mod lp_print_utils;
 pub mod lp_types;
 pub mod lp_utils;
+pub mod matrix_market;
 pub mod matrix_scaler;
 pub mod matrix_utils;
 pub mod mps_reader;

@@ -15,6 +15,9 @@
 )]
 
 use std::borrow::Cow;
+use std::cell::RefCell;
+use std::io;
+use std::path::Path;
 use std::rc::Rc;
 
 use lp_data::lp_data::LinearProgram;
@@ -40,6 +43,7 @@ use crate::random::SharedRandom;
 use crate::reduced_costs::{
     PrimalPrices, perturb_costs_into, update_reduced_cost_values_before_basis_pivot,
 };
+use crate::simplex_probe::SimplexProbe;
 use crate::time_limit::TimeLimit;
 use crate::update_row::UpdateRow;
 use crate::variables_info::{BasisState, VariablesInfo};
@@ -327,6 +331,7 @@ pub struct RevisedSimplex {
     diagnostic_last_direction: Option<ScatteredColumn>,
     phase4_events_enabled: bool,
     phase4_events: Vec<&'static str>,
+    simplex_probe: Option<Rc<RefCell<SimplexProbe>>>,
     initial_basis_before_permutation: RowToColMapping,
     initial_column_permutation: Vec<usize>,
     recovered_warm_basis: Option<RowToColMapping>,
@@ -448,6 +453,7 @@ impl RevisedSimplex {
             diagnostic_last_direction: None,
             phase4_events_enabled: false,
             phase4_events: Vec::new(),
+            simplex_probe: None,
             initial_basis_before_permutation: RowToColMapping::new(),
             initial_column_permutation: Vec::new(),
             recovered_warm_basis: None,
@@ -458,6 +464,35 @@ impl RevisedSimplex {
         #[allow(clippy::cast_sign_loss)]
         self.random.seed(parameters.random_seed as u64);
         self.parameters = parameters.clone();
+    }
+
+    /// Enables opt-in Matrix Market basis and direct-solve probes.
+    ///
+    /// # Errors
+    ///
+    /// Rejects an unsafe instance name.
+    pub fn enable_simplex_probes(
+        &mut self,
+        root: impl AsRef<Path>,
+        instance: &str,
+    ) -> io::Result<()> {
+        self.simplex_probe = Some(Rc::new(RefCell::new(SimplexProbe::new(
+            root.as_ref().to_path_buf(),
+            instance,
+        )?)));
+        Ok(())
+    }
+
+    fn update_probe_pivot(&self) {
+        if let Some(probe) = &self.simplex_probe {
+            probe.borrow_mut().set_pivot(self.num_iterations);
+        }
+    }
+
+    fn begin_pivot_update_probe(&self) {
+        if let Some(probe) = &self.simplex_probe {
+            probe.borrow_mut().set_pivot(self.num_iterations + 1);
+        }
     }
 
     #[must_use]
@@ -755,6 +790,7 @@ impl RevisedSimplex {
         }
         self.trace.clear();
         self.num_iterations = 0;
+        self.update_probe_pivot();
 
         let mut ran_dual = false;
         let mut optimization_started = false;
@@ -1362,6 +1398,7 @@ impl RevisedSimplex {
                 let imprecise_pivot = pivot_difference
                     > self.parameters.refactorization_threshold
                         * (1.0 + pivot_from_update_row.abs().min(pivot_from_direction.abs()));
+                self.begin_pivot_update_probe();
                 if imprecise_pivot {
                     self.strengthen_lu_pivoting_after_early_imprecision()?;
                     self.basis_factorization
@@ -1394,6 +1431,7 @@ impl RevisedSimplex {
                     self.variables_info.as_ref().unwrap().lower_bounds()[entering.to_usize()];
             }
             self.num_iterations += 1;
+            self.update_probe_pivot();
         }
         Ok(())
     }
@@ -1993,11 +2031,15 @@ impl RevisedSimplex {
         &self,
         basis: &RowToColMapping,
     ) -> Result<BasisRepresentation, FactorizationError> {
-        BasisRepresentation::new_for_compact_basis(
+        let mut factorization = BasisRepresentation::new_for_compact_basis(
             Rc::clone(&self.compact_matrix),
             basis,
             &self.parameters,
-        )
+        )?;
+        if let Some(probe) = &self.simplex_probe {
+            factorization.attach_probe(Rc::clone(probe))?;
+        }
+        Ok(factorization)
     }
 
     fn reinitialize_basis_representation(
@@ -3714,6 +3756,7 @@ impl RevisedSimplex {
                 let imprecise_pivot = pivot_difference
                     > self.parameters.refactorization_threshold
                         * (1.0 + pivot_from_update_row.abs().min(pivot_from_direction.abs()));
+                self.begin_pivot_update_probe();
                 if imprecise_pivot {
                     self.strengthen_lu_pivoting_after_early_imprecision()?;
                     self.basis_factorization
@@ -3761,6 +3804,7 @@ impl RevisedSimplex {
             }
             self.num_iterations += 1;
             final_check_performed = false;
+            self.update_probe_pivot();
             if self.trace_enabled {
                 self.trace.push(IterationEvent {
                     iteration: self.num_iterations,
@@ -4047,6 +4091,7 @@ impl RevisedSimplex {
             let imprecise_pivot = pivot_difference
                 > self.parameters.refactorization_threshold
                     * (1.0 + pivot_from_update_row.abs().min(pivot.abs()));
+            self.begin_pivot_update_probe();
             if imprecise_pivot {
                 self.strengthen_lu_pivoting_after_early_imprecision()?;
                 self.basis_factorization
@@ -4075,6 +4120,7 @@ impl RevisedSimplex {
                 self.update_dual_phase_one_prices_for_columns(&changed_columns, false)?;
             }
             self.num_iterations += 1;
+            self.update_probe_pivot();
             if self.trace_enabled {
                 self.trace.push(IterationEvent {
                     iteration: self.num_iterations,
@@ -4405,6 +4451,7 @@ impl RevisedSimplex {
             let imprecise_pivot = pivot_difference
                 > self.parameters.refactorization_threshold
                     * (1.0 + pivot_from_update_row.abs().min(pivot.abs()));
+            self.begin_pivot_update_probe();
             if imprecise_pivot {
                 self.strengthen_lu_pivoting_after_early_imprecision()?;
                 self.basis_factorization
@@ -4425,6 +4472,7 @@ impl RevisedSimplex {
             self.variable_values[leaving_column] = target_bound;
             reduced_costs_precise = false;
             self.num_iterations += 1;
+            self.update_probe_pivot();
 
             if self.trace_enabled {
                 self.trace.push(IterationEvent {
