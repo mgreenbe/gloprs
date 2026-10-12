@@ -459,7 +459,11 @@ impl<'a> ReducedCosts<'a> {
             .copy_from_slice(&self.basic_objective);
         self.basis_factorization
             .transpose_solve_with_nonzeros(&mut left_inverse)?;
-        self.basic_objective_left_inverse = left_inverse.values().clone();
+        self.basic_objective_left_inverse
+            .resize(ColIndex::from_usize(self.basic_objective.len()), 0.0);
+        self.basic_objective_left_inverse
+            .as_mut_slice()
+            .copy_from_slice(left_inverse.values().as_slice());
         self.recompute_basic_objective_left_inverse = false;
         Ok(())
     }

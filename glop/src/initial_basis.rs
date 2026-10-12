@@ -417,7 +417,9 @@ impl<'a> InitialBasis<'a> {
             // RowNonZero() is deliberately lazy upstream: it includes columns
             // deleted at earlier pivots. Preserve those entries while updating
             // their signed residual degrees.
-            let row_columns = pattern.row_nonzeros[row].clone();
+            // The row is retired by this pivot, so move its adjacency list
+            // out instead of allocating a copy just to traverse it once.
+            let row_columns = std::mem::take(&mut pattern.row_nonzeros[row]);
             pattern.delete_row_and_column(row, column);
             for other in row_columns {
                 if other == column {
@@ -531,7 +533,8 @@ impl<'a> InitialBasis<'a> {
             basis[RowIndex::from_usize(row)] = ColIndex::from_usize(column);
             available[column] = false;
             available[first_slack + row] = false;
-            let row_columns = pattern.row_nonzeros[row].clone();
+            // This row is likewise retired; its stored order is preserved.
+            let row_columns = std::mem::take(&mut pattern.row_nonzeros[row]);
             pattern.delete_row_and_column(row, column);
             for other in row_columns {
                 available[other] = false;

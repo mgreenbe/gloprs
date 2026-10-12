@@ -2015,6 +2015,18 @@ Exit criteria:
 
 ## Immediate next actions
 
+The follow-up ownership scan removed two transient sparse-row index copies in
+the simplex price updates, one in `VariableValues`, and two retired-row
+adjacency-list clones in initial-basis construction. Reduced-cost refresh now
+reuses its retained left-inverse buffer instead of allocating a clone. These
+changes preserve the stored traversal order. The serial fast-96 rerun on this
+source measured 1.127× native for the matched presolved solve (previously
+1.134×), 1.127× for the public pipeline (previously 1.121×), and 0.960× for
+direct dual, whose aggregate is dominated by `pilot87`; see
+`baselines/phase8-performance.md` for per-model and weighted results. These
+small differences do not establish a measurable gain from the ownership edits,
+so paired kernel measurements remain the next performance evidence to collect.
+
 1. Continue Phase 8 with paired kernel-level measurements on `dfl001`'s
    FTRAN, refactorization, and basis-update shares, and `fit2d`'s remaining
    update-row/edge-norm work. Actual `dfl001` BTRAN probes are at parity,

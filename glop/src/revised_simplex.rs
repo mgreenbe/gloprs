@@ -1890,11 +1890,11 @@ impl RevisedSimplex {
                 }
                 self.recompute_dual_prices()?;
             } else {
-                let changed_rows = rhs.non_zeros().to_vec();
-                for &row in &changed_rows {
+                let changed_rows = rhs.non_zeros();
+                for &row in changed_rows {
                     self.variable_values[self.basis[row]] -= rhs.value(row);
                 }
-                self.update_dual_prices(&changed_rows)?;
+                self.update_dual_prices(changed_rows)?;
             }
         }
         Ok(())
@@ -2014,8 +2014,7 @@ impl RevisedSimplex {
                 );
             }
         } else {
-            let rows = rhs.non_zeros().to_vec();
-            for row in rows {
+            for &row in rhs.non_zeros() {
                 self.dual_phase_one_pricing_vector[row] += rhs.value(row);
                 Self::update_dual_phase_one_price_at(
                     &mut self.dual_prices,

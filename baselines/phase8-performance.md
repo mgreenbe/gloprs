@@ -24,6 +24,33 @@ optimization variable.
 
 ## Workspace-audit rerun (12 October 2026)
 
+### Follow-up ownership-scan rerun
+
+After removing the transient sparse-index and retired adjacency-list clones
+and reusing the reduced-cost left-inverse buffer, the same serial fast-96
+protocol was rerun on the uncommitted working tree (one warm-up, three
+alternating timed trials per model). Release binaries were rebuilt; each
+stage run checked matching outcomes, and the public and direct-dual harnesses
+checked their corresponding solver outcomes. The JSON revision field is the
+parent commit `ffbaca5`, not the working-tree content.
+
+| Timed scope | Native | Rust | Rust/native | Sqrt-nnz weighted geometric ratio |
+| --- | ---: | ---: | ---: | ---: |
+| Parse | 0.218 s | 0.201 s | 0.926× | 0.913× |
+| Presolve | 0.262 s | 0.263 s | 1.005× | 0.999× |
+| Solve after matched presolve | 9.652 s | 10.882 s | 1.127× | 1.149× |
+| Public default pipeline | 9.935 s | 11.198 s | 1.127× | 1.117× |
+| Direct unscaled dual | 23.778 s | 22.825 s | 0.960× | 1.175× |
+
+The preceding documented full run had 1.134× matched presolved solve and
+1.121× public-pipeline ratios. The new differences are small and do not by
+themselves establish a gain from the ownership edits. In the matched
+presolved solve, `dfl001` (+0.461 s), `fit2d` (+0.280 s), and `d6cube`
+(+0.101 s) remain the largest absolute excesses. Direct dual is again
+dominated by `pilot87` (9.274 s native, 7.101 s Rust); its below-one total
+ratio does not represent most models. Raw per-model timings and dispersion
+are in ignored `target/phase8-{stages,public,direct-dual}-ownership-scan-fast96.json`.
+
 After retaining the dual-breakpoint heap, primal ratio-test candidate lists,
 scattered dual workspace, and several reset buffers, the same fast-96 protocol
 was rerun serially on the Apple M2: one warm-up and three alternating timed

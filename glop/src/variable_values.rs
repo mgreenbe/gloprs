@@ -213,11 +213,11 @@ impl<'a> VariableValues<'a> {
             }
             self.recompute_dual_prices(dual_edge_norms, dual_prices, false)?;
         } else {
-            let changed_rows = rhs.non_zeros().to_vec();
-            for &row in &changed_rows {
+            let changed_rows = rhs.non_zeros();
+            for &row in changed_rows {
                 self.variable_values[self.basis[row]] -= rhs.value(row);
             }
-            self.update_dual_prices(&changed_rows, dual_edge_norms, dual_prices)?;
+            self.update_dual_prices(changed_rows, dual_edge_norms, dual_prices)?;
         }
         Ok(())
     }
