@@ -959,8 +959,7 @@ impl RevisedSimplex {
             }
 
             if self.problem_status == ProblemStatus::Optimal {
-                let objective = self.objective.clone();
-                self.compute_reduced_costs(&objective)?;
+                self.compute_reduced_costs_for_current_objective()?;
                 self.phase4_event("optimal_cleanup");
                 let solution_tolerance = self.parameters.solution_feasibility_tolerance;
                 let primal_residual = self.maximum_primal_residual();
@@ -1052,8 +1051,7 @@ impl RevisedSimplex {
             self.reduced_costs_need_basis_refactorization = false;
         }
         if self.reduced_costs_dirty {
-            let objective = self.objective.clone();
-            self.compute_reduced_costs(&objective)?;
+            self.compute_reduced_costs_for_current_objective()?;
         }
         let info = self.variables_info.as_ref().unwrap();
         let mut candidates = Vec::new();
@@ -1520,8 +1518,7 @@ impl RevisedSimplex {
                     ProblemStatus::PrimalUnbounded | ProblemStatus::DualUnbounded
                 )
             {
-                let objective = self.objective.clone();
-                self.compute_reduced_costs(&objective)?;
+                self.compute_reduced_costs_for_current_objective()?;
             }
             // GLOP temporarily replaces objective_ with the Phase-I objective
             // when primal feasibility fails. This port keeps the user objective
@@ -1650,8 +1647,7 @@ impl RevisedSimplex {
         // ahead of the check: an exact deterministic-time boundary can stop
         // before it, even when the final operation total is unchanged.
         if self.reduced_costs_dirty && !self.parameters.use_dedicated_dual_feasibility_algorithm {
-            let objective = self.objective.clone();
-            self.compute_reduced_costs(&objective)?;
+            self.compute_reduced_costs_for_current_objective()?;
         }
         if self.parameters.use_dedicated_dual_feasibility_algorithm {
             self.variables_info
@@ -1686,9 +1682,8 @@ impl RevisedSimplex {
                     self.phase4_event("dual_phase_one_post_cleanup");
                     self.basis_factorization.as_mut().unwrap().refactorize()?;
                     self.incorporate_basis_permutation();
-                    let objective = self.objective.clone();
                     if self.reduced_costs_dirty || !self.reduced_costs_precise {
-                        self.compute_reduced_costs(&objective)?;
+                        self.compute_reduced_costs_for_current_objective()?;
                     }
                     let boxed: Vec<_> = self
                         .variables_info
@@ -3176,6 +3171,16 @@ impl RevisedSimplex {
         Ok(())
     }
 
+    /// Use the owned objective as a borrowed input without cloning its full
+    /// column vector. GLOP holds a direct view here; moving the Vec out and
+    /// restoring it after the call is the Rust borrow-checker equivalent.
+    fn compute_reduced_costs_for_current_objective(&mut self) -> Result<(), FactorizationError> {
+        let objective = std::mem::take(&mut self.objective);
+        let result = self.compute_reduced_costs(&objective);
+        self.objective = objective;
+        result
+    }
+
     /// Recompute reduced costs from the left inverse already held in
     /// `dual_values`, as native `GetReducedCosts()` does after `GetDualValues()`.
     fn compute_reduced_costs_from_dual(&mut self, objective: &DenseRow) {
@@ -3942,8 +3947,7 @@ impl RevisedSimplex {
                 || (self.basis_factorization.as_ref().unwrap().is_refactorized()
                     && !reduced_costs_precise)
             {
-                let objective = self.objective.clone();
-                self.compute_reduced_costs(&objective)?;
+                self.compute_reduced_costs_for_current_objective()?;
                 reduced_costs_precise = true;
                 reduced_costs_recomputed = true;
                 prices_initialized = false;
@@ -4226,8 +4230,7 @@ impl RevisedSimplex {
         time_limit: &mut TimeLimit,
     ) -> Result<(), FactorizationError> {
         if self.reduced_costs_dirty {
-            let objective = self.objective.clone();
-            self.compute_reduced_costs(&objective)?;
+            self.compute_reduced_costs_for_current_objective()?;
         }
         let mut reduced_costs_precise = self.reduced_costs_precise;
         let mut recompute_reduced_costs_after_refactorization = false;
@@ -4264,8 +4267,7 @@ impl RevisedSimplex {
                     // untouched, including when a pivot retry requested a
                     // refactorization after that precise pass.
                     if !self.reduced_costs_precise {
-                        let objective = self.objective.clone();
-                        self.compute_reduced_costs(&objective)?;
+                        self.compute_reduced_costs_for_current_objective()?;
                     }
                     reduced_costs_precise = true;
                     recompute_reduced_costs_after_refactorization = false;

@@ -55,6 +55,52 @@ dispersion, and metadata are in ignored `target/phase8-*-workspace-audit-fast96.
 Those artifacts identify the parent commit because the measured Rust binary
 contains the current uncommitted workspace-audit edits.
 
+## Compact-dot bounds-check follow-up
+
+The compact-column dot product remained 1.7–1.8× native in matched isolated
+measurements. A scoped unchecked read of only the matrix-owned coefficient and
+row arrays removes repeated entry-array bounds checks. The compact builder
+always appends one row and coefficient together and closes each column at
+their common length; the RHS vector remains checked, including for malformed
+row coordinates. The four-accumulator fused arithmetic and traversal order
+are unchanged. A seven-trial alternating A/B of old/new Rust binaries measured
+new/old medians of 0.821, 0.759, and 0.721 at 4, 16, and 64 entries per
+column; corresponding new/native ratios are 1.429, 1.375, and 1.290.
+
+Five-trial alternating presolved-solve A/Bs, timing inside the solver, measured
+`fit2d` at 1.430 versus 1.384 seconds (new/old 0.968) and `dfl001` at
+3.549 versus 3.526 seconds (0.993), with matching status, iterations, and
+objective bits. A fresh serial fast-96 comparison (one warm-up, three timed
+trials per model) measures the matched presolved solve at 9.623 seconds native
+versus 10.866 Rust (1.129×), down from the preceding 1.156× run. The public
+default pipeline measures 9.891 versus 11.100 seconds (1.122×), down from
+1.153×. The strict 96-model native pivot-path and public postsolve/KKT gates
+pass; the qap15 terminal KKT gate passes too. Raw per-model trials are in
+ignored `target/phase8-{presolved-solve,public}-compact-bounds-fast96.json`.
+
+Separately, reduced-cost refresh now temporarily moves the existing objective
+allocation into a read-only local reference and restores it, instead of
+cloning the full vector. A focused three-trial A/B on `fit2d`, `dfl001`, and
+`stocfor3` showed no reliable timing gain; this is retained for ownership
+fidelity, not credited with the preceding performance improvement.
+The full serial fast-96 rerun on the final combined source measures the
+presolved solve at 9.693 seconds native versus 10.996 Rust (1.134×) and the
+public pipeline at 10.007 versus 11.216 seconds (1.121×). These small
+differences from the compact-dot-only 1.129×/1.122× runs are not a reliable
+effect of the objective move. Final-source trials are in ignored
+`target/phase8-{presolved-solve,public}-compact-bounds-objective-view-fast96.json`.
+
+The actual `dfl001` refactorization probes give a more specific transpose
+answer than the synthetic lower-transpose benchmark. Across all 271 saved
+basis groups, sampling up to five FTRAN and five BTRAN RHS per group, three
+serial trials and 50 in-process repetitions per RHS, BTRAN is at 0.991×
+native (563 RHS) with no checksum disagreements. FTRAN remains 1.107× (275
+RHS). This does not support treating BTRAN/lower-transpose as the main source
+of `dfl001`'s remaining full-solver excess. The per-RHS data are in ignored
+`target/phase8-dfl001-solve-probes-all.csv`. The probe harness's `--rhs-limit`
+now applies separately to FTRAN and BTRAN so a capped sample cannot omit
+the latter.
+
 | Timed scope | Initial ratio | Workspace edits | Direct row conversion | Inline dot product |
 | --- | ---: | ---: | ---: | ---: |
 | Direct unscaled dual solve | 1.086 (23.80 / 25.84 s) | 1.104 (23.74 / 26.22 s) | 1.172 (24.04 / 28.17 s) | not rerun |

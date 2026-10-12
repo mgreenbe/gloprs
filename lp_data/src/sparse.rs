@@ -228,6 +228,9 @@ impl CompactSparseMatrix {
     // avoids a redundant signedness branch per sparse entry. A negative or
     // out-of-range row still panics at the checked vector indexing below.
     #[allow(clippy::cast_sign_loss)]
+    // The isolated native comparison shows a substantial gap in this hot
+    // kernel; only the two matrix-owned arrays are unchecked below.
+    #[allow(unsafe_code)]
     // GLOP defines this kernel inline in sparse.h. The isolated benchmark
     // measures a further 0–18% reduction from inlining the Rust counterpart.
     #[allow(clippy::inline_always)]
@@ -239,30 +242,45 @@ impl CompactSparseMatrix {
     ) -> Fractional {
         let start = self.starts[column.to_usize()];
         let end = self.starts[column.to_usize() + 1];
+        debug_assert_eq!(self.rows.len(), self.coefficients.len());
+        debug_assert!(end <= self.rows.len());
+        let entry_data = |index: usize| {
+            // SAFETY: every CompactSparseMatrix builder appends one row and one
+            // coefficient per entry and closes a column at their common length.
+            // `index` is in [start, end), so both backing arrays contain it.
+            // The caller's vector is still indexed safely because malformed
+            // row coordinates must not become unchecked memory accesses.
+            unsafe {
+                (
+                    *self.coefficients.get_unchecked(index),
+                    self.rows.get_unchecked(index).value() as usize,
+                )
+            }
+        };
         let shifted_end = end.saturating_sub(3);
         let mut entry = start;
         let (mut result1, mut result2, mut result3, mut result4) = (0.0, 0.0, 0.0, 0.0);
         while entry < shifted_end {
-            result1 = self.coefficients[entry]
-                .mul_add(vector[self.rows[entry].value() as usize], result1);
-            result2 = self.coefficients[entry + 1]
-                .mul_add(vector[self.rows[entry + 1].value() as usize], result2);
-            result3 = self.coefficients[entry + 2]
-                .mul_add(vector[self.rows[entry + 2].value() as usize], result3);
-            result4 = self.coefficients[entry + 3]
-                .mul_add(vector[self.rows[entry + 3].value() as usize], result4);
+            let (coefficient, row) = entry_data(entry);
+            result1 = coefficient.mul_add(vector[row], result1);
+            let (coefficient, row) = entry_data(entry + 1);
+            result2 = coefficient.mul_add(vector[row], result2);
+            let (coefficient, row) = entry_data(entry + 2);
+            result3 = coefficient.mul_add(vector[row], result3);
+            let (coefficient, row) = entry_data(entry + 3);
+            result4 = coefficient.mul_add(vector[row], result4);
             entry += 4;
         }
         let mut result = result1 + result2 + result3 + result4;
         if entry < end {
-            result =
-                self.coefficients[entry].mul_add(vector[self.rows[entry].value() as usize], result);
+            let (coefficient, row) = entry_data(entry);
+            result = coefficient.mul_add(vector[row], result);
             if entry + 1 < end {
-                result = self.coefficients[entry + 1]
-                    .mul_add(vector[self.rows[entry + 1].value() as usize], result);
+                let (coefficient, row) = entry_data(entry + 1);
+                result = coefficient.mul_add(vector[row], result);
                 if entry + 2 < end {
-                    result = self.coefficients[entry + 2]
-                        .mul_add(vector[self.rows[entry + 2].value() as usize], result);
+                    let (coefficient, row) = entry_data(entry + 2);
+                    result = coefficient.mul_add(vector[row], result);
                 }
             }
         }

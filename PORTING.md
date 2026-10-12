@@ -831,6 +831,33 @@ annotations measured FTRAN at 0.4590 seconds Rust versus 0.4157 native
 checksum mismatches; treat the small timing difference from the preceding
 single pass as indicative, not a confidence interval.
 
+## Compact-column dot and objective-view follow-up
+
+For `sparse.{h,cc}` (`lp_data/src/sparse.rs`), the compact scalar product now
+uses unchecked reads only for its internally paired coefficient and row arrays.
+All constructors append these together and record column endpoints at their
+common length; debug assertions check the invariant. The caller-supplied RHS
+vector remains checked, including for invalid row coordinates. This preserves
+GLOP's four-accumulator arithmetic and entry order while cutting isolated
+new/old Rust time by 18–28% at 4–64 entries per column. Focused `fit2d` and
+`dfl001` A/B solves preserve status, iteration counts, and objective bits;
+the fast-96 strict trajectory and public KKT gates pass. The fast-96
+presolved-solve ratio is now 1.129× native and public default 1.122×.
+
+For `revised_simplex.{h,cc}` (`glop/src/revised_simplex.rs`), calls that refresh
+reduced costs from the current objective now move that existing allocation
+temporarily into a read-only local reference and restore it, avoiding a full
+vector clone. This corresponds more closely to GLOP's non-owning objective
+view. A focused same-code A/B showed no convincing timing gain, so no solver
+speedup is attributed to this ownership edit. The final combined-source
+fast-96 ratios are 1.134× native for the presolved solve and 1.121× for the
+public pipeline; the strict native trajectory and qap15 checkpoint tests pass.
+Across all 271 saved `dfl001` refactorization groups, sampled BTRAN probes
+measure 0.991× native (563 RHS) and FTRAN 1.107× (275 RHS), with zero checksum
+disagreements. This argues against blaming the remaining solver gap on
+lower-transpose/BTRAN alone; the per-RHS data are recorded in the Phase-8
+performance report.
+
 ## Iteration-workspace audit
 
 An October 2026 constructor/copy audit of the `glop` and `lp_data` source

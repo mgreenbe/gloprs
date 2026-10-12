@@ -1509,6 +1509,30 @@ new 1.156× is not enough to attribute a meaningful gain to the allocation
 changes alone. Raw trials and remaining outliers are recorded in
 `baselines/phase8-performance.md` and ignored `target/phase8-*-workspace-audit-fast96.json`.
 
+A paired kernel pass then found a stronger, reproducible `fit2d` signal in the
+compact-column dot product: 1.7–1.8× native with safe entry-array reads.
+Scoped unchecked reads of the matrix's internally paired row/coefficient
+arrays, retaining checked RHS-vector indexing and the exact arithmetic order,
+improved isolated new/old medians by 18–28% at 4–64 entries per column.
+Focused same-code A/B solves improved `fit2d` by 3.2% and `dfl001` by 0.7%.
+The fast-96 presolved-solve ratio fell from 1.156× to 1.129× and the public
+pipeline from 1.153× to 1.122×, with unchanged status and iteration counts.
+The strict native trajectory and public postsolve/KKT gates pass. Dense
+lower-transpose solve is only about 1.11× native at dimension 1024 in the
+existing isolated benchmark, so the compact dot was the clearer target.
+Removing full-objective clones at reduced-cost recomputation brings ownership
+closer to upstream but showed no convincing timing gain in a focused A/B.
+On the final combined source, serial fast-96 ratios are 1.134× for the
+presolved solve and 1.121× for the public pipeline; the small run-to-run
+movement from the compact-dot-only sample is not assigned to the objective
+move.
+On all 271 saved `dfl001` refactorization probe groups, BTRAN is 0.991×
+native across 563 sampled RHS while FTRAN is 1.107× across 275; all checksums
+agree. Thus the synthetic lower-transpose gap does not currently explain
+`dfl001`'s solver-level excess. Next profiling should examine its FTRAN,
+factorization, and pivot-update shares before altering transpose substitution.
+See `baselines/phase8-performance.md` for methods and raw-result paths.
+
 The first serial, optimized, untraced comparison of the 96 fast Netlib models
 (excluding `qap12` and `qap15`, three timed trials and one warm-up per solver)
 found a 1.358 Rust/native aggregate solve-time ratio. The largest ratios were
@@ -1992,9 +2016,11 @@ Exit criteria:
 ## Immediate next actions
 
 1. Continue Phase 8 with paired kernel-level measurements on `dfl001`'s
-   transpose solves and `fit2d`'s compact-dot/update-row/edge-norm work.
-   Preserve upstream operation order and validate any edit with strict
-   trajectories and the public-postsolve KKT gate.
+   FTRAN, refactorization, and basis-update shares, and `fit2d`'s remaining
+   update-row/edge-norm work. Actual `dfl001` BTRAN probes are at parity,
+   while compact-dot bounds-check work already improved `fit2d`. Preserve
+   upstream operation order and validate any edit with strict trajectories
+   and the public-postsolve KKT gate.
 2. Repeat the serial fast-96 stage and public-pipeline comparisons after a
    measured change; record medians and dispersion, and rank regressions by
    absolute time. Keep `qap15` outside deterministic wall-time gates until

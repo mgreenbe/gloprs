@@ -66,14 +66,16 @@ def main() -> None:
     parser.add_argument("--rust", type=Path, default=RUST)
     parser.add_argument("--models", nargs="*")
     parser.add_argument("--limit-groups", type=int)
-    parser.add_argument("--rhs-limit", type=int)
+    parser.add_argument("--rhs-limit", type=int,
+                        help="maximum FTRAN and maximum BTRAN RHS per basis")
     parser.add_argument("--trials", type=int, default=3)
     parser.add_argument("--repetitions", type=int, default=10)
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--output", type=Path,
                         default=ROOT / "target/netlib-solve-probe-timings.csv")
     options = parser.parse_args()
-    if options.trials < 1 or options.repetitions < 1 or options.warmups < 0:
+    if (options.trials < 1 or options.repetitions < 1 or options.warmups < 0
+            or options.rhs_limit is not None and options.rhs_limit < 1):
         parser.error("trials/repetitions must be positive; warmups nonnegative")
     selected = groups(options.root, set(options.models) if options.models else None)
     if options.limit_groups is not None:
@@ -91,7 +93,10 @@ def main() -> None:
                          "rhs_nnz", "native_ns", "rust_ns", "ratio"])
         for number, (model, factorization, basis, rhs) in enumerate(selected, 1):
             if options.rhs_limit is not None:
-                rhs = rhs[:options.rhs_limit]
+                rhs = ([path for path in rhs if path.name.startswith("ftran-")]
+                       [:options.rhs_limit]
+                       + [path for path in rhs if path.name.startswith("btran-")]
+                       [:options.rhs_limit])
             if not rhs:
                 continue
             samples: dict[str, dict[str, list[float]]] = {
