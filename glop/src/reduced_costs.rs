@@ -233,7 +233,8 @@ impl<'a> ReducedCosts<'a> {
     }
 
     pub fn compute_maximum_dual_residual(&mut self) -> Result<f64, FactorizationError> {
-        let dual = self.dual_values()?.to_vec();
+        let _ = self.dual_values()?;
+        let dual = self.basic_objective_left_inverse.as_slice();
         let mut maximum = 0.0_f64;
         for row in 0..self.matrix.num_rows().to_usize() {
             let column = self.basis[RowIndex::from_usize(row)];
@@ -268,7 +269,8 @@ impl<'a> ReducedCosts<'a> {
         exclude_boxed: bool,
         sum: bool,
     ) -> Result<f64, FactorizationError> {
-        let reduced = self.reduced_costs()?.to_vec();
+        let _ = self.reduced_costs()?;
+        let reduced = &self.reduced_costs;
         let mut result = 0.0_f64;
         for column in self.variables_info.relevance().iter_ones() {
             if exclude_boxed
@@ -328,7 +330,9 @@ impl<'a> ReducedCosts<'a> {
 
     pub fn perturb_costs(&mut self) {
         let structural_size = self.matrix.num_cols().to_usize() - self.matrix.num_rows().to_usize();
-        self.cost_perturbations = vec![0.0; self.matrix.num_cols().to_usize()];
+        self.cost_perturbations
+            .resize(self.matrix.num_cols().to_usize(), 0.0);
+        self.cost_perturbations.fill(0.0);
         perturb_costs_into(
             &self.objective,
             self.variables_info,
@@ -378,7 +382,9 @@ impl<'a> ReducedCosts<'a> {
 
     pub fn clear_and_remove_cost_shifts(&mut self) {
         self.has_cost_shift = false;
-        self.cost_perturbations = vec![0.0; self.matrix.num_cols().to_usize()];
+        self.cost_perturbations
+            .resize(self.matrix.num_cols().to_usize(), 0.0);
+        self.cost_perturbations.fill(0.0);
         self.recompute_basic_objective = true;
         self.recompute_basic_objective_left_inverse = true;
         self.are_reduced_costs_precise = false;

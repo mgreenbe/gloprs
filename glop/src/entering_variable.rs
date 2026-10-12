@@ -91,6 +91,8 @@ mod ordering_tests {
 pub struct EnteringVariable {
     parameters: GlopParameters,
     equivalent_entering_choices: Vec<usize>,
+    // GLOP retains breakpoints_ across ratio tests rather than allocating it per pivot.
+    breakpoints: BinaryHeap<ColWithRatio>,
     random: SharedRandom,
     num_operations: i64,
 }
@@ -106,6 +108,7 @@ impl EnteringVariable {
         Self {
             parameters: GlopParameters::default(),
             equivalent_entering_choices: Vec::new(),
+            breakpoints: BinaryHeap::new(),
             random,
             num_operations: 0,
         }
@@ -124,14 +127,14 @@ impl EnteringVariable {
         reduced_costs_state: &mut ReducedCosts<'_>,
         bound_flip_candidates: &mut Vec<ColIndex>,
     ) -> Result<Option<ColIndex>, FactorizationError> {
-        let reduced_costs = reduced_costs_state.reduced_costs()?.to_vec();
         let dual_tolerance = reduced_costs_state.dual_feasibility_tolerance();
+        let reduced_costs = reduced_costs_state.reduced_costs()?;
         Ok(self.dual_choose_entering_column_from_values(
             nothing_to_recompute,
             update_row,
             cost_variation,
             variables_info,
-            &reduced_costs,
+            reduced_costs,
             dual_tolerance,
             bound_flip_candidates,
         ))
@@ -158,7 +161,9 @@ impl EnteringVariable {
         let harris_tolerance = self.parameters.harris_tolerance_ratio * dual_tolerance;
         let minimum_delta = self.parameters.degenerate_ministep_factor * dual_tolerance;
         let mut harris_ratio = f64::MAX;
-        let mut breakpoints = BinaryHeap::new();
+        self.breakpoints.clear();
+        self.breakpoints
+            .reserve(update_row.non_zero_positions().len());
         self.num_operations +=
             10 * i64::try_from(update_row.non_zero_positions().len()).unwrap_or(i64::MAX);
         for &column in update_row.non_zero_positions() {
@@ -203,7 +208,7 @@ impl EnteringVariable {
                     harris_ratio = ratio;
                 }
             }
-            breakpoints.push(entry);
+            self.breakpoints.push(entry);
         }
         harris_ratio = f64::MAX;
         bound_flip_candidates.clear();
@@ -211,7 +216,7 @@ impl EnteringVariable {
         let mut step = 0.0;
         let mut best_coefficient = -1.0;
         self.equivalent_entering_choices.clear();
-        while let Some(top) = breakpoints.peek().copied() {
+        while let Some(top) = self.breakpoints.peek().copied() {
             if top.ratio > harris_ratio {
                 break;
             }
@@ -225,7 +230,7 @@ impl EnteringVariable {
                     * top.coefficient_magnitude;
                 if variation_magnitude > 0.0 {
                     bound_flip_candidates.push(ColIndex::from_usize(top.column));
-                    breakpoints.pop();
+                    self.breakpoints.pop();
                     continue;
                 }
             }
@@ -243,7 +248,7 @@ impl EnteringVariable {
                     step = top.ratio;
                 }
             }
-            breakpoints.pop();
+            self.breakpoints.pop();
         }
         if !self.equivalent_entering_choices.is_empty() {
             if let Some(first) = entering {
@@ -277,14 +282,14 @@ impl EnteringVariable {
         variables_info: &VariablesInfo,
         reduced_costs_state: &mut ReducedCosts<'_>,
     ) -> Result<Option<ColIndex>, FactorizationError> {
-        let reduced_costs = reduced_costs_state.reduced_costs()?.to_vec();
         let dual_tolerance = reduced_costs_state.dual_feasibility_tolerance();
+        let reduced_costs = reduced_costs_state.reduced_costs()?;
         Ok(self.dual_phase_one_choose_entering_column_from_values(
             nothing_to_recompute,
             update_row,
             cost_variation,
             variables_info,
-            &reduced_costs,
+            reduced_costs,
             dual_tolerance,
         ))
     }
@@ -305,7 +310,9 @@ impl EnteringVariable {
         };
         let harris_tolerance = self.parameters.harris_tolerance_ratio * dual_tolerance;
         let minimum_delta = self.parameters.degenerate_ministep_factor * dual_tolerance;
-        let mut breakpoints = BinaryHeap::new();
+        self.breakpoints.clear();
+        self.breakpoints
+            .reserve(update_row.non_zero_positions().len());
         self.num_operations +=
             10 * i64::try_from(update_row.non_zero_positions().len()).unwrap_or(i64::MAX);
         for &column in update_row.non_zero_positions() {
@@ -333,7 +340,7 @@ impl EnteringVariable {
                 if coefficient * reduced_costs[column] > 0.0 {
                     let numerator =
                         minimum_delta.max(harris_tolerance - reduced_costs[column].abs());
-                    breakpoints.push(ColWithRatio {
+                    self.breakpoints.push(ColWithRatio {
                         column,
                         ratio: numerator / coefficient.abs(),
                         coefficient_magnitude: coefficient.abs(),
@@ -343,7 +350,7 @@ impl EnteringVariable {
             } else if coefficient * reduced_costs[column] > 0.0 {
                 continue;
             }
-            breakpoints.push(ColWithRatio {
+            self.breakpoints.push(ColWithRatio {
                 column,
                 ratio: (reduced_costs[column].abs() + harris_tolerance) / coefficient.abs(),
                 coefficient_magnitude: coefficient.abs(),
@@ -353,7 +360,7 @@ impl EnteringVariable {
         let mut entering = None;
         let mut step = -1.0;
         let mut improvement = cost_variation.abs();
-        while let Some(top) = breakpoints.peek().copied() {
+        while let Some(top) = self.breakpoints.peek().copied() {
             if top.ratio > step && top.coefficient_magnitude >= pivot_magnitude {
                 entering = Some(top.column);
                 step = top.ratio;
@@ -370,7 +377,7 @@ impl EnteringVariable {
             if improvement <= 0.0 {
                 break;
             }
-            breakpoints.pop();
+            self.breakpoints.pop();
         }
         entering.map(ColIndex::from_usize)
     }

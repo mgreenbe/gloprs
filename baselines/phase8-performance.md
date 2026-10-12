@@ -22,6 +22,39 @@ optimization variable.
   default pipeline. The memory timer instead measures the entire process,
   including parsing and runtime/library startup.
 
+## Workspace-audit rerun (12 October 2026)
+
+After retaining the dual-breakpoint heap, primal ratio-test candidate lists,
+scattered dual workspace, and several reset buffers, the same fast-96 protocol
+was rerun serially on the Apple M2: one warm-up and three alternating timed
+trials per model, with native/Rust status and iteration checks. Results are
+summed per-model medians; smaller is better for Rust/native ratios.
+
+| Timed scope | Native | Rust | Rust/native | Sqrt-nnz weighted geometric ratio |
+| --- | ---: | ---: | ---: | ---: |
+| Parse | 0.217 s | 0.200 s | 0.923× | 0.910× |
+| Presolve | 0.262 s | 0.264 s | 1.011× | 1.006× |
+| Solve after matched presolve | 9.660 s | 11.165 s | 1.156× | 1.174× |
+| Public default pipeline | 9.945 s | 11.466 s | 1.153× | 1.144× |
+| Direct unscaled dual | 23.794 s | 22.998 s | 0.967× | 1.185× |
+
+The direct-dual total is dominated by `pilot87`: 9.267 seconds native versus
+7.147 Rust, with tight three-trial dispersion. Excluding only that model gives
+a 1.091× direct-dual aggregate; Rust remains slower on 90 of 96 direct-dual
+models. The largest remaining absolute excesses are `dfl001` (+0.610 s),
+`truss` (+0.275 s), and `stocfor3` (+0.256 s). In the matched presolved solve,
+the leading excesses are `dfl001` (+0.504 s), `fit2d` (+0.329 s), and `d6cube`
+(+0.146 s). Thus the 0.967× direct total does not establish general parity.
+
+The closest prior full stage sample, taken before the parser/presolve fixes and
+this workspace audit, had a 1.164× presolved-solve ratio (9.616/11.192 s);
+the new 1.156× is a modest change and not an isolated measurement of the
+workspace edits. The preceding documented public and direct-dual comparisons
+are older still and include intervening solver changes. Per-model raw trials,
+dispersion, and metadata are in ignored `target/phase8-*-workspace-audit-fast96.json`.
+Those artifacts identify the parent commit because the measured Rust binary
+contains the current uncommitted workspace-audit edits.
+
 | Timed scope | Initial ratio | Workspace edits | Direct row conversion | Inline dot product |
 | --- | ---: | ---: | ---: | ---: |
 | Direct unscaled dual solve | 1.086 (23.80 / 25.84 s) | 1.104 (23.74 / 26.22 s) | 1.172 (24.04 / 28.17 s) | not rerun |

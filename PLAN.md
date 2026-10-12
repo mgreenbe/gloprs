@@ -1484,6 +1484,31 @@ separately as a performance problem.
 
 ## Phase 8: performance parity campaign
 
+An allocation-site audit across `glop/src` and `lp_data/src` found three
+per-pivot/recomputation workspaces that Rust discarded while GLOP retained
+them: dual entering-variable breakpoints, primal Harris candidate/tie lists,
+and the scattered basic-objective left inverse. These now retain capacity
+across calls; the dual entering wrapper also borrows reduced costs instead of
+copying the full vector, standalone residual checks borrow their cached
+dual/reduced-cost vectors, pending dual price rows are refilled in place, and
+Devex-weight and reduced-cost-perturbation resets retain their buffers.
+Constructors in LP parsing/presolve and in one-time simplex initialization
+were separated from these iterative sites. Remaining candidates for later
+profiling include objective clones at reduced-cost recomputation and the
+packed middle-product update representation; these need ownership/algorithm
+review rather than a mechanical `new()` replacement. No speedup is claimed
+from the audit alone without paired timing measurements.
+
+The subsequent serial fast-96 rerun (one warm-up, three alternating trials)
+measures 0.923× Rust/native for parsing, 1.011× for presolve, 1.156× for
+solving matched presolved models, and 1.153× for the public default pipeline.
+Direct unscaled dual totals 0.967×, but this is dominated by `pilot87`; its
+sqrt-nnz weighted geometric ratio is 1.185× and 90 of 96 models remain slower
+in Rust. The closest prior full presolved-solve sample was 1.164×, so the
+new 1.156× is not enough to attribute a meaningful gain to the allocation
+changes alone. Raw trials and remaining outliers are recorded in
+`baselines/phase8-performance.md` and ignored `target/phase8-*-workspace-audit-fast96.json`.
+
 The first serial, optimized, untraced comparison of the 96 fast Netlib models
 (excluding `qap12` and `qap15`, three timed trials and one warm-up per solver)
 found a 1.358 Rust/native aggregate solve-time ratio. The largest ratios were

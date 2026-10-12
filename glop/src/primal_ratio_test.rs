@@ -25,6 +25,13 @@ pub enum LeavingChoice {
     Refactorize,
 }
 
+/// GLOP keeps both Harris candidate lists across primal ratio tests.
+#[derive(Default)]
+pub struct PrimalRatioWorkspace {
+    candidates: Vec<(RowIndex, f64)>,
+    equivalent_leaving_choices: Vec<RowIndex>,
+}
+
 #[must_use]
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_lines)]
@@ -40,6 +47,39 @@ pub fn choose_leaving_variable_row(
     basis_is_refactorized: bool,
     parameters: &GlopParameters,
     random: &SharedRandom,
+) -> LeavingChoice {
+    choose_leaving_variable_row_with_workspace(
+        entering_column,
+        reduced_cost,
+        direction,
+        direction_infinity_norm,
+        variable_values,
+        lower_bounds,
+        upper_bounds,
+        basis,
+        basis_is_refactorized,
+        parameters,
+        random,
+        &mut PrimalRatioWorkspace::default(),
+    )
+}
+
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+pub fn choose_leaving_variable_row_with_workspace(
+    entering_column: ColIndex,
+    reduced_cost: f64,
+    direction: &ScatteredColumn,
+    direction_infinity_norm: f64,
+    variable_values: &[f64],
+    lower_bounds: &[f64],
+    upper_bounds: &[f64],
+    basis: &RowToColMapping,
+    basis_is_refactorized: bool,
+    parameters: &GlopParameters,
+    random: &SharedRandom,
+    workspace: &mut PrimalRatioWorkspace,
 ) -> LeavingChoice {
     debug_assert_ne!(reduced_cost, 0.0);
     let entering = entering_column.to_usize();
@@ -59,7 +99,8 @@ pub fn choose_leaving_variable_row(
         parameters.ratio_test_zero_threshold
     };
     let mut harris_ratio = current_ratio;
-    let mut candidates = Vec::new();
+    workspace.candidates.clear();
+    workspace.equivalent_leaving_choices.clear();
     for entry in direction {
         let magnitude = entry.coefficient().abs();
         if magnitude <= threshold {
@@ -80,7 +121,7 @@ pub fn choose_leaving_variable_row(
             (value - upper_bounds[column]) / entry.coefficient()
         };
         if ratio <= harris_ratio {
-            candidates.push((row, ratio));
+            workspace.candidates.push((row, ratio));
             harris_ratio = harris_ratio
                 .min((minimum_delta / magnitude).max(ratio + harris_tolerance / magnitude));
         }
@@ -92,8 +133,7 @@ pub fn choose_leaving_variable_row(
     }
     let mut leaving_row = None;
     let mut pivot_magnitude = 0.0_f64;
-    let mut equivalent_leaving_choices = Vec::new();
-    for (row, ratio) in candidates {
+    for &(row, ratio) in &workspace.candidates {
         if ratio > harris_ratio {
             continue;
         }
@@ -106,20 +146,21 @@ pub fn choose_leaving_variable_row(
                 continue;
             }
             if ratio == current_ratio {
-                equivalent_leaving_choices.push(row);
+                workspace.equivalent_leaving_choices.push(row);
                 continue;
             }
         }
-        equivalent_leaving_choices.clear();
+        workspace.equivalent_leaving_choices.clear();
         current_ratio = ratio;
         pivot_magnitude = candidate_magnitude;
         leaving_row = Some(row);
     }
     let mut row = leaving_row.expect("a Harris candidate exists when bound flip is rejected");
-    let exact_tie = !equivalent_leaving_choices.is_empty();
+    let exact_tie = !workspace.equivalent_leaving_choices.is_empty();
     if exact_tie {
-        equivalent_leaving_choices.push(row);
-        row = equivalent_leaving_choices[random.uniform_index(equivalent_leaving_choices.len())];
+        workspace.equivalent_leaving_choices.push(row);
+        row = workspace.equivalent_leaving_choices
+            [random.uniform_index(workspace.equivalent_leaving_choices.len())];
     }
     let step = if current_ratio <= 0.0 {
         minimum_delta / pivot_magnitude

@@ -27,7 +27,7 @@ use lp_data::lp_types::{
 };
 use lp_data::lp_utils::precise_scalar_product;
 use lp_data::permutation::ColumnPermutation;
-use lp_data::scattered_vector::ScatteredColumn;
+use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow};
 use lp_data::sparse::{CompactSparseMatrix, SparseMatrix};
 
 use crate::basis_representation::{BasisRepresentation, DiagnosticSolveStage};
@@ -38,7 +38,9 @@ use crate::lu_factorization::FactorizationError;
 use crate::parameters::{GlopParameters, InitialBasisHeuristic};
 use crate::pricing::DynamicMaximum;
 use crate::primal_edge_norms::{PricingRule as EdgePricingRule, PrimalEdgeNorms};
-use crate::primal_ratio_test::{LeavingChoice, choose_leaving_variable_row};
+use crate::primal_ratio_test::{
+    LeavingChoice, PrimalRatioWorkspace, choose_leaving_variable_row_with_workspace,
+};
 use crate::random::SharedRandom;
 use crate::reduced_costs::{
     PrimalPrices, perturb_costs_into, update_reduced_cost_values_before_basis_pivot,
@@ -300,6 +302,14 @@ pub struct IterationEvent {
     pub objective: f64,
 }
 
+#[derive(Clone, Copy)]
+struct PhaseOneBreakPoint {
+    row: RowIndex,
+    ratio: f64,
+    magnitude: f64,
+    target: f64,
+}
+
 #[derive(Debug)]
 pub struct RevisedSimplex {
     parameters: GlopParameters,
@@ -331,6 +341,8 @@ pub struct RevisedSimplex {
     cost_perturbations: DenseRow,
     has_cost_shift: bool,
     dual_values: DenseColumn,
+    // GLOP's basic_objective_left_inverse_ survives reduced-cost recomputations.
+    dual_workspace: ScatteredRow,
     solution_reduced_costs: DenseRow,
     solution_dual_values: DenseColumn,
     is_maximization_problem: bool,
@@ -455,6 +467,7 @@ impl RevisedSimplex {
             cost_perturbations: DenseRow::new(),
             has_cost_shift: false,
             dual_values: DenseColumn::new(),
+            dual_workspace: ScatteredRow::new(ColIndex::new(0)),
             solution_reduced_costs: DenseRow::new(),
             solution_dual_values: DenseColumn::new(),
             is_maximization_problem: false,
@@ -1052,6 +1065,7 @@ impl RevisedSimplex {
         let mut refactorize = false;
         let mut num_pivots = 0;
         let mut direction = ScatteredColumn::new(self.num_rows);
+        let mut primal_ratio_workspace = PrimalRatioWorkspace::default();
         for _ in 0..10 {
             self.advance_deterministic_time(time_limit);
             if time_limit.limit_reached() {
@@ -1099,7 +1113,7 @@ impl RevisedSimplex {
                 .iter()
                 .fold(0.0_f64, |max, value| max.max(value.abs()));
             let info = self.variables_info.as_ref().unwrap();
-            let leaving = choose_leaving_variable_row(
+            let leaving = choose_leaving_variable_row_with_workspace(
                 entering,
                 fake_reduced_cost,
                 &direction,
@@ -1111,6 +1125,7 @@ impl RevisedSimplex {
                 self.basis_factorization.as_ref().unwrap().is_refactorized(),
                 &self.parameters,
                 &self.random,
+                &mut primal_ratio_workspace,
             );
             let (leaving_row, step_length, target_bound) = match leaving {
                 LeavingChoice::Refactorize => continue,
@@ -1321,6 +1336,7 @@ impl RevisedSimplex {
             }
         }
         let mut direction = ScatteredColumn::new(self.num_rows);
+        let mut primal_ratio_workspace = PrimalRatioWorkspace::default();
         let mut refactorize = false;
         while let Some(&entering) = super_basic_cols.last() {
             self.advance_deterministic_time(time_limit);
@@ -1355,7 +1371,7 @@ impl RevisedSimplex {
                 .as_slice()
                 .iter()
                 .fold(0.0_f64, |maximum, value| maximum.max(value.abs()));
-            let choice = choose_leaving_variable_row(
+            let choice = choose_leaving_variable_row_with_workspace(
                 entering,
                 fake_reduced_cost,
                 &direction,
@@ -1367,6 +1383,7 @@ impl RevisedSimplex {
                 self.basis_factorization.as_ref().unwrap().is_refactorized(),
                 &self.parameters,
                 &self.random,
+                &mut primal_ratio_workspace,
             );
             let (leaving_row, mut step_length, target_bound) = match choice {
                 LeavingChoice::Refactorize => {
@@ -3154,18 +3171,7 @@ impl RevisedSimplex {
     }
 
     fn compute_reduced_costs(&mut self, objective: &DenseRow) -> Result<(), FactorizationError> {
-        self.recompute_basic_objective(objective);
-        let mut dual = lp_data::scattered_vector::ScatteredRow::new(ColIndex::from_usize(
-            self.num_rows.to_usize(),
-        ));
-        dual.values_mut()
-            .as_mut_slice()
-            .copy_from_slice(&self.basic_objective);
-        self.basis_factorization
-            .as_ref()
-            .unwrap()
-            .transpose_solve_with_nonzeros(&mut dual)?;
-        self.dual_values = DenseColumn::from_vec(dual.values().as_slice().to_vec());
+        self.refresh_dual_values(objective)?;
         self.compute_reduced_costs_from_dual(objective);
         Ok(())
     }
@@ -3202,17 +3208,23 @@ impl RevisedSimplex {
     // GetReducedCosts() can return its cached row without a matrix pass.
     fn refresh_dual_values(&mut self, objective: &DenseRow) -> Result<(), FactorizationError> {
         self.recompute_basic_objective(objective);
-        let mut dual = lp_data::scattered_vector::ScatteredRow::new(ColIndex::from_usize(
-            self.num_rows.to_usize(),
-        ));
-        dual.values_mut()
+        if self.dual_workspace.len().to_usize() == self.num_rows.to_usize() {
+            self.dual_workspace.clear();
+        } else {
+            self.dual_workspace = ScatteredRow::new(ColIndex::from_usize(self.num_rows.to_usize()));
+        }
+        self.dual_workspace
+            .values_mut()
             .as_mut_slice()
             .copy_from_slice(&self.basic_objective);
         self.basis_factorization
             .as_ref()
             .unwrap()
-            .transpose_solve_with_nonzeros(&mut dual)?;
-        self.dual_values = DenseColumn::from_vec(dual.values().as_slice().to_vec());
+            .transpose_solve_with_nonzeros(&mut self.dual_workspace)?;
+        self.dual_values.resize(self.num_rows, 0.0);
+        self.dual_values
+            .as_mut_slice()
+            .copy_from_slice(self.dual_workspace.values().as_slice());
         Ok(())
     }
 
@@ -3398,6 +3410,8 @@ impl RevisedSimplex {
         let mut refactorize_for_precision = false;
         let mut direction = ScatteredColumn::new(self.num_rows);
         let mut phase_objective = self.phase_objective(phase);
+        let mut primal_ratio_workspace = PrimalRatioWorkspace::default();
+        let mut phase_one_breakpoints = Vec::new();
         let all_rows: Vec<_> = (0..self.num_rows.to_usize())
             .map(RowIndex::from_usize)
             .collect();
@@ -3610,10 +3624,16 @@ impl RevisedSimplex {
                 .fold(0.0_f64, |maximum, value| maximum.max(value.abs()));
             let reduced = precise_reduced;
             let choice = if phase == SimplexPhase::Feasibility {
-                self.phase_one_ratio_test(entering, reduced, &direction, direction_norm)
+                self.phase_one_ratio_test(
+                    entering,
+                    reduced,
+                    &direction,
+                    direction_norm,
+                    &mut phase_one_breakpoints,
+                )
             } else {
                 let info = self.variables_info.as_ref().unwrap();
-                choose_leaving_variable_row(
+                choose_leaving_variable_row_with_workspace(
                     entering,
                     reduced,
                     &direction,
@@ -3625,6 +3645,7 @@ impl RevisedSimplex {
                     self.basis_factorization.as_ref().unwrap().is_refactorized(),
                     &self.parameters,
                     &self.random,
+                    &mut primal_ratio_workspace,
                 )
             };
             if choice == LeavingChoice::Refactorize {
@@ -4550,13 +4571,15 @@ impl RevisedSimplex {
                 self.dual_prices.clear();
                 pending_price_rows.clear();
             } else {
-                pending_price_rows = if direction.non_zeros().is_empty() {
-                    (0..self.num_rows.to_usize())
-                        .map(RowIndex::from_usize)
-                        .collect::<Vec<_>>()
+                // Keep the pending-row allocation across pivots, as GLOP does
+                // for its iteration workspaces.
+                pending_price_rows.clear();
+                if direction.non_zeros().is_empty() {
+                    pending_price_rows
+                        .extend((0..self.num_rows.to_usize()).map(RowIndex::from_usize));
                 } else {
-                    direction.non_zeros().to_vec()
-                };
+                    pending_price_rows.extend_from_slice(direction.non_zeros());
+                }
             }
         }
     }
@@ -4567,14 +4590,8 @@ impl RevisedSimplex {
         reduced_cost: f64,
         direction: &ScatteredColumn,
         direction_norm: f64,
+        points: &mut Vec<PhaseOneBreakPoint>,
     ) -> LeavingChoice {
-        #[derive(Clone, Copy)]
-        struct BreakPoint {
-            row: RowIndex,
-            ratio: f64,
-            magnitude: f64,
-            target: f64,
-        }
         let info = self.variables_info.as_ref().unwrap();
         let entering_value = self.variable_values[entering];
         let mut current_ratio = if reduced_cost > 0.0 {
@@ -4582,7 +4599,7 @@ impl RevisedSimplex {
         } else {
             info.upper_bounds()[entering.to_usize()] - entering_value
         };
-        let mut points = Vec::new();
+        points.clear();
         let tolerance = self.parameters.primal_feasibility_tolerance;
         for entry in direction {
             let signed_direction = if reduced_cost > 0.0 {
@@ -4601,7 +4618,7 @@ impl RevisedSimplex {
             let to_lower = (lower - tolerance - value) / signed_direction;
             let to_upper = (upper + tolerance - value) / signed_direction;
             if to_lower >= 0.0 && to_lower < current_ratio {
-                points.push(BreakPoint {
+                points.push(PhaseOneBreakPoint {
                     row: entry.row(),
                     ratio: to_lower,
                     magnitude,
@@ -4609,7 +4626,7 @@ impl RevisedSimplex {
                 });
             }
             if to_upper >= 0.0 && to_upper < current_ratio {
-                points.push(BreakPoint {
+                points.push(PhaseOneBreakPoint {
                     row: entry.row(),
                     ratio: to_upper,
                     magnitude,
@@ -4626,7 +4643,7 @@ impl RevisedSimplex {
         let mut improvement = reduced_cost.abs();
         let mut best = None;
         let mut best_magnitude = 0.0;
-        for point in points {
+        for &point in points.iter() {
             if point.magnitude > best_magnitude {
                 current_ratio = point.ratio;
                 best_magnitude = point.magnitude;

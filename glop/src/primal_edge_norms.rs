@@ -176,11 +176,16 @@ impl PrimalEdgeNorms {
     #[must_use]
     pub fn devex_weights(&mut self) -> &[f64] {
         if self.reset_devex_weights {
-            self.devex_weights = if self.initialize_devex_with_column_norms {
-                self.matrix_column_norms().to_vec()
+            if self.initialize_devex_with_column_norms {
+                let _ = self.matrix_column_norms();
+                self.devex_weights.clear();
+                self.devex_weights
+                    .extend_from_slice(&self.matrix_column_norms);
             } else {
-                vec![1.0; self.matrix.num_cols().to_usize()]
-            };
+                self.devex_weights
+                    .resize(self.matrix.num_cols().to_usize(), 1.0);
+                self.devex_weights.fill(1.0);
+            }
             self.num_devex_updates_since_reset = 0;
             self.reset_devex_weights = false;
         }

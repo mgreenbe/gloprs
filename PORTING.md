@@ -831,6 +831,34 @@ annotations measured FTRAN at 0.4590 seconds Rust versus 0.4157 native
 checksum mismatches; treat the small timing difference from the preceding
 single pass as indicative, not a confidence interval.
 
+## Iteration-workspace audit
+
+An October 2026 constructor/copy audit of the `glop` and `lp_data` source
+separated model-setup and persistent-factor allocations from allocations on
+the simplex iteration path. In `entering_variable.{h,cc}`, native
+`breakpoints_` is a member reused between dual Phase-I/II ratio tests; Rust's
+local `BinaryHeap` has been made a member with retained capacity. The wrapper
+now borrows the reduced-cost slice instead of cloning it. In
+`revised_simplex.{h,cc}`, native `leaving_candidates_` and
+`equivalent_leaving_choices_` are persistent; Rust's primal Harris ratio test
+now takes a reusable workspace across each optimization, polish, or primal-push
+loop. Its Phase-I breakpoint list and the dual loop's pending-price-row list
+also retain their allocations. In `reduced_costs.{h,cc}`, native
+`basic_objective_left_inverse_` survives recomputations; Rust's equivalent
+scattered row now survives on `RevisedSimplex`, and its dense dual output is
+copied into retained storage. The heap's existing ordering and all numerical
+operations remain unchanged. Devex weight resets and the standalone
+`ReducedCosts` perturbation-reset paths now retain their vector storage too;
+its residual checks borrow the cached dual and reduced-cost vectors instead of
+copying them.
+Unit tests and the fast-96 strict trajectory
+fixture validate these changes; the qap15 checkpoint gate is run separately.
+
+Remaining objective clones on reduced-cost refresh and packed middle-product
+update construction merit a separate ownership and representation audit; they
+are not classified as removable temporary workspaces merely from a constructor
+search. No performance improvement is inferred without paired benchmarks.
+
 ## Test inventory caveat
 
 The pinned public tree does not contain the historical file-local unit tests for
