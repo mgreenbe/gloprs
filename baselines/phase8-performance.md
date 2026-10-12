@@ -42,6 +42,34 @@ The direct-dual total also varied much more than the other two scopes across
 these runs, warranting a controlled check before attributing its movement to
 an implementation change.
 
+## October 2026 parsing and presolve follow-up
+
+Using the same serial, release-build fast-96 stage harness (one warm-up and
+three alternating trials per model), an in-place partial-index permutation
+removed a temporary sparse-entry allocation in presolve. Fixed MPS fields now
+borrow the input text, and fixed-format data cards are no longer redundantly
+whitespace-tokenized. Row and column deletion also now compact model metadata
+in place, as upstream does, instead of rebuilding bounds, types, and cloned
+names. The parser still uses the same fixed-first/free-fallback selection and
+field boundaries. Summed per-model median times were:
+
+| Stage | Native | Rust before | Rust after | Final ratio |
+| --- | ---: | ---: | ---: | ---: |
+| Parse | 0.218 s | 0.380 s | 0.199 s | 0.912× |
+| Presolve | 0.263 s | 0.382 s | 0.267 s | 1.015× |
+
+The stage harness checked parsed dimensions and presolved status/dimensions
+for all 96 models. The final parser and presolve raw trials and dispersion are
+in ignored `target/phase8-parse-presolve-final.json` and
+`target/phase8-presolve-inplace-metadata.json`; intermediate runs are in
+similarly named `target/phase8-*.json` files. Native parsing
+includes an `MPModelProto` conversion whereas Rust builds `LinearProgram`
+directly, so the final parse ratio is pipeline parity, not identical parser
+algorithm cost. Presolve's residual aggregate excess is 0.004 s, within 1.5%.
+After the metadata change, the native MPS reader's 1,000 free and 1,000 fixed
+generated traces, the 500-case native `lp_data` trace, the strict fast-96
+pivot-path regression, and the fast-96 public postsolve gate all pass.
+
 The 96-model whole-process memory run used three alternating launches each.
 Rust had lower peak RSS in all 96; median per-model Rust/native RSS ratio was
 0.194, and the largest observed peaks were 33.3 MiB Rust versus 41.5 MiB

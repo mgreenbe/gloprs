@@ -527,6 +527,12 @@ pub struct PrimalPrices {
 }
 
 impl PrimalPrices {
+    /// Diagnostic snapshot of GLOP's top-k pricing candidates.
+    #[must_use]
+    pub fn diagnostic_tops(&self) -> Vec<(usize, u64)> {
+        self.prices.diagnostic_tops()
+    }
+
     #[must_use]
     pub fn new(seed: u64) -> Self {
         Self::new_with_random(SharedRandom::new(seed))

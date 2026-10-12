@@ -211,8 +211,7 @@ impl<'a> EquationFormView<'a> {
 /// directions accumulate four products per block. The distinction matters
 /// for reduced-cost precision tests near the refactorization threshold.
 fn basic_objective_direction_scalar_product(
-    objective: &DenseRow,
-    basis: &RowToColMapping,
+    basic_objective: &[f64],
     direction: &ScatteredColumn,
 ) -> f64 {
     if !direction.should_use_dense_iteration(0.8) {
@@ -223,10 +222,10 @@ fn basic_objective_direction_scalar_product(
         // rounded products are added in order, with fused tail terms. Preserve
         // that arithmetic on arm64 so reduced-cost precision decisions agree.
         while i + 4 <= rows.len() {
-            let p0 = objective[basis[rows[i]]] * direction.value(rows[i]);
-            let p1 = objective[basis[rows[i + 1]]] * direction.value(rows[i + 1]);
-            let p2 = objective[basis[rows[i + 2]]] * direction.value(rows[i + 2]);
-            let p3 = objective[basis[rows[i + 3]]] * direction.value(rows[i + 3]);
+            let p0 = basic_objective[rows[i].to_usize()] * direction.value(rows[i]);
+            let p1 = basic_objective[rows[i + 1].to_usize()] * direction.value(rows[i + 1]);
+            let p2 = basic_objective[rows[i + 2].to_usize()] * direction.value(rows[i + 2]);
+            let p3 = basic_objective[rows[i + 3].to_usize()] * direction.value(rows[i + 3]);
             sum += p0;
             sum += p1;
             sum += p2;
@@ -234,25 +233,59 @@ fn basic_objective_direction_scalar_product(
             i += 4;
         }
         while i < rows.len() {
-            sum = objective[basis[rows[i]]].mul_add(direction.value(rows[i]), sum);
+            sum = basic_objective[rows[i].to_usize()].mul_add(direction.value(rows[i]), sum);
             i += 1;
         }
         return sum;
     }
     let values = direction.values().as_slice();
-    let mut sum = 0.0;
-    let blocks = values.len() / 4;
-    for block in 0..blocks {
-        let i = 4 * block;
-        sum += objective[basis[RowIndex::from_usize(i)]] * values[i]
-            + objective[basis[RowIndex::from_usize(i + 1)]] * values[i + 1]
-            + objective[basis[RowIndex::from_usize(i + 2)]] * values[i + 2]
-            + objective[basis[RowIndex::from_usize(i + 3)]] * values[i + 3];
+    #[cfg(all(target_arch = "aarch64", target_os = "macos"))]
+    {
+        let mut sum = 0.0;
+        let mut i = 0;
+        // Clang vectorizes upstream's dense four-term expression eight blocks at
+        // a time on arm64. Each block starts with a rounded product at offset 1,
+        // then contracts offsets 0, 2, and 3. The eight partial sums are added
+        // to the running total in block order.
+        while i + 32 <= values.len() {
+            for block in 0..8 {
+                let j = i + 4 * block;
+                let mut partial = basic_objective[j + 1] * values[j + 1];
+                partial = basic_objective[j].mul_add(values[j], partial);
+                partial = basic_objective[j + 2].mul_add(values[j + 2], partial);
+                partial = basic_objective[j + 3].mul_add(values[j + 3], partial);
+                sum += partial;
+            }
+            i += 32;
+        }
+        while i + 4 <= values.len() {
+            let mut partial = basic_objective[i + 1] * values[i + 1];
+            partial = basic_objective[i].mul_add(values[i], partial);
+            partial = basic_objective[i + 2].mul_add(values[i + 2], partial);
+            partial = basic_objective[i + 3].mul_add(values[i + 3], partial);
+            sum += partial;
+            i += 4;
+        }
+        while i < values.len() {
+            sum = basic_objective[i].mul_add(values[i], sum);
+            i += 1;
+        }
+        sum
     }
-    for (i, &value) in values.iter().enumerate().skip(4 * blocks) {
-        sum += objective[basis[RowIndex::from_usize(i)]] * value;
+    #[cfg(not(all(target_arch = "aarch64", target_os = "macos")))]
+    {
+        let mut sum = 0.0;
+        for i in (0..values.len() - values.len() % 4).step_by(4) {
+            sum += basic_objective[i] * values[i]
+                + basic_objective[i + 1] * values[i + 1]
+                + basic_objective[i + 2] * values[i + 2]
+                + basic_objective[i + 3] * values[i + 3];
+        }
+        for i in (values.len() - values.len() % 4)..values.len() {
+            sum += basic_objective[i] * values[i];
+        }
+        sum
     }
-    sum
 }
 
 /// A normalized event emitted only when tracing is enabled.
@@ -292,6 +325,9 @@ pub struct RevisedSimplex {
     variables_info: Option<VariablesInfo>,
     variable_values: DenseRow,
     reduced_costs: DenseRow,
+    /// GLOP's `ReducedCosts::basic_objective_`, in current basis-row order.
+    basic_objective: Vec<f64>,
+    basic_objective_dirty: bool,
     cost_perturbations: DenseRow,
     has_cost_shift: bool,
     dual_values: DenseColumn,
@@ -414,6 +450,8 @@ impl RevisedSimplex {
             variables_info: None,
             variable_values: DenseRow::new(),
             reduced_costs: DenseRow::new(),
+            basic_objective: Vec::new(),
+            basic_objective_dirty: true,
             cost_perturbations: DenseRow::new(),
             has_cost_shift: false,
             dual_values: DenseColumn::new(),
@@ -560,6 +598,12 @@ impl RevisedSimplex {
     #[must_use]
     pub fn diagnostic_random_next(&self) -> u64 {
         self.random.diagnostic_peek_next_u64()
+    }
+
+    /// Diagnostic snapshot of the primal pricing heap.
+    #[must_use]
+    pub fn diagnostic_primal_price_tops(&self) -> Vec<(usize, u64)> {
+        self.primal_prices.diagnostic_tops()
     }
 
     pub fn diagnostic_left_solve_stages(
@@ -2418,6 +2462,8 @@ impl RevisedSimplex {
         self.variables_info = Some(info);
         self.variable_values = variable_values;
         self.reduced_costs = DenseRow::filled(self.num_cols, 0.0);
+        self.basic_objective.clear();
+        self.basic_objective_dirty = true;
         self.reduced_costs_dirty = true;
         self.reduced_costs_precise = false;
         self.cost_perturbations = DenseRow::filled(self.num_cols, 0.0);
@@ -2466,6 +2512,9 @@ impl RevisedSimplex {
             permuted[RowIndex::from_usize(destination)] = self.basis[RowIndex::from_usize(source)];
         }
         self.basis = permuted;
+        // Native `ReducedCosts::UpdateDataOnBasisPermutation()` lazily
+        // reconstructs the basic objective in the new basis-row order.
+        self.basic_objective_dirty = true;
         factorization.set_column_permutation_to_identity();
     }
 
@@ -2581,6 +2630,8 @@ impl RevisedSimplex {
             .unwrap()
             .rebind_compact(&self.compact_matrix);
         self.reduced_costs = DenseRow::filled(self.num_cols, 0.0);
+        self.basic_objective.clear();
+        self.basic_objective_dirty = true;
         self.reduced_costs_dirty = true;
         self.reduced_costs_precise = false;
         self.cost_perturbations = DenseRow::filled(self.num_cols, 0.0);
@@ -2675,6 +2726,8 @@ impl RevisedSimplex {
         self.dual_edge_norms
             .resize_on_new_rows(self.num_rows.to_usize());
         self.reduced_costs = DenseRow::filled(self.num_cols, 0.0);
+        self.basic_objective.clear();
+        self.basic_objective_dirty = true;
         self.reduced_costs_dirty = true;
         self.reduced_costs_precise = false;
         self.cost_perturbations = DenseRow::filled(self.num_cols, 0.0);
@@ -3091,19 +3144,23 @@ impl RevisedSimplex {
         changed
     }
 
+    fn recompute_basic_objective(&mut self, objective: &DenseRow) {
+        self.basic_objective.resize(self.num_rows.to_usize(), 0.0);
+        for row in 0..self.num_rows.to_usize() {
+            let column = self.basis[RowIndex::from_usize(row)];
+            self.basic_objective[row] = objective[column] + self.cost_perturbations[column];
+        }
+        self.basic_objective_dirty = false;
+    }
+
     fn compute_reduced_costs(&mut self, objective: &DenseRow) -> Result<(), FactorizationError> {
-        let basic_objective: Vec<_> = (0..self.num_rows.to_usize())
-            .map(|row| {
-                let column = self.basis[RowIndex::from_usize(row)];
-                objective[column] + self.cost_perturbations[column]
-            })
-            .collect();
+        self.recompute_basic_objective(objective);
         let mut dual = lp_data::scattered_vector::ScatteredRow::new(ColIndex::from_usize(
             self.num_rows.to_usize(),
         ));
         dual.values_mut()
             .as_mut_slice()
-            .copy_from_slice(&basic_objective);
+            .copy_from_slice(&self.basic_objective);
         self.basis_factorization
             .as_ref()
             .unwrap()
@@ -3144,18 +3201,13 @@ impl RevisedSimplex {
     // ReducedCosts::GetDualValues() always performs a fresh BTRAN, even when
     // GetReducedCosts() can return its cached row without a matrix pass.
     fn refresh_dual_values(&mut self, objective: &DenseRow) -> Result<(), FactorizationError> {
-        let basic_objective: Vec<_> = (0..self.num_rows.to_usize())
-            .map(|row| {
-                let column = self.basis[RowIndex::from_usize(row)];
-                objective[column] + self.cost_perturbations[column]
-            })
-            .collect();
+        self.recompute_basic_objective(objective);
         let mut dual = lp_data::scattered_vector::ScatteredRow::new(ColIndex::from_usize(
             self.num_rows.to_usize(),
         ));
         dual.values_mut()
             .as_mut_slice()
-            .copy_from_slice(&basic_objective);
+            .copy_from_slice(&self.basic_objective);
         self.basis_factorization
             .as_ref()
             .unwrap()
@@ -3489,12 +3541,11 @@ impl RevisedSimplex {
                 self.recompute_primal_price_at(entering)?;
                 continue;
             }
-            let precise_reduced = phase_objective[entering]
-                - basic_objective_direction_scalar_product(
-                    &phase_objective,
-                    &self.basis,
-                    &direction,
-                );
+            if self.basic_objective_dirty {
+                self.recompute_basic_objective(&phase_objective);
+            }
+            let precise_reduced = phase_objective[entering] + self.cost_perturbations[entering]
+                - basic_objective_direction_scalar_product(&self.basic_objective, &direction);
             let old_reduced = self.reduced_costs[entering];
             self.reduced_costs[entering] = precise_reduced;
             let scale = if precise_reduced.abs() <= 1.0 {
@@ -3719,6 +3770,10 @@ impl RevisedSimplex {
                         self.update_row.as_ref().unwrap(),
                     );
                 }
+                // GLOP updates `basic_objective_` after the reduced-cost row
+                // update but before the basis mapping changes.
+                self.basic_objective[row.to_usize()] =
+                    phase_objective[entering] + self.cost_perturbations[entering];
                 self.reduced_costs_precise = false;
                 if !self.reduced_costs_dirty && !self.primal_prices.recomputation_pending() {
                     let norms = self.primal_edge_norms.as_mut().unwrap().squared_norms(
@@ -4629,6 +4684,7 @@ impl RevisedSimplex {
             permuted[RowIndex::from_usize(destination)] = self.basis[RowIndex::from_usize(source)];
         }
         self.basis = permuted;
+        self.basic_objective_dirty = true;
 
         if !self.dual_phase_one_pricing_vector.is_empty() {
             let mut permuted = self.dual_phase_one_pricing_vector.clone();

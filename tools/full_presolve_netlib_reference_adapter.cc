@@ -479,6 +479,14 @@ int main(int argc, char** argv) {
       std::cout << "random_next " << diag_random_next() << '\n';
       return EXIT_SUCCESS;
     }
+    if (argc >= 4 && std::strcmp(argv[3], "heap") == 0) {
+      std::cout << "random_next " << diag_random_next() << "\nprice_tops";
+      const auto& heap = (direct.*Access(PrimalPricesTag{})).*Access(PriceHeapTag{});
+      for (const auto& top : heap.*Access(PriceTopsTag{}))
+        std::cout << ' ' << top.index.value() << ':' << bits(top.value);
+      std::cout << '\n';
+      return EXIT_SUCCESS;
+    }
     if (argc >= 4 && std::strcmp(argv[3], "clock") == 0) {
       std::cout << "clock " << bits(direct.DeterministicTime())
                 << " updates " << direct.GetBasisFactorization().NumUpdates()
@@ -538,6 +546,14 @@ int main(int argc, char** argv) {
     const auto& lu_row_perm = inverse_lu.*Access(LuInverseRowPermutationTag{});
     for (int index = 0; index < lu_row_perm.size().value(); ++index)
       std::cout << ' ' << lu_row_perm[glop::RowIndex(index)].value();
+    std::cout << "\nrandom_next " << diag_random_next() << "\nprice_tops";
+    const auto& price_heap = (direct.*Access(PrimalPricesTag{})).*Access(PriceHeapTag{});
+    for (const auto& top : price_heap.*Access(PriceTopsTag{}))
+      std::cout << ' ' << top.index.value() << ':' << bits(top.value);
+    if (argc >= 4 && std::strcmp(argv[3], "brief") == 0) {
+      std::cout << '\n';
+      return EXIT_SUCCESS;
+    }
     const auto& update_row = direct.*Access(UpdateRowTag{});
     std::cout << "\nupdate_row";
     for (const auto col : update_row.GetNonZeroPositions())

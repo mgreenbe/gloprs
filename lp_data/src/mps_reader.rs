@@ -177,11 +177,20 @@ impl Parser {
             return Err(MpsError::new(line_number, "line is not in fixed format"));
         }
         let trimmed = line.trim_start();
-        let whitespace_tokens: Vec<&str> = trimmed.split_whitespace().collect();
+        let fixed_data_card = self.format == MpsFormat::Fixed
+            && line.starts_with(' ')
+            && self.section != Section::ObjSense;
+        // Fixed-format data cards are parsed from their field boundaries;
+        // tokenizing them first only allocates and scans the card a second time.
+        let whitespace_tokens: Vec<&str> = if fixed_data_card {
+            Vec::new()
+        } else {
+            trimmed.split_whitespace().collect()
+        };
         if self.format == MpsFormat::Free && whitespace_tokens.len() > 6 {
             return Err(MpsError::new(line_number, "found too many fields"));
         }
-        if whitespace_tokens.is_empty() {
+        if whitespace_tokens.is_empty() && !fixed_data_card {
             return Ok(());
         }
 
@@ -201,18 +210,12 @@ impl Parser {
             return self.start_section(line_number, &whitespace_tokens);
         }
 
-        let fixed_tokens = (self.format == MpsFormat::Fixed && self.section != Section::ObjSense)
-            .then(|| fixed_fields(line, self.section))
-            .flatten();
-        let tokens: Vec<&str> =
-            if self.format == MpsFormat::Fixed && self.section != Section::ObjSense {
-                let fields = fixed_tokens
-                    .as_ref()
-                    .ok_or_else(|| MpsError::new(line_number, "invalid fixed-format data card"))?;
-                fields.iter().map(String::as_str).collect()
-            } else {
-                whitespace_tokens
-            };
+        let tokens = if fixed_data_card {
+            fixed_fields(line, self.section)
+                .ok_or_else(|| MpsError::new(line_number, "invalid fixed-format data card"))?
+        } else {
+            whitespace_tokens
+        };
 
         match self.section {
             Section::ObjSense => self.parse_objective_sense(line_number, &tokens),
@@ -365,8 +368,7 @@ impl Parser {
                 "column requires one or two row/value pairs",
             ));
         }
-        let column_name = tokens[0].to_owned();
-        let column = self.lp.find_or_create_variable(&column_name);
+        let column = self.lp.find_or_create_variable(tokens[0]);
         if self.binary_by_default.len() <= column.to_usize() {
             self.binary_by_default.resize(column.to_usize() + 1, false);
         }
@@ -587,7 +589,7 @@ fn parse_number(line: usize, token: &str) -> Result<Fractional, MpsError> {
     Ok(value)
 }
 
-fn fixed_fields(line: &str, section: Section) -> Option<Vec<String>> {
+fn fixed_fields(line: &str, section: Section) -> Option<Vec<&str>> {
     let bytes = line.as_bytes();
     let row_line = matches!(section, Section::Rows | Section::LazyRows);
     if bytes.len() < if row_line { 5 } else { 14 }
@@ -607,14 +609,11 @@ fn fixed_fields(line: &str, section: Section) -> Option<Vec<String>> {
         Section::Bounds => &[(1, 3), (4, 12), (14, 22), (24, 36)],
         _ => return None,
     };
-    let mut fields: Vec<String> = ranges
+    let mut fields: Vec<&str> = ranges
         .iter()
-        .map(|&(start, end)| {
-            line.get(start..end.min(line.len()))
-                .map_or_else(String::new, |field| field.trim().to_owned())
-        })
+        .map(|&(start, end)| line.get(start..end.min(line.len())).map_or("", str::trim))
         .collect();
-    while fields.last().is_some_and(String::is_empty) {
+    while fields.last().is_some_and(|field| field.is_empty()) {
         fields.pop();
     }
     if section == Section::Rows {

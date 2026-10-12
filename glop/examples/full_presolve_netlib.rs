@@ -140,6 +140,17 @@ fn main() {
             println!("random_next {}", direct.diagnostic_random_next());
             return;
         }
+        if matches!(env::args().nth(3).as_deref(), Some("heap")) {
+            print!(
+                "random_next {}\nprice_tops",
+                direct.diagnostic_random_next()
+            );
+            for (column, bits) in direct.diagnostic_primal_price_tops() {
+                print!(" {column}:{bits}");
+            }
+            println!();
+            return;
+        }
         if matches!(env::args().nth(3).as_deref(), Some("clock")) {
             println!(
                 "clock {} updates {} basis_time {} refactorizations {}",
@@ -234,6 +245,17 @@ fn main() {
         print!("\nlu_row_perm");
         for row in direct.diagnostic_lu_row_permutation() {
             print!(" {row}");
+        }
+        print!(
+            "\nrandom_next {}\nprice_tops",
+            direct.diagnostic_random_next()
+        );
+        for (column, bits) in direct.diagnostic_primal_price_tops() {
+            print!(" {column}:{bits}");
+        }
+        if matches!(env::args().nth(3).as_deref(), Some("brief")) {
+            println!();
+            return;
         }
         if let Some(direction) = direct.diagnostic_last_direction() {
             print!("\ndirection_values");

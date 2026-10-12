@@ -37,6 +37,15 @@ impl Default for DynamicMaximum {
 }
 
 impl DynamicMaximum {
+    /// Diagnostic snapshot of the lazy top-k heap in traversal order.
+    #[must_use]
+    pub fn diagnostic_tops(&self) -> Vec<(usize, u64)> {
+        self.tops
+            .iter()
+            .map(|entry| (entry.index, entry.value.to_bits()))
+            .collect()
+    }
+
     #[must_use]
     pub fn new(seed: u64) -> Self {
         Self::new_with_random(SharedRandom::new(seed))

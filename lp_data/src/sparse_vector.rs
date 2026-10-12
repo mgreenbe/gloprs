@@ -655,17 +655,19 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
     }
 
     pub fn apply_partial_index_permutation(&mut self, permutation: &Permutation<I>) {
-        let entries = self
-            .iter()
-            .filter_map(|entry| {
-                let index = permutation[entry.index];
-                (index.value_i64() >= 0).then_some(SparseEntry {
-                    index,
-                    coefficient: entry.coefficient,
-                })
-            })
-            .collect();
-        self.replace_entries(entries);
+        // Match GLOP's ApplyPartialIndexPermutation(): compact surviving
+        // entries in place, preserving order and the column's capacity.
+        let mut write = 0;
+        for read in 0..self.indices.len() {
+            let index = permutation[self.indices[read]];
+            if index.value_i64() >= 0 {
+                self.indices[write] = index;
+                self.coefficients[write] = self.coefficients[read];
+                write += 1;
+            }
+        }
+        self.indices.truncate(write);
+        self.coefficients.truncate(write);
     }
 
     pub fn move_tagged_entries_to(&mut self, permutation: &Permutation<I>, output: &mut Self) {
@@ -964,6 +966,31 @@ impl RandomAccessSparseColumn {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn partial_permutation_compacts_in_place_and_preserves_capacity() {
+        let mut column = SparseColumn::new();
+        column.reserve(8);
+        column.add_entry(RowIndex::new(0), 1.0);
+        column.add_entry(RowIndex::new(1), 2.0);
+        column.add_entry(RowIndex::new(2), 3.0);
+        column.add_entry(RowIndex::new(3), 4.0);
+        let index_capacity = column.indices.capacity();
+        let coefficient_capacity = column.coefficients.capacity();
+        let permutation = Permutation::from_vec(vec![
+            RowIndex::new(2),
+            RowIndex::new(-1),
+            RowIndex::new(0),
+            RowIndex::new(-1),
+        ]);
+
+        column.apply_partial_index_permutation(&permutation);
+
+        assert_eq!(column.indices, [RowIndex::new(2), RowIndex::new(0)]);
+        assert_eq!(column.coefficients, [1.0, 3.0]);
+        assert_eq!(column.indices.capacity(), index_capacity);
+        assert_eq!(column.coefficients.capacity(), coefficient_capacity);
+    }
 
     #[test]
     fn cleanup_sorts_removes_zeros_and_keeps_last_duplicate() {

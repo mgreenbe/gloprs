@@ -1423,7 +1423,7 @@ stable IDs in `baselines/phase7-known-issues.md`. The first affected clock
 prefixes on `d2q06c` and `sierra` are pinned by
 `tools/validate_phase7_clock_prefix.py`.
 
-The refreshed 98-model terminal audit has 97 clean matches and one documented
+The earlier 98-model terminal audit had 97 clean matches and one documented
 `qap15` path discrepancy (P7-001). The former `d2q06c` and `sierra` clock
 defects are repaired: Rust no longer marks the temporary sparse membership
 mask while scattering the direction into the cached inverse. Their first
@@ -1431,13 +1431,18 @@ affected clock prefixes and the three-stage `d2q06c` transpose solve now
 agree bit-for-bit. The audit also compares live native/Rust refactorization
 counts on all 98 models; the 97 other terminal solves agree. The
 96-model KKT gate passes, and the `qap15` terminal solution has a separate
-opt-in original-model KKT gate. Native `qap15` takes 74,317 pivots and 527
-refactorizations; Rust takes 73,789 and 521. Both report `OPTIMAL` with valid
-primal/dual feasibility, but their trajectories and final bases differ. The
-native terminal trace is pinned, and an opt-in 67,016/67,017 fixed-cap pair
-reproduces the narrowest tested capped-state difference. Fixed-cap cleanup
-can change the path, so that pair does not identify the first live divergent
-pivot. P7-001 remains a port-fidelity defect, not an invalid solution.
+opt-in original-model KKT gate. At that audit, native `qap15` took 74,317
+pivots and 527 refactorizations versus Rust's 73,789 and 521. Fixed-cap
+cleanup complicated localization; the 67,016/67,017 capped-state split was
+not the first live divergence. P7-001 is now resolved: the first live
+reduced-cost drift was at pivot 7,505 in the dense basic-objective/direction
+dot product. Matching Apple Clang's contracted eight-block reduction and
+maintaining GLOP's basis-row-ordered basic-objective workspace restores the
+7,506 pricing heap, the 65,430 RNG state, and the full `qap15` terminal
+fingerprints. Both implementations now reach `OPTIMAL` after 74,317 pivots
+and 527 refactorizations, with identical ordered basis, variable values,
+reduced costs, objective, and deterministic clock. The opt-in
+`qap15_presolved_trajectory` gate pins these checkpoints.
 
 Build a harness that runs GLOP and `gloprs` with matched parameters and compares:
 
@@ -1471,10 +1476,11 @@ Exit criteria:
 
 Exit criteria (met): the full checked-in report and regression harness cover
 all 98 models, no incorrect status or invalid solution is unexplained, and
-P7-001 has a pinned terminal fixture plus a narrow opt-in capped-state
-regression. Phase 7's validation deliverable is complete; exact `qap15`
-trajectory equivalence is still open and must not be described as validated
-port fidelity.
+P7-001 has a pinned terminal fixture and an opt-in presolved-trajectory
+regression covering the former pricing/RNG splits and terminal state. Phase 7's
+validation deliverable is complete, and the former `qap15` terminal fidelity
+defect is resolved. Direct, unscaled qap15 dual termination is tracked
+separately as a performance problem.
 
 ## Phase 8: performance parity campaign
 
@@ -1865,6 +1871,49 @@ and `fit2d` but slightly slower on `stocfor3`. The strict fast-96 trajectory
 and public-postsolve KKT gates still pass. The separate lower-transpose kernel
 gap also remains open.
 
+A fresh serial fast-96 stage comparison on 12 October 2026 (one warm-up and
+three alternating trials per model, release binaries) matched native status,
+iteration count, and objective on every model. Summed per-model medians were
+0.218/0.380 seconds for native/Rust parsing (1.741×), 0.260/0.382 seconds
+for presolve (1.467×), and 9.616/11.192 seconds for the already-presolved
+solve (1.164×). The solve excess is 1.576 seconds; `dfl001` (+0.521 seconds)
+and `fit2d` (+0.354 seconds) account for over half of it. These timings are
+a new machine-state sample, not evidence that the prior inline change alone
+reduced the 1.254× ratio. The raw trials and dispersion are in ignored
+`target/phase8-stages-inline-fast96.json`.
+
+Matched eight-second samples of ten repeated presolved solves show different
+dominant costs. On `dfl001`, Rust's triangular transpose solve has 1,212
+top-of-stack samples; native's three transpose-lower/upper variants total
+1,319. On `fit2d`, Rust spends most samples in primal edge-norm updates
+(2,692), column-wise update rows (2,583), and primal price updates (1,005);
+native has corresponding hotspots (2,573, 2,226, and 1,462). Sampling alone
+does not isolate the excess time to one of these kernels, so no speculative
+arithmetic or traversal rewrite was made. The next comparison should use
+matched per-kernel timings/counters for these paths, including the already
+known compact-dot gap, then rerun the strict trajectory and public KKT gates
+after any change.
+
+The next Phase-8 pass targeted stage overhead. `SparseVector`'s partial index
+permutation now follows upstream's in-place stable compaction instead of
+allocating and copying a temporary entry array during presolve row deletion.
+The fixed-field MPS scanner borrows input slices, avoids an extra column-name
+copy, and no longer tokenizes cards that it will parse by field position.
+With the same fast-96 serial protocol, parsing now totals 0.218 seconds native
+versus 0.199 seconds Rust (0.912×). `LinearProgram` row and column deletion
+now also compacts metadata in place, matching upstream instead of rebuilding
+bounds, types, and cloned-name vectors. A final presolve-only rerun totals
+0.263 seconds native versus 0.267 seconds Rust (1.015×), down from 1.467×
+before these compaction fixes. The stage benchmark checks matching parsed
+dimensions and presolved status and dimensions. Raw stage trials are in
+ignored `target/phase8-parse-presolve-final.json` (parser) and
+`target/phase8-presolve-inplace-metadata.json` (final presolve). The remaining
+presolve excess is only 0.004 seconds summed over 96 models; individual
+outliers can still be profiled if they matter to a workload. The 1,000-case
+free and 1,000-case fixed native MPS traces, 500 native `lp_data` traces,
+strict fast-96 pivot trajectories, public fast-96 postsolve gate, workspace
+tests, formatting, and Clippy all pass after these edits.
+
 Benchmark native GLOP and `gloprs` on the same machine with pinned compilers and
 equivalent optimized settings. Use repeated runs, warm caches where appropriate,
 and report medians plus dispersion.
@@ -1917,10 +1966,13 @@ Exit criteria:
 
 ## Immediate next actions
 
-1. Begin Phase 7's full differential validation using the public Phase-6 API,
-   preserving the same file-level source correspondence.
-2. Carry the measured LU and public-solve Rust/native gaps into Phase 8's
-   profile-guided performance work. Keep `qap15` outside deterministic
-   wall-time trajectory gates until its performance is tractable.
+1. Continue Phase 8 with paired kernel-level measurements on `dfl001`'s
+   transpose solves and `fit2d`'s compact-dot/update-row/edge-norm work.
+   Preserve upstream operation order and validate any edit with strict
+   trajectories and the public-postsolve KKT gate.
+2. Repeat the serial fast-96 stage and public-pipeline comparisons after a
+   measured change; record medians and dispersion, and rank regressions by
+   absolute time. Keep `qap15` outside deterministic wall-time gates until
+   its performance is tractable.
 3. Find a naturally failing auxiliary-LP scaling case for native differential
    fallback validation; the injected-error branch test already pins dispatch.

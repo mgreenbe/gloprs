@@ -1,21 +1,22 @@
 # Phase 7 known differential limitations
 
-- **P7-001 — qap15 late terminal trajectory divergence.** The native terminal
-  solve is pinned in `phase7-qap15-terminal-native.json.gz`. With matching
-  default parameters, both solvers reach `OPTIMAL`, but native takes 74,317
-  pivots (527 refactorizations) and Rust takes 73,789 (521 refactorizations),
-  with different terminal basis and solution bits. The full Phase 7 audit
-  classifies each difference and checks the original-model primal violations;
-  the opt-in terminal KKT test checks the Rust solution independently. The
-  presolved model is bit-exact, and the fixed-cap fingerprints agree at
-  67,016 iterations but differ at 67,017. Run
-  `python3 tools/validate_phase7_qap15_boundary.py` to reproduce that narrow
-  capped-state comparison. An iteration cap runs cleanup and reoptimization,
-  so this is **not** evidence that live pivot 67,017 is the first divergent
-  pivot; earlier capped snapshots even diverge and subsequently reconverge.
-  The in-flight first divergence and its numerical cause remain open fidelity
-  work. A 20-second wall-limited partial solve is not used as a trajectory
-  comparator.
+- **P7-001 — resolved: qap15 late terminal trajectory divergence.** The
+  former Rust solve took 73,789 pivots and 521 refactorizations versus native
+  GLOP's 74,317 and 527. Live reduced-cost arrays first differed at pivot
+  7,505, even though capped solves could clean up and reconverge. The initial
+  mismatch was in `TestEnteringReducedCostPrecision()`: GLOP uses a persistent,
+  basis-row-ordered basic-objective vector, and Apple Clang contracts its dense
+  dot product in eight four-term blocks. Rust gathered objective entries through
+  the basis permutation and accumulated them in a different floating-point
+  order. Matching the native dense reduction and maintaining the basic-objective
+  workspace (including lazy invalidation on basis permutation) restores the
+  exact 7,506 pricing heap and eliminates the extra RNG draw at 65,430. The
+  full presolved terminal fingerprints now agree bit-for-bit: `OPTIMAL`, 74,317
+  pivots, 527 refactorizations, ordered basis, variable values, reduced costs,
+  objective, and deterministic clock. The opt-in
+  `qap15_presolved_trajectory` test pins the early price heap, later RNG state,
+  and terminal state against the pinned native checkout. The native terminal
+  solution remains in `phase7-qap15-terminal-native.json.gz`.
 
 - **P7-002 — resolved: d2q06c deterministic-work drift.** Before the fix, the
   terminal Rust deterministic time exceeded native by about `4.04e-8` seconds.

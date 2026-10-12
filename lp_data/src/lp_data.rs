@@ -1132,58 +1132,52 @@ impl LinearProgram {
             return;
         }
         let old_columns = self.num_variables().to_usize();
-        let mut destination_by_source = vec![None; old_columns];
-        let mut kept = Vec::with_capacity(old_columns);
+        let mut column_permutation = ColumnPermutation::new(self.num_variables());
+        let mut new_index = 0;
         for source in 0..old_columns {
-            if source >= deleted.as_slice().len() || !deleted[ColIndex::from_usize(source)] {
-                destination_by_source[source] = Some(ColIndex::from_usize(kept.len()));
-                kept.push(source);
+            let column = ColIndex::from_usize(source);
+            if source >= deleted.as_slice().len() || !deleted[column] {
+                self.objective_coefficients.as_mut_slice()[new_index] =
+                    self.objective_coefficients.as_slice()[source];
+                self.variable_lower_bounds.as_mut_slice()[new_index] =
+                    self.variable_lower_bounds.as_slice()[source];
+                self.variable_upper_bounds.as_mut_slice()[new_index] =
+                    self.variable_upper_bounds.as_slice()[source];
+                self.variable_types.as_mut_slice()[new_index] =
+                    self.variable_types.as_slice()[source];
+                self.variable_names.as_mut_slice().swap(new_index, source);
+                column_permutation[column] = ColIndex::from_usize(new_index);
+                new_index += 1;
+            } else {
+                column_permutation[column] = INVALID_COL;
             }
         }
-        self.objective_coefficients = DenseRow::from_vec(
-            kept.iter()
-                .map(|&i| self.objective_coefficients.as_slice()[i])
-                .collect(),
-        );
-        self.variable_lower_bounds = DenseRow::from_vec(
-            kept.iter()
-                .map(|&i| self.variable_lower_bounds.as_slice()[i])
-                .collect(),
-        );
-        self.variable_upper_bounds = DenseRow::from_vec(
-            kept.iter()
-                .map(|&i| self.variable_upper_bounds.as_slice()[i])
-                .collect(),
-        );
-        self.variable_types = TypedVec::from_vec(
-            kept.iter()
-                .map(|&i| self.variable_types.as_slice()[i])
-                .collect(),
-        );
-        self.variable_names = TypedVec::from_vec(
-            kept.iter()
-                .map(|&i| self.variable_names.as_slice()[i].clone())
-                .collect(),
-        );
+        let new_size = ColIndex::from_usize(new_index);
+        self.objective_coefficients.truncate(new_size);
+        self.variable_lower_bounds.truncate(new_size);
+        self.variable_upper_bounds.truncate(new_size);
+        self.variable_types.truncate(new_size);
+        self.variable_names.truncate(new_size);
         self.variable_ids.retain(|_, column| {
-            if let Some(destination) = destination_by_source[column.to_usize()] {
+            let destination = column_permutation[*column];
+            if destination == INVALID_COL {
+                false
+            } else {
                 *column = destination;
                 true
-            } else {
-                false
             }
         });
         self.matrix.delete_columns(deleted);
         self.integer_variable_lists_are_consistent.set(false);
         if self.transpose_matrix_is_consistent.get() {
-            let mut permutation = RowPermutation::new(RowIndex::from_usize(old_columns));
-            for (source, destination) in destination_by_source.iter().enumerate() {
-                permutation[RowIndex::from_usize(source)] =
-                    destination.map_or(INVALID_ROW, |col| RowIndex::from_usize(col.to_usize()));
+            let mut row_permutation = RowPermutation::new(RowIndex::from_usize(old_columns));
+            for source in 0..old_columns {
+                row_permutation[RowIndex::from_usize(source)] =
+                    RowIndex::new(column_permutation[ColIndex::from_usize(source)].value());
             }
             self.transpose_matrix
                 .get_mut()
-                .delete_rows(RowIndex::from_usize(kept.len()), &permutation);
+                .delete_rows(RowIndex::from_usize(new_index), &row_permutation);
         }
     }
 
@@ -1193,31 +1187,25 @@ impl LinearProgram {
         }
         let old_rows = self.num_constraints().to_usize();
         let mut permutation = RowPermutation::new(self.num_constraints());
-        let mut kept = Vec::with_capacity(old_rows);
+        let mut new_index = 0;
         for source in 0..old_rows {
             let row = RowIndex::from_usize(source);
             if source >= deleted.as_slice().len() || !deleted[row] {
-                permutation[row] = RowIndex::from_usize(kept.len());
-                kept.push(source);
+                self.constraint_lower_bounds.as_mut_slice()[new_index] =
+                    self.constraint_lower_bounds.as_slice()[source];
+                self.constraint_upper_bounds.as_mut_slice()[new_index] =
+                    self.constraint_upper_bounds.as_slice()[source];
+                self.constraint_names.as_mut_slice().swap(new_index, source);
+                permutation[row] = RowIndex::from_usize(new_index);
+                new_index += 1;
             } else {
                 permutation[row] = INVALID_ROW;
             }
         }
-        self.constraint_lower_bounds = DenseColumn::from_vec(
-            kept.iter()
-                .map(|&i| self.constraint_lower_bounds.as_slice()[i])
-                .collect(),
-        );
-        self.constraint_upper_bounds = DenseColumn::from_vec(
-            kept.iter()
-                .map(|&i| self.constraint_upper_bounds.as_slice()[i])
-                .collect(),
-        );
-        self.constraint_names = TypedVec::from_vec(
-            kept.iter()
-                .map(|&i| self.constraint_names.as_slice()[i].clone())
-                .collect(),
-        );
+        let new_size = RowIndex::from_usize(new_index);
+        self.constraint_lower_bounds.truncate(new_size);
+        self.constraint_upper_bounds.truncate(new_size);
+        self.constraint_names.truncate(new_size);
         self.constraint_ids.retain(|_, row| {
             let destination = permutation[*row];
             if destination == INVALID_ROW {
@@ -1227,8 +1215,7 @@ impl LinearProgram {
                 true
             }
         });
-        self.matrix
-            .delete_rows(RowIndex::from_usize(kept.len()), &permutation);
+        self.matrix.delete_rows(new_size, &permutation);
         if self.transpose_matrix_is_consistent.get() {
             let deleted_columns = DenseBooleanRow::from_vec(deleted.as_slice().to_vec());
             self.transpose_matrix
@@ -1919,6 +1906,49 @@ impl ProblemSolution {
 #[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deleting_rows_and_columns_compacts_metadata_without_changing_order() {
+        let mut model = LinearProgram::new();
+        for name in ["x0", "x1", "x2"] {
+            model.find_or_create_variable(name);
+        }
+        for name in ["r0", "r1", "r2"] {
+            model.find_or_create_constraint(name);
+        }
+        for position in 0..3 {
+            model.set_coefficient(
+                RowIndex::from_usize(position),
+                ColIndex::from_usize(position),
+                [1.0, 2.0, 3.0][position],
+            );
+        }
+        model.clean_up();
+        let _ = model.transpose_sparse_matrix();
+
+        model.delete_rows(&DenseBooleanColumn::from_vec(vec![false, true, false]));
+        model.delete_columns(&DenseBooleanRow::from_vec(vec![false, true, false]));
+
+        assert_eq!(model.num_constraints(), RowIndex::new(2));
+        assert_eq!(model.num_variables(), ColIndex::new(2));
+        assert_eq!(model.constraint_name(RowIndex::new(0)), "r0");
+        assert_eq!(model.constraint_name(RowIndex::new(1)), "r2");
+        assert_eq!(model.variable_name(ColIndex::new(0)), "x0");
+        assert_eq!(model.variable_name(ColIndex::new(1)), "x2");
+        assert_eq!(
+            model
+                .matrix()
+                .look_up_value(RowIndex::new(1), ColIndex::new(1)),
+            3.0
+        );
+        assert_eq!(
+            model
+                .transpose_sparse_matrix()
+                .look_up_value(RowIndex::new(1), ColIndex::new(1)),
+            3.0
+        );
+        assert!(model.validate().is_ok());
+    }
 
     #[test]
     fn model_defaults_validation_and_solution_statuses_match_upstream() {
