@@ -41,7 +41,7 @@ impl std::error::Error for TriangularError {}
 pub struct TriangularMatrix {
     num_rows: usize,
     starts: Vec<usize>,
-    rows: Vec<usize>,
+    rows: Vec<u32>,
     coefficients: Vec<f64>,
     diagonal: Vec<f64>,
     triangle: Triangle,
@@ -80,7 +80,9 @@ struct PermutedLowerWorkspace {
 
 // GLOP deliberately uses exact zero and unit-diagonal predicates because they
 // control storage, fast paths, and symbolic behavior.
-#[allow(clippy::float_cmp)]
+// Row indices use upstream's fixed-width storage. Builders check that usize
+// inputs fit 32 bits; reads of stored indices fit usize on supported targets.
+#[allow(clippy::float_cmp, clippy::missing_panics_doc)]
 impl TriangularMatrix {
     #[must_use]
     pub fn empty(triangle: Triangle, unit_diagonal: bool) -> Self {
@@ -133,7 +135,7 @@ impl TriangularMatrix {
                     if !valid {
                         return Err(TriangularError::WrongTriangle);
                     }
-                    rows.push(row);
+                    rows.push(u32::try_from(row).expect("triangular row fits in 32 bits"));
                     coefficients.push(entry.coefficient());
                 }
             }
@@ -209,7 +211,8 @@ impl TriangularMatrix {
                 if !valid {
                     return Err(TriangularError::WrongTriangle);
                 }
-                self.rows.push(row);
+                self.rows
+                    .push(u32::try_from(row).expect("triangular row fits in 32 bits"));
                 self.coefficients.push(coefficient);
             }
             self.starts.push(self.rows.len());
@@ -287,7 +290,8 @@ impl TriangularMatrix {
                 diagonal_value = entry.coefficient();
             } else {
                 debug_assert_ne!(entry.coefficient(), 0.0);
-                self.rows.push(entry.index().to_usize());
+                self.rows
+                    .push(u32::try_from(entry.index().to_usize()).unwrap());
                 self.coefficients.push(entry.coefficient());
             }
         }
@@ -302,7 +306,8 @@ impl TriangularMatrix {
     ) {
         for entry in column {
             debug_assert_ne!(entry.index(), diagonal_row);
-            self.rows.push(entry.index().to_usize());
+            self.rows
+                .push(u32::try_from(entry.index().to_usize()).unwrap());
             self.coefficients.push(entry.coefficient());
         }
         self.close_current_column(diagonal_value);
@@ -317,7 +322,7 @@ impl TriangularMatrix {
         diagonal_value: f64,
     ) {
         for (row, coefficient) in entries {
-            self.rows.push(row);
+            self.rows.push(u32::try_from(row).unwrap());
             self.coefficients.push(coefficient);
         }
         self.close_current_column(diagonal_value);
@@ -333,7 +338,8 @@ impl TriangularMatrix {
             if entry.index() == diagonal_row {
                 debug_assert_eq!(entry.coefficient(), diagonal_coefficient);
             } else if entry.coefficient() != 0.0 {
-                self.rows.push(entry.index().to_usize());
+                self.rows
+                    .push(u32::try_from(entry.index().to_usize()).unwrap());
                 self.coefficients
                     .push(entry.coefficient() / diagonal_coefficient);
             }
@@ -343,7 +349,7 @@ impl TriangularMatrix {
 
     pub fn apply_row_permutation_to_non_diagonal_entries(&mut self, permutation: &[usize]) {
         for row in &mut self.rows {
-            *row = permutation[*row];
+            *row = u32::try_from(permutation[usize::try_from(*row).unwrap()]).unwrap();
         }
     }
 
@@ -403,8 +409,8 @@ impl TriangularMatrix {
         let range = self.starts[column]..self.starts[column + 1];
         self.rows[range.clone()]
             .iter()
-            .copied()
-            .zip(self.coefficients[range].iter().copied())
+            .zip(self.coefficients[range].iter())
+            .map(|(&row, &coefficient)| (usize::try_from(row).unwrap(), coefficient))
     }
 
     /// Solves GLOP's partially permuted unit-lower system during Markowitz
@@ -483,7 +489,7 @@ impl TriangularMatrix {
                 let mut position = starts[column];
                 let mut end = workspace.pruned_ends[column];
                 while position < end {
-                    let successor = rows[position];
+                    let successor = usize::try_from(rows[position]).expect("row index fits usize");
                     if workspace.marked.contains(RowIndex::from_usize(successor)) {
                         workspace.marked.clear_bit(RowIndex::from_usize(successor));
                         position += 1;
@@ -509,6 +515,7 @@ impl TriangularMatrix {
             }
             workspace.nodes_to_explore.push(invalid);
             for &successor in &rows[starts[column]..workspace.pruned_ends[column]] {
+                let successor = usize::try_from(successor).expect("row index fits usize");
                 if !workspace.stored.contains(RowIndex::from_usize(successor)) {
                     workspace.nodes_to_explore.push(successor);
                 }
@@ -539,6 +546,7 @@ impl TriangularMatrix {
                 .iter()
                 .zip(&coefficients[starts[column]..end])
             {
+                let successor = usize::try_from(successor).expect("row index fits usize");
                 workspace.scratchpad[successor] =
                     (-coefficient).mul_add(pivot, workspace.scratchpad[successor]);
             }
@@ -594,7 +602,7 @@ impl TriangularMatrix {
             let column = row_permutation[permuted_row];
             debug_assert_ne!(column, invalid);
             for position in self.starts[column]..self.starts[column + 1] {
-                let row = self.rows[position];
+                let row = usize::try_from(self.rows[position]).unwrap();
                 scratchpad[row] = (-self.coefficients[position]).mul_add(pivot, scratchpad[row]);
             }
         }
@@ -724,7 +732,7 @@ impl TriangularMatrix {
                         pivot
                     };
                     for position in (self.starts[column]..self.starts[column + 1]).rev() {
-                        let row = self.rows[position];
+                        let row = usize::try_from(self.rows[position]).unwrap();
                         rhs[row] = (-self.coefficients[position]).mul_add(pivot, rhs[row]);
                     }
                 }
@@ -822,10 +830,10 @@ impl TriangularMatrix {
                 let &[r0, r1, r2, r3] = r else {
                     unreachable!();
                 };
-                let mut four_term_sum = c2 * rhs[r2];
-                four_term_sum = c3.mul_add(rhs[r3], four_term_sum);
-                four_term_sum = c1.mul_add(rhs[r1], four_term_sum);
-                four_term_sum = c0.mul_add(rhs[r0], four_term_sum);
+                let mut four_term_sum = c2 * rhs[usize::try_from(r2).unwrap()];
+                four_term_sum = c3.mul_add(rhs[usize::try_from(r3).unwrap()], four_term_sum);
+                four_term_sum = c1.mul_add(rhs[usize::try_from(r1).unwrap()], four_term_sum);
+                four_term_sum = c0.mul_add(rhs[usize::try_from(r0).unwrap()], four_term_sum);
                 sum -= four_term_sum;
             }
             let mut tail = remainder
@@ -833,11 +841,11 @@ impl TriangularMatrix {
                 .rev()
                 .zip(rows[..remainder.len()].iter().rev());
             if let Some((&coefficient, &row)) = tail.next() {
-                sum = (-coefficient).mul_add(rhs[row], sum);
+                sum = (-coefficient).mul_add(rhs[usize::try_from(row).unwrap()], sum);
                 if let Some((&coefficient, &row)) = tail.next() {
-                    sum = (-coefficient).mul_add(rhs[row], sum);
+                    sum = (-coefficient).mul_add(rhs[usize::try_from(row).unwrap()], sum);
                     if let Some((&coefficient, &row)) = tail.next() {
-                        sum = (-coefficient).mul_add(rhs[row], sum);
+                        sum = (-coefficient).mul_add(rhs[usize::try_from(row).unwrap()], sum);
                     }
                 }
             }
@@ -858,26 +866,33 @@ impl TriangularMatrix {
             let mut sum = rhs[column];
             while position + 3 < end {
                 // Preserve the contraction order of the pinned native build.
-                let mut four_term_sum =
-                    self.coefficients[position + 1] * rhs[self.rows[position + 1]];
-                four_term_sum =
-                    self.coefficients[position].mul_add(rhs[self.rows[position]], four_term_sum);
-                four_term_sum = self.coefficients[position + 2]
-                    .mul_add(rhs[self.rows[position + 2]], four_term_sum);
-                four_term_sum = self.coefficients[position + 3]
-                    .mul_add(rhs[self.rows[position + 3]], four_term_sum);
+                let mut four_term_sum = self.coefficients[position + 1]
+                    * rhs[usize::try_from(self.rows[position + 1]).unwrap()];
+                four_term_sum = self.coefficients[position].mul_add(
+                    rhs[usize::try_from(self.rows[position]).unwrap()],
+                    four_term_sum,
+                );
+                four_term_sum = self.coefficients[position + 2].mul_add(
+                    rhs[usize::try_from(self.rows[position + 2]).unwrap()],
+                    four_term_sum,
+                );
+                four_term_sum = self.coefficients[position + 3].mul_add(
+                    rhs[usize::try_from(self.rows[position + 3]).unwrap()],
+                    four_term_sum,
+                );
                 sum -= four_term_sum;
                 position += 4;
             }
             // GLOP handles the 1–3 remaining entries with fixed branches.
             if position < end {
-                sum = (-self.coefficients[position]).mul_add(rhs[self.rows[position]], sum);
+                sum = (-self.coefficients[position])
+                    .mul_add(rhs[usize::try_from(self.rows[position]).unwrap()], sum);
                 if position + 1 < end {
                     sum = (-self.coefficients[position + 1])
-                        .mul_add(rhs[self.rows[position + 1]], sum);
+                        .mul_add(rhs[usize::try_from(self.rows[position + 1]).unwrap()], sum);
                     if position + 2 < end {
                         sum = (-self.coefficients[position + 2])
-                            .mul_add(rhs[self.rows[position + 2]], sum);
+                            .mul_add(rhs[usize::try_from(self.rows[position + 2]).unwrap()], sum);
                     }
                 }
                 position = end;
@@ -1045,18 +1060,26 @@ impl TriangularMatrix {
             // This is the contraction sequence emitted for GLOP's four-term
             // expression by the pinned optimized Apple Clang build: one
             // rounded multiply for i+1, then FMAs for i, i+2, and i+3.
-            let mut four_term_sum = self.coefficients[position + 1] * rhs[self.rows[position + 1]];
-            four_term_sum =
-                self.coefficients[position].mul_add(rhs[self.rows[position]], four_term_sum);
-            four_term_sum = self.coefficients[position + 2]
-                .mul_add(rhs[self.rows[position + 2]], four_term_sum);
-            four_term_sum = self.coefficients[position + 3]
-                .mul_add(rhs[self.rows[position + 3]], four_term_sum);
+            let mut four_term_sum = self.coefficients[position + 1]
+                * rhs[usize::try_from(self.rows[position + 1]).unwrap()];
+            four_term_sum = self.coefficients[position].mul_add(
+                rhs[usize::try_from(self.rows[position]).unwrap()],
+                four_term_sum,
+            );
+            four_term_sum = self.coefficients[position + 2].mul_add(
+                rhs[usize::try_from(self.rows[position + 2]).unwrap()],
+                four_term_sum,
+            );
+            four_term_sum = self.coefficients[position + 3].mul_add(
+                rhs[usize::try_from(self.rows[position + 3]).unwrap()],
+                four_term_sum,
+            );
             sum -= four_term_sum;
             position += 4;
         }
         while position < end {
-            sum = (-self.coefficients[position]).mul_add(rhs[self.rows[position]], sum);
+            sum = (-self.coefficients[position])
+                .mul_add(rhs[usize::try_from(self.rows[position]).unwrap()], sum);
             position += 1;
         }
         sum
@@ -1070,19 +1093,27 @@ impl TriangularMatrix {
             // This is the contraction sequence emitted for GLOP's four-term
             // expression by the pinned optimized Apple Clang build: one
             // rounded multiply for i-1, then FMAs for i, i-2, and i-3.
-            let mut four_term_sum = self.coefficients[end - 2] * rhs[self.rows[end - 2]];
-            four_term_sum =
-                self.coefficients[end - 1].mul_add(rhs[self.rows[end - 1]], four_term_sum);
-            four_term_sum =
-                self.coefficients[end - 3].mul_add(rhs[self.rows[end - 3]], four_term_sum);
-            four_term_sum =
-                self.coefficients[end - 4].mul_add(rhs[self.rows[end - 4]], four_term_sum);
+            let mut four_term_sum =
+                self.coefficients[end - 2] * rhs[usize::try_from(self.rows[end - 2]).unwrap()];
+            four_term_sum = self.coefficients[end - 1].mul_add(
+                rhs[usize::try_from(self.rows[end - 1]).unwrap()],
+                four_term_sum,
+            );
+            four_term_sum = self.coefficients[end - 3].mul_add(
+                rhs[usize::try_from(self.rows[end - 3]).unwrap()],
+                four_term_sum,
+            );
+            four_term_sum = self.coefficients[end - 4].mul_add(
+                rhs[usize::try_from(self.rows[end - 4]).unwrap()],
+                four_term_sum,
+            );
             sum -= four_term_sum;
             end -= 4;
         }
         while end > start {
             end -= 1;
-            sum = (-self.coefficients[end]).mul_add(rhs[self.rows[end]], sum);
+            sum = (-self.coefficients[end])
+                .mul_add(rhs[usize::try_from(self.rows[end]).unwrap()], sum);
         }
         sum
     }
@@ -1120,7 +1151,7 @@ impl TriangularMatrix {
         starts.resize(n + 2, 0);
         starts.fill(0);
         for &row in &self.rows {
-            starts[row + 2] += 1;
+            starts[usize::try_from(row).unwrap() + 2] += 1;
         }
         for column in 2..n + 2 {
             starts[column] += starts[column - 1];
@@ -1132,10 +1163,10 @@ impl TriangularMatrix {
         starts.pop();
         for column in 0..n {
             for index in self.starts[column]..self.starts[column + 1] {
-                let transposed_column = self.rows[index];
+                let transposed_column = usize::try_from(self.rows[index]).unwrap();
                 let destination = starts[transposed_column + 1];
                 starts[transposed_column + 1] += 1;
-                rows[destination] = column;
+                rows[destination] = u32::try_from(column).unwrap();
                 coefficients[destination] = self.coefficients[index];
             }
         }

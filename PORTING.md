@@ -596,6 +596,14 @@ to translate.
 | `lp_decomposer.{h,cc}` | `lp_data/src/lp_decomposer.rs` | validated | Union-find decomposition preserves union-by-size/root tie-breaking, first-node component numbering, sorted global columns, and `SparseBitset` first-touch constraint order. Local extraction copies exactly the upstream names, types, bounds, costs, direction, coefficients, and sparse traversal order; global/local assignment projection and aggregation are included. A 1,000-case native trace agrees byte-for-byte on component order, complete extracted models, coefficient bits, and assignment reconstruction. A Rust shared borrow replaces the C++ raw pointer plus mutex and statically prevents source mutation |
 | `proto_utils.{h,cc}` | focused model conversion, if needed | not started | Do not reproduce protobuf infrastructure |
 
+Phase-8 storage follow-up for the validated `sparse.{h,cc}` row:
+`TriangularMatrix` now stores non-diagonal row indices in 32 bits, as native
+GLOP does, rather than Rust `usize`. This preserves the 1,000-case native
+triangular and LU traces, strict fast-96 pivot trajectories, and public postsolve/KKT
+gate. A matched lower-transpose microbenchmark improves from 1.51× to 1.45×
+native at dimension 1024, but the full presolved fast-96 solve remains 1.253×
+native, effectively unchanged; see `baselines/phase8-performance.md`.
+
 ## Direct supporting dependencies to assess
 
 The initial include inventory found these non-GLOP/non-`lp_data` dependencies:

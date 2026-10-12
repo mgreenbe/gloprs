@@ -91,6 +91,17 @@ likely involves checked vector gathers and code generation. The
 lower-transpose triangular-solve gap documented in `PLAN.md` remains open.
 No performance-parity claim is made yet.
 
+A further layout experiment changed `TriangularMatrix` non-diagonal row storage
+from 64-bit `usize` to 32-bit indices, matching native GLOP's storage width.
+In the isolated lower-transpose benchmark at dimension 1024, the Rust/native
+ratio fell from 1.51 to 1.45 with the same 3% density and 5,000 repetitions.
+The full 96-model serial presolved-solve timing, however, is 9.527 seconds
+native and 11.941 seconds Rust (1.253×), effectively unchanged from the
+preceding 1.254×. The layout improves one kernel but does not account for the
+solver-level gap. All 1,000 native triangular and LU traces, strict 96-model pivot
+trajectories, and 96-model public postsolve/KKT comparisons pass. Its raw
+per-model timing is `phase8-presolved-solve-u32-fast96.json`.
+
 The A/B harness is `tools/benchmark_phase8_ab.py`. For that check, `A` was a
 release binary with the checked signed conversion, and `B` differed only by
 the direct integer conversion in the compact dot-product kernel. Its printed
@@ -113,6 +124,7 @@ python3 tools/benchmark_phase5_netlib.py --mode default --trials 3 --warmups 1 -
 python3 tools/benchmark_phase8_stages.py --stage both --trials 3 --warmups 1 --output baselines/phase8-stages-final-fast96.json
 python3 tools/benchmark_phase8_stages.py --stage solve --trials 3 --warmups 1 --output baselines/phase8-presolved-solve-dot-fast96.json
 python3 tools/benchmark_phase8_stages.py --stage solve --trials 3 --warmups 1 --output baselines/phase8-presolved-solve-inline-fast96.json
+python3 tools/benchmark_phase8_stages.py --stage solve --trials 3 --warmups 1 --output baselines/phase8-presolved-solve-u32-fast96.json
 python3 tools/benchmark_phase5_netlib.py --mode default --trials 3 --warmups 1 --output baselines/phase8-public-inline-fast96.json
 python3 tools/benchmark_phase8_memory.py --trials 3 --output baselines/phase8-memory-fast96.json
 python3 tools/benchmark_compact_dot.py

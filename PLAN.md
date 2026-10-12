@@ -1566,6 +1566,20 @@ kernel gap is entirely bounds checks: Rust still retains right-hand-side
 checks and uses 64-bit row indices versus native GLOP's 32-bit indices.
 The reproducible microbenchmark is `tools/benchmark_lower_transpose.py`.
 
+The next Phase-8 pass tested the remaining row-width mismatch in that kernel.
+`TriangularMatrix` now stores non-diagonal row indices in 32 bits, as pinned
+GLOP does, while retaining the existing safe right-hand-side indexing and
+exact arithmetic order. An isolated same-code layout A/B measured about an
+8–9% gain at dimension 1024; the production lower-transpose benchmark moved
+from 1.51× to 1.45× native at that size. This does **not** explain the main
+simplex gap: a serial three-trial 96-model presolved-solve run is 11.941 versus
+9.527 seconds, or 1.253×, essentially unchanged from the prior 1.254× result.
+The 1,000-case native triangular and LU traces, workspace tests, strict
+96-model pivot trajectories, and 96-model public postsolve/KKT gate pass. The full timing
+artifact is `baselines/phase8-presolved-solve-u32-fast96.json`. Further work
+should profile update-row and factorization costs on the largest absolute
+outliers; storage width alone is not a performance-parity solution.
+
 The excluded `qap12` is now separately validated under matched settings.
 Unscaled direct dual simplex terminates `OPTIMAL` in 115,513 iterations in
 both pinned GLOP and Rust; sampled limits at 0, 1, 10, 100, 500, 1,000,

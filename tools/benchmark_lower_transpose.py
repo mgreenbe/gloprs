@@ -46,13 +46,14 @@ def main() -> None:
     parser.add_argument("--density", type=float, default=0.03)
     parser.add_argument("--repetitions", type=int, default=5000)
     parser.add_argument("--trials", type=int, default=7)
+    parser.add_argument("--rust-binary", type=Path, default=RUST)
     args = parser.parse_args()
     for n in args.sizes:
         data = factor_input(n, args.density, args.repetitions)
         native_times: list[float] = []
         rust_times: list[float] = []
         for trial in range(args.trials + 1):
-            order = [(NATIVE, native_times), (RUST, rust_times)]
+            order = [(NATIVE, native_times), (args.rust_binary, rust_times)]
             if trial % 2:
                 order.reverse()
             checksums = []
