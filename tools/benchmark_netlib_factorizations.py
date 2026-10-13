@@ -18,9 +18,14 @@ NATIVE = ROOT / "target/native/netlib_factorization_reference_adapter"
 RUST = ROOT / "target/release/examples/netlib_factorization_benchmark"
 
 
-def run(binary: Path, paths: list[Path], repetitions: int, warmups: int) -> dict[Path, tuple[int, int, float, float]]:
+def run(binary: Path, paths: list[Path], repetitions: int, warmups: int,
+        selected_source: Path | None) -> dict[Path, tuple[int, int, float, float]]:
+    command = [binary, str(repetitions), str(warmups)]
+    if selected_source is not None:
+        command.extend(("--selected-source", str(selected_source)))
+    command.extend(str(path) for path in paths)
     output = subprocess.run(
-        [binary, str(repetitions), str(warmups), *(str(path) for path in paths)],
+        command,
         capture_output=True,
         text=True,
         check=True,
@@ -40,6 +45,8 @@ def run(binary: Path, paths: list[Path], repetitions: int, warmups: int) -> dict
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=PROBES)
+    parser.add_argument("--selected-source", type=Path,
+                        help="benchmark selection-*.txt views into this original compact matrix")
     parser.add_argument("--native", type=Path, default=NATIVE)
     parser.add_argument("--rust", type=Path, default=RUST)
     parser.add_argument("--output", type=Path, default=ROOT / "target/netlib-factorization-timings.csv")
@@ -57,7 +64,10 @@ def main() -> None:
     for binary in (options.native, options.rust):
         if not binary.is_file():
             parser.error(f"build the benchmark executable first: {binary}")
-    paths = sorted(options.root.glob("*-*/factorization-*.mtx"))
+    if options.selected_source is not None and not options.selected_source.is_file():
+        parser.error(f"selected source does not exist: {options.selected_source}")
+    pattern = "*-*/selection-*.txt" if options.selected_source else "*-*/factorization-*.mtx"
+    paths = sorted(options.root.glob(pattern))
     if options.models:
         models = set(options.models)
         paths = [path for path in paths if path.parent.name.rsplit("-", 1)[0] in models]
@@ -83,11 +93,11 @@ def main() -> None:
         for start in range(0, len(paths), 50):
             batch = paths[start : start + 50]
             if trial % 2 == 0:
-                native = run(options.native, batch, options.repetitions, options.warmups)
-                rust = run(options.rust, batch, options.repetitions, options.warmups)
+                native = run(options.native, batch, options.repetitions, options.warmups, options.selected_source)
+                rust = run(options.rust, batch, options.repetitions, options.warmups, options.selected_source)
             else:
-                rust = run(options.rust, batch, options.repetitions, options.warmups)
-                native = run(options.native, batch, options.repetitions, options.warmups)
+                rust = run(options.rust, batch, options.repetitions, options.warmups, options.selected_source)
+                native = run(options.native, batch, options.repetitions, options.warmups, options.selected_source)
             for path in batch:
                 n, nnz, native_seconds, native_det = native[path]
                 rust_n, rust_nnz, rust_seconds, rust_det = rust[path]

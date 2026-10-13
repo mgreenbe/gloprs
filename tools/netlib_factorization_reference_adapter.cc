@@ -51,7 +51,6 @@ void ReadMatrixMarket(const std::string& path, LoadedMatrix* result) {
       rows <= 0 || columns <= 0) {
     throw std::runtime_error(path + ": invalid dimensions");
   }
-  if (rows != columns) throw std::runtime_error(path + ": not square");
   std::vector<std::vector<std::pair<int, double>>> grouped(columns);
   std::vector<std::unordered_set<int>> seen(columns);
   size_t count = 0;
@@ -97,15 +96,51 @@ int main(int argc, char** argv) {
       throw std::runtime_error("repetitions must be positive and warmups nonnegative");
     }
     GlopParameters parameters;
-    for (int file = 3; file < argc; ++file) {
+    int first_file = 3;
+    LoadedMatrix source;
+    const bool selected = argc >= 6 && std::string(argv[3]) == "--selected-source";
+    if (selected) {
+      ReadMatrixMarket(argv[4], &source);
+      first_file = 5;
+    }
+    for (int file = first_file; file < argc; ++file) {
       LoadedMatrix loaded;
-      ReadMatrixMarket(argv[file], &loaded);
+      if (!selected) ReadMatrixMarket(argv[file], &loaded);
       std::vector<ColIndex> columns;
-      columns.reserve(loaded.n);
-      for (int column = 0; column < loaded.n; ++column) {
-        columns.push_back(ColIndex(column));
+      const CompactSparseMatrix* matrix = selected ? &source.matrix : &loaded.matrix;
+      if (selected) {
+        std::ifstream input(argv[file]);
+        int dimension;
+        if (!(input >> dimension) || dimension != source.n) {
+          throw std::runtime_error(std::string(argv[file]) + ": invalid selection dimension");
+        }
+        columns.reserve(dimension);
+        for (int position = 0; position < dimension; ++position) {
+          int column;
+          if (!(input >> column) || column < 0 ||
+              column >= matrix->num_cols().value()) {
+            throw std::runtime_error(std::string(argv[file]) + ": invalid selected column");
+          }
+          columns.push_back(ColIndex(column));
+        }
+        int extra;
+        if (input >> extra) {
+          throw std::runtime_error(std::string(argv[file]) + ": extra selected column");
+        }
+      } else {
+        if (loaded.n != matrix->num_cols().value()) {
+          throw std::runtime_error(std::string(argv[file]) + ": not square");
+        }
+        columns.reserve(loaded.n);
+        for (int column = 0; column < loaded.n; ++column) {
+          columns.push_back(ColIndex(column));
+        }
       }
-      CompactSparseMatrixView view(&loaded.matrix, &columns);
+      size_t selected_entries = 0;
+      for (const ColIndex column : columns) {
+        selected_entries += matrix->ColumnNumEntries(column).value();
+      }
+      CompactSparseMatrixView view(matrix, &columns);
       LuFactorization factorization;
       factorization.SetParameters(parameters);
       for (int warmup = 0; warmup < warmups; ++warmup) {
@@ -121,7 +156,7 @@ int main(int argc, char** argv) {
       }
       const auto stop = std::chrono::steady_clock::now();
       const std::chrono::duration<double> seconds = stop - start;
-      std::cout << argv[file] << '\t' << loaded.n << '\t' << loaded.entries
+      std::cout << argv[file] << '\t' << columns.size() << '\t' << selected_entries
                 << '\t' << repetitions << '\t' << std::fixed
                 << std::setprecision(9) << seconds.count() << '\t'
                 << std::scientific << std::setprecision(17)

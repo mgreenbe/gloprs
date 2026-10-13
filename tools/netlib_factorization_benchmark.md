@@ -14,6 +14,17 @@ live solve, LU instead reads a selected-column view of the original compact
 problem matrix. Thus the benchmark measures factorization parity on matched
 materialized inputs, not necessarily the memory-access cost of live
 refactorization.
+The direct factorization-only probes additionally record the original compact
+matrix and basis selections; use `--selected-source` to benchmark that live
+view layout without timing file loading:
+
+```sh
+python3 tools/benchmark_netlib_factorizations.py \
+  --root target/phase8-qap15-direct-probes \
+  --selected-source target/phase8-qap15-direct-probes/qap15-source.mtx \
+  --models qap15 --repetitions 1 --warmups 0 --trials 3 \
+  --output target/phase8-qap15-selected-view-timings.csv
+```
 
 Build both release executables against the pinned upstream checkout:
 

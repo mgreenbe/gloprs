@@ -2309,6 +2309,18 @@ so paired kernel measurements remain the next performance evidence to collect.
    solve show both spending most sampled time in Markowitz's partially
    permuted lower solve, but the wall windows do not cover exactly the same
    pivots and do not establish which live stage creates the residual gap.
+   A selected-view probe now also saves the immutable rectangular compact
+   source matrix and each ordered basis-column selection. The paired LU
+   adapters factor that view directly, with source loading outside the timer.
+   A clean serial three-trial rerun over all 1,826 selections (after another
+   CPU-intensive process ended) measured 51.372/52.479, 50.205/51.522,
+   and 50.125/51.477 seconds native/Rust: 1.022x, 1.026x, and 1.027x.
+   Per-selection median totals are 50.192/51.515 seconds (1.026x), with
+   matched dimension, nnz, and determinant on every input. This is close to
+   the 1.024x materialized-basis result: selected-column indirection alone
+   does not explain the 1.079x live-solve ratio at pivot 30,000. The next
+   step remains timing complete live stages, including basis-update solves,
+   rather than inferring their costs from broad samples.
    The ~1.7 GB diagnostic corpus and raw results are ignored under
    `target/phase8-qap15-direct-*`.
 2. Repeat the serial fast-96 stage and public-pipeline comparisons after a

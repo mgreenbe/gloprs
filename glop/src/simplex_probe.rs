@@ -4,6 +4,7 @@
 //! square basis at each successful LU construction and right-hand sides used
 //! before the first rank-one update changes that basis.
 
+use std::fmt::Write as _;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -25,6 +26,7 @@ pub struct SimplexProbe {
     ftran_count: usize,
     btran_count: usize,
     factorization_only: bool,
+    source_recorded: bool,
 }
 
 impl SimplexProbe {
@@ -56,6 +58,7 @@ impl SimplexProbe {
             ftran_count: 0,
             btran_count: 0,
             factorization_only: false,
+            source_recorded: false,
         })
     }
 
@@ -68,6 +71,55 @@ impl SimplexProbe {
 
     pub fn set_pivot(&mut self, pivot: u64) {
         self.pivot = pivot;
+    }
+
+    #[must_use]
+    pub const fn factorization_only(&self) -> bool {
+        self.factorization_only
+    }
+
+    #[must_use]
+    pub const fn source_recorded(&self) -> bool {
+        self.source_recorded
+    }
+
+    /// Saves the immutable compact problem matrix once for selected-view benchmarks.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error or rejects a conflicting preexisting source.
+    pub fn record_source_matrix(
+        &mut self,
+        rows: usize,
+        columns: usize,
+        entries: &[(usize, usize, f64)],
+    ) -> io::Result<()> {
+        if !self.source_recorded {
+            write_unchanged_or_new(
+                &self.root.join(format!("{}-source.mtx", self.instance)),
+                &matrix_market(rows, columns, entries),
+            )?;
+            self.source_recorded = true;
+        }
+        Ok(())
+    }
+
+    /// Saves zero-based source-column indices for the next basis snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error or rejects conflicting preexisting indices.
+    pub fn record_selection(&self, columns: &[usize]) -> io::Result<()> {
+        let mut contents = format!("{}\n", columns.len());
+        for &column in columns {
+            writeln!(contents, "{column}").expect("writing to String cannot fail");
+        }
+        write_unchanged_or_new(
+            &self
+                .directory()
+                .join(format!("selection-{:04}.txt", self.serial)),
+            &contents,
+        )
     }
 
     /// Records a newly constructed square basis in column/entry order.
@@ -235,6 +287,35 @@ mod tests {
             .factorizations_only();
         probe.active = Some((0, 0));
         assert!(!probe.should_capture_rhs(false));
+    }
+
+    #[test]
+    fn selected_view_snapshots_keep_source_and_basis_order() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "gloprs-selected-probe-{}-{nonce}",
+            std::process::id()
+        ));
+        let source = [(0, 0, 2.0), (1, 1, 3.0), (0, 2, 5.0)];
+        let mut probe = SimplexProbe::new(&root, "case")
+            .unwrap()
+            .factorizations_only();
+        probe.record_source_matrix(2, 3, &source).unwrap();
+        probe.record_selection(&[2, 1]).unwrap();
+        probe.record_basis(2, &[(0, 0, 5.0), (1, 1, 3.0)]).unwrap();
+        assert_eq!(
+            fs::read_to_string(root.join("case-0/selection-0000.txt")).unwrap(),
+            "2\n2\n1\n"
+        );
+        assert!(
+            fs::read_to_string(root.join("case-source.mtx"))
+                .unwrap()
+                .contains("2 3 3")
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

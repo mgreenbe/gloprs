@@ -541,8 +541,30 @@ impl BasisRepresentation {
 
     fn record_probe_basis(&self) -> Result<(), FactorizationError> {
         if let Some(probe) = &self.probe {
+            let mut probe = probe.borrow_mut();
+            if probe.factorization_only()
+                && let BasisMatrix::CompactView { matrix, columns } = &self.basis
+            {
+                if !probe.source_recorded() {
+                    let mut entries = Vec::new();
+                    for column in 0..matrix.num_cols().to_usize() {
+                        for (row, value) in matrix.column(ColIndex::from_usize(column)).iter() {
+                            entries.push((row.to_usize(), column, value));
+                        }
+                    }
+                    probe
+                        .record_source_matrix(
+                            self.dimension(),
+                            matrix.num_cols().to_usize(),
+                            &entries,
+                        )
+                        .map_err(|error| FactorizationError::ProbeIo(error.to_string()))?;
+                }
+                probe
+                    .record_selection(columns)
+                    .map_err(|error| FactorizationError::ProbeIo(error.to_string()))?;
+            }
             probe
-                .borrow_mut()
                 .record_basis(self.dimension(), &self.basis.probe_entries())
                 .map_err(|error| FactorizationError::ProbeIo(error.to_string()))?;
         }

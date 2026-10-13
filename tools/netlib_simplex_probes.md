@@ -65,8 +65,14 @@ target/release/examples/netlib_simplex_probe \
 ```
 
 This mode skips preprocessing and scaling, saves only
-`factorization-SSSS.mtx`, and avoids the large RHS corpus. It does not change
-the default presolved/scaled probe behavior described above.
+`factorization-SSSS.mtx` plus selected-view metadata, and avoids the large
+RHS corpus. `<instance>-source.mtx` is the immutable rectangular compact
+problem matrix, including slack columns; each
+`<instance>-<pivot>/selection-SSSS.txt` starts with the basis dimension and
+then gives one zero-based source-column index per basis position. Together
+they reproduce the selected-column view used by live LU, which a standalone
+square basis `.mtx` cannot reproduce. This mode does not change the default
+presolved/scaled probe behavior described above.
 
 ## Sparse FTRAN/BTRAN benchmark
 
