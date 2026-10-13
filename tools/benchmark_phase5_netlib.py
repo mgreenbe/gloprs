@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import gzip
 import json
 import math
 import platform
@@ -13,14 +12,13 @@ import struct
 import subprocess
 from pathlib import Path
 
+from lp_corpus import models as corpus_models
+
 
 ROOT = Path(__file__).resolve().parents[1]
-MODELS = ROOT.parent / "datasets/netlib/mps"
 NATIVE = ROOT / "target/native/phase5_netlib_solution_reference_adapter"
 RUST = ROOT / "target/release/examples/phase5_netlib_solution_trace"
-FAST = ROOT / "baselines/netlib-dual-trajectories.json.gz"
 PHASE7 = ROOT / "baselines/phase7-netlib-report.json"
-MANIFEST = ROOT.parent / "datasets/netlib/manifest.json"
 
 
 def run(executable: Path, model: Path, mode: str) -> tuple[str, int, int, float]:
@@ -48,25 +46,31 @@ def main() -> None:
     parser.add_argument("--trials", type=int, default=3)
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--models", nargs="+")
+    parser.add_argument("--corpus", choices=("netlib-fast96", "miplib2017",
+                                      "mittelmann-lpopt", "extra"),
+                        default="netlib-fast96")
     parser.add_argument("--mode", choices=("default", "raw", "both"), default="default")
     parser.add_argument("--output", type=Path)
     options = parser.parse_args()
     if options.trials < 1 or options.warmups < 0:
         parser.error("trials must be positive and warmups nonnegative")
-    with gzip.open(FAST, "rt", encoding="utf-8") as stream:
-        fast_names = [case["name"] for case in json.load(stream)["results"]]
     phase7 = json.loads(PHASE7.read_text(encoding="utf-8"))
     expected = {case["name"]: case for case in phase7["results"]}
-    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    nonzeros = {case["name"]: case["nonzeros"] for case in manifest["problems"]}
-    names = fast_names if options.models is None else options.models
-    unknown = set(names) - set(fast_names)
+    selected = corpus_models(options.corpus)
+    by_key = {model.key: model for model in selected}
+    by_name = {model.name: model for model in selected
+               if sum(other.name == model.name for other in selected) == 1}
+    requested = options.models or list(by_key)
+    unknown = set(requested) - set(by_key) - set(by_name)
     if unknown:
-        parser.error(f"models outside the fast-96 fixture: {sorted(unknown)}")
+        parser.error(f"models outside {options.corpus}: {sorted(unknown)}")
+    cases = [by_key[name] if name in by_key else by_name[name] for name in requested]
     modes = ("raw", "default") if options.mode == "both" else (options.mode,)
     report = []
-    for number, name in enumerate(names, start=1):
-        model = MODELS / f"{name}.mps"
+    for number, case in enumerate(cases, start=1):
+        name, model = case.key, case.path
+        if not model.is_file():
+            raise FileNotFoundError(model)
         results = {}
         for mode in modes:
             times: dict[str, list[float]] = {"native": [], "rust": []}
@@ -82,14 +86,18 @@ def main() -> None:
                     status, iterations, objective_bits, elapsed = run(executable, model, mode)
                     outcomes[label] = (status, iterations, objective_bits)
                     times[label].append(elapsed)
+            wall_limited = (options.corpus != "netlib-fast96"
+                            and max(times["native"] + times["rust"]) >= 19.0
+                            and (outcomes["native"][0] != "OPTIMAL"
+                                 or outcomes["rust"][0] != "OPTIMAL"))
             if mode == "default":
                 native, rust = outcomes["native"], outcomes["rust"]
-                if native[:2] != rust[:2] or not math.isclose(
+                if not wall_limited and (native[:2] != rust[:2] or not math.isclose(
                     from_bits(native[2]), from_bits(rust[2]), rel_tol=1e-8, abs_tol=1e-8
-                ):
+                )):
                     raise AssertionError(f"{name} {mode}: {outcomes}")
-            if mode == "default":
-                reference = expected[name]
+            if mode == "default" and case.corpus == "netlib":
+                reference = expected[case.name]
                 assert outcomes["native"][:2] == (
                     reference["native_status"], reference["native_iterations"]
                 ), (name, outcomes, reference)
@@ -103,31 +111,37 @@ def main() -> None:
                 "native_iterations": outcomes["native"][1],
                 "rust_iterations": outcomes["rust"][1],
                 "same_path_length": outcomes["native"][:2] == outcomes["rust"][:2],
+                "wall_limited": wall_limited,
             }
             results[mode]["ratio"] = (
                 results[mode]["rust_seconds"] / results[mode]["native_seconds"]
             )
-        result = {"name": name, "nonzeros": nonzeros[name], **results}
+        result = {"name": case.name, "corpus": case.corpus,
+                  "nonzeros": case.nonzeros, **results}
         report.append(result)
-        print(f"[{number:02d}/{len(names)}] {name:<10} " + " ".join(
+        print(f"[{number:02d}/{len(cases)}] {name:<10} " + " ".join(
             f"{mode}={results[mode]['ratio']:.3f}x" for mode in modes
         ), flush=True)
 
     summary = {}
     for mode in modes:
-        cases = [result[mode] for result in report]
+        comparable = [result for result in report if not result[mode]["wall_limited"]]
+        cases = [result[mode] for result in comparable]
         native_total = sum(case["native_seconds"] for case in cases)
         rust_total = sum(case["rust_seconds"] for case in cases)
         summary[mode] = {
+            "comparable_models": len(comparable),
+            "wall_limited_models": len(report) - len(comparable),
             "native_total_seconds": native_total,
             "rust_total_seconds": rust_total,
-            "aggregate_ratio": rust_total / native_total,
-            "median_model_ratio": statistics.median(case["ratio"] for case in cases),
+            "aggregate_ratio": rust_total / native_total if native_total else None,
+            "median_model_ratio": (statistics.median(case["ratio"] for case in cases)
+                                   if cases else None),
             "sqrt_nnz_weighted_geometric_ratio": math.exp(
                 sum(math.sqrt(item["nonzeros"]) * math.log(item[mode]["ratio"])
-                    for item in report)
-                / sum(math.sqrt(item["nonzeros"]) for item in report)
-            ),
+                    for item in comparable)
+                / sum(math.sqrt(item["nonzeros"]) for item in comparable)
+            ) if comparable else None,
             "same_path_length_count": sum(case["same_path_length"] for case in cases),
         }
     output = {
@@ -141,6 +155,7 @@ def main() -> None:
         "trials": options.trials,
         "warmups": options.warmups,
         "modes": modes,
+        "corpus": options.corpus,
         "summary": summary,
         "results": report,
     }

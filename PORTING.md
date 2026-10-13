@@ -970,6 +970,19 @@ fast-96 trajectories, and the public postsolve/KKT gate continue to agree.
 The paired large-model A/B found no material solver-level timing change; see
 `baselines/phase8-performance.md`.
 
+## Fast-96 transpose-solve outlier follow-up
+
+The `sparse.{h,cc}` transpose triangular substitution counterpart in
+`lp_data/src/triangular_matrix.rs` retains upstream traversal and arithmetic
+while removing bounds checks on validated starts, diagonal, and RHS slots.
+The local unsafe contracts are documented at each access. Alternating old/new
+`dfl001` and `stocfor3` solves improved by 1.3% and 1.9%, and isolated
+`stocfor3` BTRAN/FTRAN ratios improved from 1.151x/1.183x to
+1.117x/1.128x. `fit2d` and `d6cube` remain approximately 1.06x native in
+the full matched-presolve run; this is a partial performance reconciliation,
+not a claim of complete kernel parity. Strict fast-96 trajectories and
+public postsolve/KKT still agree. See `baselines/phase8-performance.md`.
+
 ## High-threshold lower-solve performance follow-up
 
 The qap15 late-stage replay exposed a pivot-threshold-dependent performance

@@ -7,6 +7,93 @@ regression and the 96-model public-postsolve KKT gate also pass after the
 changes described below. Numerical and path fidelity is a gate, not an
 optimization variable.
 
+## Additional LP corpora harness (13 October 2026)
+
+The stage and public-solver timing scripts now accept `--corpus miplib2017`,
+`--corpus mittelmann-lpopt`, or `--corpus extra` (both). Selection is generated
+from the shared dataset MPS manifests, with a strict `< 150000` matrix-nonzero
+cutoff and case-insensitive exclusion of all Netlib LP names. This selects
+129 MIPLIB 2017 and 34 Mittelmann LPopt models. Model identities and report
+rows include the corpus name; both corpora contain `brazil3`. GLOP treats the
+MIPLIB MPS files as LP relaxations; no mixed-integer optimization is implied.
+
+For a small end-to-end differential gate, run
+`python3 tools/test_extra_lp_corpus.py --corpus extra`; it compares pinned
+native and Rust public-solver status, iteration count, objective, all four
+solution vectors, and basis statuses. A 20-second wall limit is used on each
+side by default. The stage harness uses the same native/Rust parse, presolve,
+and matched-presolved-solve checks as fast-96, and the public timing harness
+uses the same status/iteration/objective comparison. When presolve itself
+terminates a model, the stage solve is marked inapplicable rather than timing
+an empty simplex; it remains in the public-solver gate. At the 20-second wall
+limit, a nonterminal result is reported as inconclusive and omitted from
+parity/timing aggregates. For example:
+
+```text
+python3 tools/benchmark_phase8_stages.py --corpus extra --stage all --trials 3 --warmups 1 --output target/phase8-extra-stages.json
+python3 tools/benchmark_phase5_netlib.py --corpus extra --mode default --trials 3 --warmups 1 --output target/phase8-extra-public.json
+```
+
+The selection unit tests pass, as do native/Rust public traces on ten tiny
+cases and two near the size cutoff. One-trial, no-warmup parse and presolve
+passes over all 163 candidates matched their native outcomes; these are
+coverage smoke tests, not reliable timing estimates. Their raw outputs are
+`target/phase8-extra-{parse,presolve}-smoke.json`.
+
+A complete one-trial public-solver pass matched native status, iteration
+count, and objective on 162 completed models. The stronger differential gate
+also matched all four solution vectors and basis statuses on those 162.
+`miplib2017/satellites2-60-fs` reached the 20-second wall limit on both sides
+and is inconclusive rather than a path mismatch. The smoke timing aggregate
+over comparable cases was 70.335/73.008 s native/Rust (1.038x), but a single
+trial is insufficient for a stable performance claim. Raw public timing:
+`target/phase8-extra-public-smoke.json`.
+
+The full matched-presolved-solve smoke pass also completed: 161 models had
+comparable native/Rust solve outcomes; `enlight_hard` was solved by presolve,
+and `satellites2-60-fs` reached the wall limit. Its one-trial comparable
+aggregate was 69.457/72.197 s (1.039x), again not a stable performance
+baseline. Raw stage output: `target/phase8-extra-solve-smoke.json`.
+
+## Fast-96 absolute outlier follow-up (13 October 2026)
+
+Fresh three-trial serial matched-presolve timing before the change below was
+9.658/9.846 s native/Rust (1.019x). The largest absolute excesses were
+`dfl001` +0.162 s (1.053x), `fit2d` +0.059 s (1.054x), `d6cube` +0.036 s
+(1.062x), and `stocfor3` +0.036 s (1.132x). Paired stack samples on
+`stocfor3` and `d6cube` implicated transpose solves within primal edge-norm
+maintenance. Saved `stocfor3` solve probes reproduced a 1.151x BTRAN and
+1.183x FTRAN ratio across 61 and 34 RHS, respectively.
+
+The transpose lower/upper substitution loops now use unchecked accesses for
+their already-validated column starts, diagonal, and RHS slots. The public
+entry validates square dimensions and RHS length, and the triangular builder
+validates storage; each unsafe access has a local safety explanation. The
+traversal, arithmetic, and upstream operation order are unchanged. A seven-
+trial alternating old/new Rust comparison on the four outliers gave `dfl001`
+0.987x and `stocfor3` 0.981x new/old, while `fit2d` and `d6cube` were neutral
+(1.001x and 0.998x). The four-model aggregate was 0.991x. The isolated
+`stocfor3` solve probes improved to 1.117x BTRAN and 1.128x FTRAN, with
+matching checksums.
+
+The complete three-trial fast-96 matched-presolve rerun is 9.654/9.781 s
+native/Rust (1.013x). Its largest residual absolute excesses are `dfl001`
++0.119 s (1.039x), `fit2d` +0.062 s (1.057x), `d6cube` +0.036 s (1.061x),
+and `stocfor3` +0.030 s (1.111x). The public default-pipeline rerun is
+9.912/10.004 s (1.009x total; 1.031x sqrt-nnz-weighted geometric mean).
+All 96 status and iteration counts, strict pivot trajectories, and original-
+model KKT checks pass. These data support a real but modest improvement;
+`fit2d` and `d6cube` remain unresolved kernel outliers, and `stocfor3` is
+still 11% slower end-to-end despite the isolated solve improvement.
+
+Two other experiments were rejected: an upstream-style packed candidate
+bitset increased the four-outlier aggregate by 0.8%, and an Apple-M2-specific
+build reduced it by only 1.0% without addressing the portable source gap.
+Raw outputs: `target/phase8-fast96-outliers-baseline.json`,
+`target/phase8-fast96-transpose-bounds.json`,
+`target/phase8-fast96-public-transpose-bounds.json`, and
+`target/phase8-stocfor3-solve-probes{,-transpose-bounds}.csv`.
+
 ## Closing the late qap15 LU regression (13 October 2026)
 
 Upstream `Markowitz::ComputeColumn()` passes the borrowed original compact

@@ -950,6 +950,7 @@ impl TriangularMatrix {
         }
     }
 
+    #[allow(unsafe_code)]
     fn transpose_lower_solve<const UNIT_DIAGONAL: bool>(&self, rhs: &mut [f64]) {
         // Match GLOP's two template instantiations: dispatch on the diagonal
         // once, outside the contiguous backward-substitution loop.
@@ -961,10 +962,15 @@ impl TriangularMatrix {
         };
         // As in GLOP, one cursor walks the contiguous columns backward.
         // Keep it exclusive to avoid a signed -1 sentinel for empty columns.
-        let mut position = self.starts[last_nonzero + 1];
+        // SAFETY: transpose_solve() established a square matrix and matching
+        // RHS; starts has dimension + 1 entries and every loop column is
+        // below dimension.
+        let mut position = unsafe { *self.starts.get_unchecked(last_nonzero + 1) };
         for column in (self.first_non_identity_column..=last_nonzero).rev() {
-            let start = self.starts[column];
-            let mut sum = rhs[column];
+            // SAFETY: column stays below dimension, which bounds starts,
+            // diagonal, and the already-validated RHS.
+            let start = unsafe { *self.starts.get_unchecked(column) };
+            let mut sum = unsafe { *rhs.get_unchecked(column) };
             while position >= start + 4 {
                 position -= 4;
                 let (r0, c0) = self.transpose_factor_entry(position);
@@ -992,21 +998,25 @@ impl TriangularMatrix {
                     }
                 }
             }
-            rhs[column] = if UNIT_DIAGONAL {
+            let solved = if UNIT_DIAGONAL {
                 sum
             } else {
-                sum / self.diagonal[column]
+                sum / unsafe { *self.diagonal.get_unchecked(column) }
             };
+            unsafe { *rhs.get_unchecked_mut(column) = solved };
         }
     }
 
+    #[allow(unsafe_code)]
     fn transpose_upper_solve<const UNIT_DIAGONAL: bool>(&self, rhs: &mut [f64]) {
         // Match GLOP's forward, contiguous entry cursor: the end of one
         // column is the start of the next, without re-entering a column helper.
-        let mut position = self.starts[self.first_non_identity_column];
+        // SAFETY: validated triangular storage has starts.len() ==
+        // dimension + 1; transpose_solve() checked rhs.len() == dimension.
+        let mut position = unsafe { *self.starts.get_unchecked(self.first_non_identity_column) };
         for column in self.first_non_identity_column..self.dimension() {
-            let end = self.starts[column + 1];
-            let mut sum = rhs[column];
+            let end = unsafe { *self.starts.get_unchecked(column + 1) };
+            let mut sum = unsafe { *rhs.get_unchecked(column) };
             while position + 3 < end {
                 // Preserve the contraction order of the pinned native build.
                 let (r0, c0) = self.transpose_factor_entry(position);
@@ -1034,11 +1044,12 @@ impl TriangularMatrix {
                 }
                 position = end;
             }
-            rhs[column] = if UNIT_DIAGONAL {
+            let solved = if UNIT_DIAGONAL {
                 sum
             } else {
-                sum / self.diagonal[column]
+                sum / unsafe { *self.diagonal.get_unchecked(column) }
             };
+            unsafe { *rhs.get_unchecked_mut(column) = solved };
         }
     }
 

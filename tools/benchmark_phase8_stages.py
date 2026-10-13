@@ -11,7 +11,6 @@ stages and postsolve.
 from __future__ import annotations
 
 import argparse
-import gzip
 import json
 import math
 import platform
@@ -20,11 +19,10 @@ import struct
 import subprocess
 from pathlib import Path
 
+from lp_corpus import models as corpus_models
+
 
 ROOT = Path(__file__).resolve().parents[1]
-MODELS = ROOT.parent / "datasets/netlib/mps"
-MANIFEST = ROOT.parent / "datasets/netlib/manifest.json"
-FAST = ROOT / "baselines/netlib-dual-trajectories.json.gz"
 NATIVE = ROOT / "target/native/full_presolve_netlib_reference_adapter"
 RUST = ROOT / "target/release/examples/full_presolve_netlib"
 
@@ -68,6 +66,9 @@ def main() -> None:
     parser.add_argument("--presolve-repetitions", type=int, default=3)
     parser.add_argument("--solve-repetitions", type=int, default=1)
     parser.add_argument("--models", nargs="+")
+    parser.add_argument("--corpus", choices=("netlib-fast96", "miplib2017",
+                                      "mittelmann-lpopt", "extra"),
+                        default="netlib-fast96")
     parser.add_argument("--rust", type=Path, default=RUST,
                         help="release Rust adapter to compare with native GLOP")
     parser.add_argument("--output", type=Path)
@@ -75,21 +76,36 @@ def main() -> None:
     if (options.trials < 1 or options.warmups < 0
             or options.presolve_repetitions < 1 or options.solve_repetitions < 1):
         parser.error("invalid trial, warmup, or repetition count")
-    with gzip.open(FAST, "rt", encoding="utf-8") as stream:
-        fast_names = [case["name"] for case in json.load(stream)["results"]]
-    names = fast_names if options.models is None else options.models
-    unknown = set(names) - set(fast_names)
+    selected = corpus_models(options.corpus)
+    by_key = {model.key: model for model in selected}
+    by_name = {model.name: model for model in selected
+               if sum(other.name == model.name for other in selected) == 1}
+    requested = options.models or list(by_key)
+    unknown = set(requested) - set(by_key) - set(by_name)
     if unknown:
-        parser.error(f"models outside the fast-96 fixture: {sorted(unknown)}")
-    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    nonzeros = {case["name"]: case["nonzeros"] for case in manifest["problems"]}
+        parser.error(f"models outside {options.corpus}: {sorted(unknown)}")
+    cases = [by_key[name] if name in by_key else by_name[name] for name in requested]
     stages = {"both": ("parse", "presolve"),
               "all": ("parse", "presolve", "solve")}.get(options.stage, (options.stage,))
     report: list[dict] = []
-    for number, name in enumerate(names, start=1):
-        model = MODELS / f"{name}.mps"
-        result: dict = {"name": name, "nonzeros": nonzeros[name]}
+    for number, case in enumerate(cases, start=1):
+        name, model = case.key, case.path
+        if not model.is_file():
+            raise FileNotFoundError(model)
+        result: dict = {"name": case.name, "corpus": case.corpus,
+                        "nonzeros": case.nonzeros}
         for stage in stages:
+            if stage == "solve":
+                presolve_native = run(NATIVE, model, "presolve", 1)
+                presolve_rust = run(options.rust, model, "presolve", 1)
+                presolve_native.pop("seconds")
+                presolve_rust.pop("seconds")
+                if presolve_native != presolve_rust:
+                    raise RuntimeError(f"{name} presolve: {presolve_native} != {presolve_rust}")
+                if presolve_native["status"] != "INIT":
+                    result[stage] = {"skipped": "presolve terminated",
+                                     "outcome": presolve_native}
+                    continue
             repetitions = (options.presolve_repetitions if stage == "presolve"
                            else options.solve_repetitions)
             for _ in range(options.warmups):
@@ -105,8 +121,17 @@ def main() -> None:
                     measured = run(executable, model, stage, repetitions)
                     times[label].append(measured.pop("seconds"))
                     outcomes[label] = measured
+                if (stage == "solve" and options.corpus != "netlib-fast96"
+                        and max(times["native"][-1], times["rust"][-1]) >= 19.0
+                        and (outcomes["native"]["status"] != "OPTIMAL"
+                             or outcomes["rust"]["status"] != "OPTIMAL")):
+                    result[stage] = {"skipped": "wall-limited, inconclusive",
+                                     "outcomes": outcomes}
+                    break
                 if not same_outcome(outcomes["native"], outcomes["rust"], stage):
                     raise RuntimeError(f"{name} {stage}: {outcomes}")
+            if "skipped" in result.get(stage, {}):
+                continue
             native = statistics.median(times["native"])
             rust = statistics.median(times["rust"])
             result[stage] = {
@@ -124,23 +149,28 @@ def main() -> None:
                 "outcome": outcomes["native"],
             }
         report.append(result)
-        print(f"[{number:02d}/{len(names)}] {name:<10} " + " ".join(
-            f"{stage}={result[stage]['ratio']:.3f}x" for stage in stages
+        print(f"[{number:02d}/{len(cases)}] {name:<10} " + " ".join(
+            f"{stage}=" + ("skipped" if "skipped" in result[stage]
+                          else f"{result[stage]['ratio']:.3f}x") for stage in stages
         ), flush=True)
     summary = {}
     for stage in stages:
-        native = sum(item[stage]["native_seconds"] for item in report)
-        rust = sum(item[stage]["rust_seconds"] for item in report)
+        timed = [item for item in report if "skipped" not in item[stage]]
+        native = sum(item[stage]["native_seconds"] for item in timed)
+        rust = sum(item[stage]["rust_seconds"] for item in timed)
         summary[stage] = {
+            "timed_models": len(timed),
+            "skipped_models": len(report) - len(timed),
             "native_total_seconds": native,
             "rust_total_seconds": rust,
-            "aggregate_ratio": rust / native,
-            "median_model_ratio": statistics.median(item[stage]["ratio"] for item in report),
+            "aggregate_ratio": rust / native if native else None,
+            "median_model_ratio": (statistics.median(item[stage]["ratio"] for item in timed)
+                                   if timed else None),
             "sqrt_nnz_weighted_geometric_ratio": math.exp(
                 sum(math.sqrt(item["nonzeros"]) * math.log(item[stage]["ratio"])
-                    for item in report)
-                / sum(math.sqrt(item["nonzeros"]) for item in report)
-            ),
+                    for item in timed)
+                / sum(math.sqrt(item["nonzeros"]) for item in timed)
+            ) if timed else None,
         }
     output = {
         "machine": platform.platform(),
@@ -154,6 +184,7 @@ def main() -> None:
         "warmups": options.warmups,
         "presolve_repetitions": options.presolve_repetitions,
         "solve_repetitions": options.solve_repetitions,
+        "corpus": options.corpus,
         "summary": summary,
         "results": report,
     }

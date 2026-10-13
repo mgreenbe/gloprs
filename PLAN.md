@@ -2344,11 +2344,16 @@ so paired kernel measurements remain the next performance evidence to collect.
    The ~1.7 GB diagnostic corpus and raw results are ignored under
    `target/phase8-qap15-direct-*`.
 2. The serial fast-96 stage and public-pipeline comparisons were repeated
-   with per-instance trial medians and dispersion; the cleanest stage solve
-   rerun is 1.021x Rust/native and public pipeline 1.015x. `dfl001`, `fit2d`,
-   `d6cube`, and `stocfor3` remain the largest absolute solve outliers.
-   Inspect paired profiles and use old/new alternating trials before claiming
-   an improvement; later full-corpus runs showed desktop-load noise.
+   with per-instance trial medians and dispersion. Paired profiles localized
+   part of the `dfl001`/`stocfor3` excess to transpose substitutions. A
+   validated, upstream-ordered bounds-check reduction improved alternating
+   old/new solves by 1.3%/1.9% on those models; all 96 strict trajectories
+   and public KKT checks pass. The fresh full matched-presolve and public
+   pipeline ratios are 1.013x and 1.009x. `fit2d` and `d6cube` did not
+   materially improve (1.057x and 1.061x matched-presolve); `stocfor3`
+   remains 1.111x despite a measurable isolated BTRAN/FTRAN gain. Continue
+   paired kernel-level diagnosis of these residuals, without accepting
+   desktop-load noise as a source-level speedup.
    Keep `qap15` outside deterministic wall-time gates until its performance
    is tractable. Details and raw artifact paths are in
    `baselines/phase8-performance.md`.
@@ -2356,3 +2361,16 @@ so paired kernel measurements remain the next performance evidence to collect.
    stress case, retain it as a differential fixture. The injected-error fallback
    and whole-model native-equilibration output are already covered; a search of
    11,000 finite sparse cases found no natural failure.
+
+The Phase-8 differential and timing harnesses now also select manifest-backed
+MIPLIB 2017 and Mittelmann LPopt MPS models with fewer than 150,000 matrix
+nonzeros, excluding all Netlib names. The new 163-model corpus is distinct
+from the pinned fast-96 gate; its MIPLIB members are LP relaxations. Parse and
+presolve smoke comparisons pass across the full selection. The public-solver
+status, iterations, objective, vectors, and basis statuses match native on
+162 completed models; `satellites2-60-fs` hits the 20-second wall limit and
+is inconclusive. The matched-presolved-solve stage agrees on 161 models;
+`enlight_hard` is fully solved in presolve. A strict trajectory fixture and
+reproducible multi-trial
+timing gate remain to be established on this corpus; record any native/Rust
+divergences as fixtures before treating it as a completion criterion.

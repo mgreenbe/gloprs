@@ -63,6 +63,30 @@ test is `qap15_terminal_solution_satisfies_original_model_kkt`. A narrower
 opt-in capped-state regression is
 `python3 tools/validate_phase7_qap15_boundary.py`.
 
+## Additional LP corpora
+
+The same native adapters and release Rust examples support the shared
+`../datasets/miplib2017` and `../datasets/mittelmann-lpopt` MPS collections.
+Their manifest-backed `extra` selection contains 163 models with fewer than
+150,000 matrix nonzeros, excluding names already in Netlib. MIPLIB instances
+are solved as LP relaxations; GLOP does not enforce integrality.
+
+```text
+python3 -m unittest discover -s tools -p test_lp_corpus.py
+python3 tools/test_extra_lp_corpus.py --corpus extra
+python3 tools/benchmark_phase8_stages.py --corpus extra --stage all --output target/phase8-extra-stages.json
+python3 tools/benchmark_phase5_netlib.py --corpus extra --mode default --output target/phase8-extra-public.json
+```
+
+Use `--corpus miplib2017` or `--corpus mittelmann-lpopt` for one source, and
+`--models corpus/name ...` to select individual cases. The differential gate
+compares native and Rust solution vectors and basis statuses in addition to
+status, objective, and iteration count. A stage solve is skipped when presolve
+already terminates the model; public-solver validation still covers it. Models
+that hit the 20-second wall limit are reported as inconclusive and excluded
+from parity/timing aggregates, because their pivot count depends on elapsed
+time.
+
 ## Native GLOP reference
 
 With the pinned OR-Tools checkout and native build described in
