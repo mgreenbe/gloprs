@@ -49,6 +49,8 @@ def main() -> None:
     parser.add_argument("--trials", type=int, default=3)
     parser.add_argument("--limit", type=int, help="use the first N paths for a smoke test")
     parser.add_argument("--models", nargs="+", help="restrict probes to these Netlib models")
+    parser.add_argument("--pivot-min", type=int, help="minimum refactorization pivot (inclusive)")
+    parser.add_argument("--pivot-max", type=int, help="maximum refactorization pivot (inclusive)")
     options = parser.parse_args()
     if options.repetitions < 1 or options.warmups < 0 or options.trials < 1:
         parser.error("repetitions and trials must be positive; warmups must be nonnegative")
@@ -59,6 +61,12 @@ def main() -> None:
     if options.models:
         models = set(options.models)
         paths = [path for path in paths if path.parent.name.rsplit("-", 1)[0] in models]
+    if options.pivot_min is not None:
+        paths = [path for path in paths
+                 if int(path.parent.name.rsplit("-", 1)[1]) >= options.pivot_min]
+    if options.pivot_max is not None:
+        paths = [path for path in paths
+                 if int(path.parent.name.rsplit("-", 1)[1]) <= options.pivot_max]
     if options.limit is not None:
         if options.limit < 1:
             parser.error("--limit must be positive")

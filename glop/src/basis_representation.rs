@@ -569,7 +569,11 @@ impl BasisRepresentation {
     }
 
     fn record_probe_unit_rhs(&self, kind: SolveKind, row: usize) -> Result<(), FactorizationError> {
-        if self.probe.is_some() {
+        if self
+            .probe
+            .as_ref()
+            .is_some_and(|probe| probe.borrow().should_capture_rhs(!self.is_refactorized()))
+        {
             let mut rhs = vec![0.0; self.dimension()];
             rhs[row] = 1.0;
             self.record_probe_rhs(kind, &rhs)?;
@@ -582,7 +586,11 @@ impl BasisRepresentation {
         kind: SolveKind,
         entries: &[(usize, f64)],
     ) -> Result<(), FactorizationError> {
-        if self.probe.is_some() {
+        if self
+            .probe
+            .as_ref()
+            .is_some_and(|probe| probe.borrow().should_capture_rhs(!self.is_refactorized()))
+        {
             let mut rhs = vec![0.0; self.dimension()];
             for &(row, value) in entries {
                 rhs[row] = value;

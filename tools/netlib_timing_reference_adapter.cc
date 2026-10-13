@@ -17,15 +17,17 @@
 
 int main(int argc, char** argv) {
   namespace glop = operations_research::glop;
-  if (argc < 2 || argc > 5) return EXIT_FAILURE;
+  if (argc < 2 || argc > 6) return EXIT_FAILURE;
   const std::string_view mode = argc >= 4 ? std::string_view(argv[3]) : "dual";
   if (mode != "dual" && mode != "primal" && mode != "advanced")
     return EXIT_FAILURE;
   const bool primal = mode == "primal";
   const int repetitions = argc >= 3 ? std::atoi(argv[2]) : 1;
   if (repetitions <= 0) return EXIT_FAILURE;
-  const int iteration_limit = argc == 5 ? std::atoi(argv[4]) : 1000000;
+  const int iteration_limit = argc >= 5 ? std::atoi(argv[4]) : 1000000;
   if (iteration_limit < 0) return EXIT_FAILURE;
+  const double wall_seconds = argc == 6 ? std::atof(argv[5]) : 20.0;
+  if (wall_seconds <= 0.0) return EXIT_FAILURE;
 
   const auto model = glop::MpsFileToMPModelProto(argv[1]);
   if (!model.ok()) return EXIT_FAILURE;
@@ -41,7 +43,7 @@ int main(int argc, char** argv) {
   for (int repetition = 0; repetition < repetitions; ++repetition) {
     simplex = std::make_unique<glop::RevisedSimplex>();
     simplex->SetParameters(parameters);
-    operations_research::TimeLimit limit(20.0);
+    operations_research::TimeLimit limit(wall_seconds);
     if (mode == "advanced") {
       glop::CompactSparseMatrix with_slack;
       with_slack.PopulateFromSparseMatrixAndAddSlacks(lp.GetSparseMatrix());
@@ -82,5 +84,8 @@ int main(int argc, char** argv) {
             << glop::GetProblemStatusString(simplex->GetProblemStatus()) << ' '
             << simplex->GetNumberOfIterations() << ' '
             << simplex->GetObjectiveValue() << '\n';
+  if (std::getenv("GLOPRS_SHOW_NATIVE_STATS") != nullptr) {
+    std::cerr << simplex->StatString();
+  }
   return EXIT_SUCCESS;
 }

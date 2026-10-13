@@ -561,6 +561,47 @@ impl<I: VectorIndex> BitVec<I> {
         }
     }
 
+    /// Packed-bit read for validated indices in numerical kernels.
+    ///
+    /// # Safety
+    ///
+    /// `position` must be less than `self.len`.
+    #[must_use]
+    #[inline]
+    #[allow(unsafe_code)]
+    pub(crate) unsafe fn contains_position_unchecked(&self, position: usize) -> bool {
+        debug_assert!(position < self.len);
+        // SAFETY: the caller guarantees position < len; resize allocates
+        // ceil(len / 64) words, so the containing word exists.
+        unsafe { *self.words.get_unchecked(position / 64) & (1_u64 << (position % 64)) != 0 }
+    }
+
+    /// Packed-bit write for validated indices in numerical kernels.
+    ///
+    /// # Safety
+    ///
+    /// `position` must be less than `self.len`.
+    #[inline]
+    #[allow(unsafe_code)]
+    pub(crate) unsafe fn set_position_unchecked(&mut self, position: usize) {
+        debug_assert!(position < self.len);
+        // SAFETY: same bound as contains_position_unchecked().
+        unsafe { *self.words.get_unchecked_mut(position / 64) |= 1_u64 << (position % 64) };
+    }
+
+    /// Packed-bit clear for validated indices in numerical kernels.
+    ///
+    /// # Safety
+    ///
+    /// `position` must be less than `self.len`.
+    #[inline]
+    #[allow(unsafe_code)]
+    pub(crate) unsafe fn clear_position_unchecked(&mut self, position: usize) {
+        debug_assert!(position < self.len);
+        // SAFETY: same bound as contains_position_unchecked().
+        unsafe { *self.words.get_unchecked_mut(position / 64) &= !(1_u64 << (position % 64)) };
+    }
+
     #[must_use]
     #[inline]
     pub fn contains(&self, index: I) -> bool {
@@ -916,6 +957,25 @@ mod tests {
             view.clear(RowIndex::new(4));
         }
         assert!(!bits.view().contains(RowIndex::new(4)));
+    }
+
+    #[test]
+    #[allow(unsafe_code)]
+    fn validated_position_bit_access_crosses_word_boundaries() {
+        let mut bits = RowBitVec::new(RowIndex::new(130));
+        for position in [0, 63, 64, 129] {
+            // SAFETY: every position is below the 130-bit allocation.
+            unsafe { bits.set_position_unchecked(position) };
+            // SAFETY: same checked positions.
+            assert!(unsafe { bits.contains_position_unchecked(position) });
+            assert!(bits.contains(RowIndex::from_usize(position)));
+        }
+        for position in [0, 63, 64, 129] {
+            // SAFETY: every position is below the 130-bit allocation.
+            unsafe { bits.clear_position_unchecked(position) };
+            assert!(!bits.contains(RowIndex::from_usize(position)));
+        }
+        assert!(bits.is_all_false());
     }
 
     #[test]

@@ -57,6 +57,18 @@ strict fast-96 trajectory and public postsolve/KKT gates pass. A serial,
 three-trial fast-96 A/B presolved-solve run measured 9.867 versus 10.001
 seconds (new/old 0.987x); seven-trial focused A/B runs found gains on all
 five sampled outliers, largest on `fit2p` (0.926x) and `stocfor3` (0.963x).
+The cached BTRAN tau intermediate now uses the same GLOP density-aware reset
+before its storage swap, again clearing only Rust's auxiliary mask first.
+A two-RHS workspace-reuse unit regression, strict fast-96 native trajectories,
+and public postsolve/KKT pass. Focused five-model A/B timing was nearly flat
+(new/old 0.996x); the lifecycle correspondence is the reason for this edit.
+The `sparse.{h,cc}` permuted lower solve retains GLOP's DFS, persistent edge
+pruning, and numerical order. Its packed-bitset edge accesses now omit bounds
+checks only inside that dimension-validated numerical kernel, as GLOP's
+`Bitset64` does; dedicated unsafe accessors document their precondition.
+On 124 late `qap15` basis probes, the median-summed old/new Rust factorization
+ratio is 0.985x with matching determinants. The native-pinned 40,000-pivot
+`qap15` trajectory and operation clock pass.
 
 The validated `basis_representation` path now also accepts a shared compact
 matrix view for the advanced entry. Its Markowitz/LU selected-column traversal

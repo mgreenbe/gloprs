@@ -24,6 +24,7 @@ pub struct SimplexProbe {
     solve_basis_recorded: bool,
     ftran_count: usize,
     btran_count: usize,
+    factorization_only: bool,
 }
 
 impl SimplexProbe {
@@ -54,7 +55,15 @@ impl SimplexProbe {
             solve_basis_recorded: false,
             ftran_count: 0,
             btran_count: 0,
+            factorization_only: false,
         })
+    }
+
+    /// Suppress solve-basis and RHS snapshots when only LU inputs are needed.
+    #[must_use]
+    pub fn factorizations_only(mut self) -> Self {
+        self.factorization_only = true;
+        self
     }
 
     pub fn set_pivot(&mut self, pivot: u64) {
@@ -89,7 +98,9 @@ impl SimplexProbe {
     #[must_use]
     #[inline]
     pub fn should_capture_rhs(&self, basis_has_updates: bool) -> bool {
-        matches!(self.active, Some((pivot, _)) if pivot == self.pivot) && !basis_has_updates
+        !self.factorization_only
+            && matches!(self.active, Some((pivot, _)) if pivot == self.pivot)
+            && !basis_has_updates
     }
 
     #[must_use]
@@ -215,6 +226,15 @@ mod tests {
     fn unsafe_instance_names_are_rejected() {
         assert!(SimplexProbe::new("ignored", "../escape").is_err());
         assert!(SimplexProbe::new("ignored", "pilot.ja").is_ok());
+    }
+
+    #[test]
+    fn factorization_only_disables_rhs_capture() {
+        let mut probe = SimplexProbe::new("ignored", "case")
+            .unwrap()
+            .factorizations_only();
+        probe.active = Some((0, 0));
+        assert!(!probe.should_capture_rhs(false));
     }
 
     #[test]

@@ -2218,6 +2218,99 @@ so paired kernel measurements remain the next performance evidence to collect.
    geometric 1.052x), improving on the preceding 1.036x aggregate run.
    The remaining `stocfor3` and LU solve gaps need updated-chain, matched-input
    profiling before changing transpose substitution or permutation kernels.
+   In the updated BTRAN tau-cache path, upstream also uses the density-aware
+   `ClearAndResizeVectorWithNonZeros()` for the retained pre-permutation
+   intermediate. Rust still used `ScatteredVector::clear()` there; this is
+   now aligned, with the Rust-only membership mask cleared first. A reuse
+   regression covers a second RHS in the same cached workspace. Seven-trial
+   paired presolved solves on the five outliers measured a modest 0.996x
+   aggregate new/old (median model 0.998x); strict fast-96 trajectories and
+   public postsolve/KKT pass. A three-trial full fast-96 A/B gave 0.984x
+   aggregate but had an unusually high old `dfl001` trial (3.62 seconds),
+   so that aggregate should not be interpreted as a stable 1.6% gain. The
+   edit is retained for upstream lifecycle fidelity, not that noisy timing.
+   A fresh serial direct-dual comparison on the two excluded QAP models uses
+   the same pinned native and Rust parameters, a 20,000-pivot cap, three timed
+   trials and one warm-up. `qap12` measured 6.938 s native versus 7.049 s Rust
+   (1.016x); `qap15` measured 13.829 versus 13.910 s (1.006x), with matched
+   status, iteration count, and objective in every trial. A single uncapped
+   `qap12` terminal trial with a 120-second internal limit reached the same
+   result in 44.461 versus 44.723 s (1.006x), versus the historical 1.33x
+   ratio. A single 40,000-pivot `qap15` trial with a 240-second internal
+   limit reached the same `DUAL_FEASIBLE` state in 141.020 versus 152.620 s
+   (1.082x), versus the historical approximately 1.25x ratio after the
+   lower-solve change. These longer single-trial ratios need replication.
+   Serial 15-second late-run samples (after 60 seconds) on both sides put
+   most sampled CPU in Markowitz refactorization and, within it, the
+   partially permuted lower sparse solve. They may cover different basis
+   rebuilds at the same wall offset, so use matched factorization probes to
+   localize the remaining `qap15` gap before editing that kernel. Raw JSON
+   timings and sample reports are ignored under `target/phase8-qap*.{json,txt}`.
+   An isolated late-basis campaign restricted to the 124 saved `qap15`
+   refactorization matrices at pivots 20,000–40,000 gives three paired
+   Rust/native aggregate ratios of 1.036x, 1.042x, and 1.067x; summing
+   per-matrix medians gives 9.147 s native versus 9.625 s Rust (1.052x),
+   with identical determinants. Sampling 200 repeated factorizations of
+   `qap15-32110/factorization-0208.mtx` puts both implementations in the
+   permuted lower sparse solve and Rust somewhat more heavily there. The
+   Rust DFS previously performed bounds-checked packed-bitset accesses for
+   each graph edge, whereas GLOP's fixed-size bitset operations are unchecked.
+   A kernel-local unsafe variant uses indices validated against the matrix
+   dimension and has explicit safety comments. On the same 124 bases, three
+   paired old/new Rust trials give 0.947x, 0.985x, and 0.986x, with median-
+   summed 9.412 versus 9.274 s (0.985x); the first trial has a slow old
+   outlier, so the credible gain is approximately 1.5%, not 5.3%.
+   All determinants agree and the native-pinned `qap15` 40,000-pivot status,
+   ordered basis, reduced-cost bits, dual-norm bits, and operation clock pass.
+   All 57 `lp_data` release unit tests, LU unit tests, strict fast-96 native
+   trajectories, public postsolve/KKT, formatting, and Clippy also pass.
+   Important provenance correction: these saved matrices come from the
+   *presolved and scaled* probe solve, while the 141/153-second 40,000-pivot
+   comparison is *direct and unscaled*. They are matched inputs to the two
+   isolated LU implementations, but not refactorizations of that direct
+   solve; their roughly 0.48-second excess cannot be subtracted from its
+   11.60-second gap. The 60-second-wall samples caught a refactorization-
+   heavy window, not necessarily a representative whole-run profile.
+   The next localization should measure stage totals across the same live
+   solve (basis rebuild, updated-basis FTRAN/BTRAN, pricing, and other
+   per-pivot work) before attributing the direct gap to any one kernel.
+   To remove the probe-provenance mismatch, an opt-in direct/unscaled,
+   factorization-only recorder now captures `qap15` with the exact dual
+   40,000-iteration parameters used by the timing adapters. It yielded 1,826
+   LU inputs (initial basis plus 1,825 refactorizations), reached the same
+   `DUAL_FEASIBLE` status, and saved no RHS files. Three serial paired LU
+   passes over **all** these matrices, excluding file loading, measured
+   50.670/51.829, 50.522/51.687, and 50.716/51.874 seconds native/Rust:
+   stable 1.023x ratios. Per-matrix-median totals were 50.181/51.375
+   seconds (1.024x), with matched dimensions, nnz, and determinants on
+   every matrix. Isolated LU on **materialized contiguous bases** differs by
+   only about 1.2 seconds across the workload. This cannot be subtracted
+   from the approximately 10–12-second direct-solve gap: the live LU factors
+   a selected-column view of the original compact problem matrix, while the
+   Matrix Market harness factors newly compacted, contiguous basis columns.
+   The split at pivots
+   20,000 and 30,000 gives native/Rust LU seconds of
+   4.648/4.752, 25.250/25.818, and 20.283/20.805 respectively, so the LU
+   ratio does not explode only in the late pivots. The next comparison must
+   preserve the original compact matrix and selected-column indirection, or
+   time the live refactorization stages directly; broad sampling alone cannot
+   identify the source of the direct-solve gap.
+   A one-trial iteration-cap sweep narrows the live gap: at 25,000 pivots
+   native/Rust are 18.090/18.091 seconds (1.000x), but at 30,000 they are
+   76.997/83.086 seconds (1.079x). Thus essentially the entire 6.09-second
+   gap at 30,000 develops over pivots 25,000–30,000; the corresponding
+   materialized-basis LU difference through pivot 30,000 is only ~0.67 seconds.
+   Native `StatString()` reports 1,127 forced refactorizations by pivot
+   30,000; Rust records the same 1,127 rebuilds plus the initial basis, so
+   this is not a frequency discrepancy. Of the 822 LU inputs at pivots
+   25,000–29,999, materialized-basis native/Rust LU time is
+   23.750/24.281 seconds.
+   Matched 40-second samples starting 21 seconds into each 30,000-pivot
+   solve show both spending most sampled time in Markowitz's partially
+   permuted lower solve, but the wall windows do not cover exactly the same
+   pivots and do not establish which live stage creates the residual gap.
+   The ~1.7 GB diagnostic corpus and raw results are ignored under
+   `target/phase8-qap15-direct-*`.
 2. Repeat the serial fast-96 stage and public-pipeline comparisons after a
    measured change; record medians and dispersion, and rank regressions by
    absolute time. Keep `qap15` outside deterministic wall-time gates until

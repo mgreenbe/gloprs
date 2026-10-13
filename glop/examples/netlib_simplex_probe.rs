@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let model_path = PathBuf::from(
         arguments
             .next()
-            .ok_or("usage: netlib_simplex_probe MODEL.mps [WALL_SECONDS] [OUTPUT_ROOT]")?,
+            .ok_or("usage: netlib_simplex_probe MODEL.mps [WALL_SECONDS] [OUTPUT_ROOT] [--direct-factorizations [ITERATION_LIMIT]]")?,
     );
     let wall_seconds = arguments
         .next()
@@ -23,7 +23,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../datasets/netlib-simplex-probes"),
         PathBuf::from,
     );
-    if arguments.next().is_some() || !wall_seconds.is_finite() || wall_seconds <= 0.0 {
+    let mode = arguments.next();
+    let direct = mode
+        .as_ref()
+        .is_some_and(|value| value == "--direct-factorizations");
+    let iteration_limit = if direct {
+        arguments
+            .next()
+            .map_or(Ok(40_000), |value| value.to_string_lossy().parse::<i64>())?
+    } else {
+        1_000_000
+    };
+    if (mode.is_some() && !direct)
+        || arguments.next().is_some()
+        || !wall_seconds.is_finite()
+        || wall_seconds <= 0.0
+        || iteration_limit <= 0
+    {
         return Err("invalid arguments".into());
     }
     let instance = model_path
@@ -32,17 +48,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .to_str()
         .ok_or("model filename is not UTF-8")?;
     let mut model = parse_mps_file(&model_path)?;
-    let parameters = GlopParameters::default();
-    model.remove_near_zero_entries(parameters.drop_magnitude);
-    let mut preprocessor = MainLpPreprocessor::new();
-    let mut presolve_limit = TimeLimit::new(wall_seconds, f64::INFINITY);
-    preprocessor.run(&mut model, &parameters, &mut presolve_limit);
-    if preprocessor.status().to_string() != "INIT" {
-        return Err(format!("presolve ended with {}", preprocessor.status()).into());
+    let parameters = if direct {
+        GlopParameters {
+            use_scaling: false,
+            use_dual_simplex: true,
+            max_number_of_iterations: iteration_limit,
+            ..GlopParameters::default()
+        }
+    } else {
+        GlopParameters::default()
+    };
+    if !direct {
+        model.remove_near_zero_entries(parameters.drop_magnitude);
+        let mut preprocessor = MainLpPreprocessor::new();
+        let mut presolve_limit = TimeLimit::new(wall_seconds, f64::INFINITY);
+        preprocessor.run(&mut model, &parameters, &mut presolve_limit);
+        if preprocessor.status().to_string() != "INIT" {
+            return Err(format!("presolve ended with {}", preprocessor.status()).into());
+        }
     }
     let mut simplex = RevisedSimplex::new();
     simplex.set_parameters(&parameters);
-    simplex.enable_simplex_probes(&root, instance)?;
+    if direct {
+        simplex.enable_factorization_probes(&root, instance)?;
+    } else {
+        simplex.enable_simplex_probes(&root, instance)?;
+    }
     let mut solve_limit = TimeLimit::new(wall_seconds, f64::INFINITY);
     simplex.solve(&model, &mut solve_limit)?;
     println!(

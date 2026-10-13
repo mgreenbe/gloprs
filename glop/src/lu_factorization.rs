@@ -921,7 +921,14 @@ impl LuFactorization {
                     .transpose_hyper_sparse_solve_with_reversed_nonzeros(values, non_zeros);
             }
         }
-        result_before_permutation.clear();
+        // GLOP uses ClearAndResizeVectorWithNonZeros() for this persistent
+        // pre-permutation cache. Clear Rust's auxiliary mask before dropping
+        // the old positions, then use the same density-aware values reset.
+        result_before_permutation.clear_sparse_mask();
+        clear_and_resize_vector_with_non_zeros(
+            result_before_permutation.len(),
+            result_before_permutation,
+        );
         rhs.clear_sparse_mask();
         rhs.values_mut()
             .swap_storage_with(result_before_permutation.values_mut());
@@ -1544,6 +1551,22 @@ mod tests {
             old_storage
         ));
         assert!(cache.values().as_slice().iter().any(|&value| value != 0.0));
+
+        // Reuse the cached workspace with a different RHS. The old cache is
+        // dense by GLOP's 5% clearing rule at this dimension; no value from
+        // the first solve may leak into the second pre-permutation result.
+        rhs.clear();
+        rhs.set(ColIndex::new(1), 7.0);
+        let mut fresh_rhs = rhs.clone();
+        let mut fresh_cache = ScatteredColumn::new(RowIndex::new(2));
+        factorization
+            .left_solve_lower_with_nonzeros_and_cache(&mut fresh_rhs, &mut fresh_cache)
+            .unwrap();
+        factorization
+            .left_solve_lower_with_nonzeros_and_cache(&mut rhs, &mut cache)
+            .unwrap();
+        assert_eq!(cache.values().as_slice(), fresh_cache.values().as_slice());
+        assert_eq!(rhs.values().as_slice(), fresh_rhs.values().as_slice());
     }
 
     #[test]

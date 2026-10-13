@@ -437,7 +437,7 @@ impl TriangularMatrix {
     /// # Panics
     ///
     /// Panics if the permutation or an input row is outside the matrix.
-    #[allow(clippy::needless_range_loop, clippy::too_many_lines)]
+    #[allow(clippy::needless_range_loop, clippy::too_many_lines, unsafe_code)]
     pub fn permuted_lower_sparse_solve(
         &mut self,
         lower: &mut SparseColumn,
@@ -467,11 +467,15 @@ impl TriangularMatrix {
         // input and lower output to share the same SparseColumn allocation.
         for entry in &*lower {
             let row = entry.index().to_usize();
+            assert!(row < *num_rows, "input row exceeds triangular dimension");
             workspace.scratchpad[row] = entry.coefficient();
             let pivot_column = row_permutation[row];
             if pivot_column == invalid {
-                if !workspace.stored.contains(entry.index()) {
-                    workspace.stored.set(entry.index());
+                // SAFETY: input row was checked against num_rows above, and
+                // stored was resized to num_rows at this solve's entry.
+                if !unsafe { workspace.stored.contains_position_unchecked(row) } {
+                    // SAFETY: same checked input row and workspace size.
+                    unsafe { workspace.stored.set_position_unchecked(row) };
                     workspace.lower_rows.push(row);
                 }
             } else {
@@ -494,7 +498,9 @@ impl TriangularMatrix {
                         .stored
                         .contains(RowIndex::from_usize(explored_row))
                 );
-                workspace.stored.set(RowIndex::from_usize(explored_row));
+                // SAFETY: explored_row is a validated stack row, not the
+                // sentinel; stored was resized to num_rows at entry.
+                unsafe { workspace.stored.set_position_unchecked(explored_row) };
                 workspace.upper_rows.push(explored_row);
 
                 let column = row_permutation[explored_row];
@@ -502,8 +508,11 @@ impl TriangularMatrix {
                 let mut end = workspace.pruned_ends[column];
                 while position < end {
                     let successor = usize::try_from(rows[position]).expect("row index fits usize");
-                    if workspace.marked.contains(RowIndex::from_usize(successor)) {
-                        workspace.marked.clear_bit(RowIndex::from_usize(successor));
+                    // SAFETY: every stored row was checked when inserted;
+                    // DFS pruning only swaps these validated entries.
+                    if unsafe { workspace.marked.contains_position_unchecked(successor) } {
+                        // SAFETY: same validated stored row.
+                        unsafe { workspace.marked.clear_position_unchecked(successor) };
                         position += 1;
                     } else {
                         end -= 1;
@@ -514,13 +523,16 @@ impl TriangularMatrix {
                 workspace.pruned_ends[column] = end;
                 continue;
             }
-            if workspace.stored.contains(RowIndex::from_usize(row)) {
+            // SAFETY: stack rows originate in the checked input or in the
+            // validated matrix rows; the sentinel was handled above.
+            if unsafe { workspace.stored.contains_position_unchecked(row) } {
                 workspace.nodes_to_explore.pop();
                 continue;
             }
             let column = row_permutation[row];
             if column == invalid {
-                workspace.stored.set(RowIndex::from_usize(row));
+                // SAFETY: same validated stack row.
+                unsafe { workspace.stored.set_position_unchecked(row) };
                 workspace.lower_rows.push(row);
                 workspace.nodes_to_explore.pop();
                 continue;
@@ -528,10 +540,12 @@ impl TriangularMatrix {
             workspace.nodes_to_explore.push(invalid);
             for &successor in &rows[starts[column]..workspace.pruned_ends[column]] {
                 let successor = usize::try_from(successor).expect("row index fits usize");
-                if !workspace.stored.contains(RowIndex::from_usize(successor)) {
+                // SAFETY: stored matrix row indices are below num_rows.
+                if !unsafe { workspace.stored.contains_position_unchecked(successor) } {
                     workspace.nodes_to_explore.push(successor);
                 }
-                workspace.marked.set(RowIndex::from_usize(successor));
+                // SAFETY: same validated matrix row.
+                unsafe { workspace.marked.set_position_unchecked(successor) };
             }
             debug_assert!(workspace.nodes_to_explore.len() <= 2 * *num_rows + rows.len());
         }

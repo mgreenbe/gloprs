@@ -534,6 +534,22 @@ impl RevisedSimplex {
         Ok(())
     }
 
+    /// Records only LU input matrices, without solve-basis or RHS snapshots.
+    ///
+    /// # Errors
+    ///
+    /// Rejects an unsafe instance name.
+    pub fn enable_factorization_probes(
+        &mut self,
+        root: impl AsRef<Path>,
+        instance: &str,
+    ) -> io::Result<()> {
+        self.simplex_probe = Some(Rc::new(RefCell::new(
+            SimplexProbe::new(root.as_ref().to_path_buf(), instance)?.factorizations_only(),
+        )));
+        Ok(())
+    }
+
     fn update_probe_pivot(&self) {
         if let Some(probe) = &self.simplex_probe {
             probe.borrow_mut().set_pivot(self.num_iterations);

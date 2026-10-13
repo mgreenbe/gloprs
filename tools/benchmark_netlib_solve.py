@@ -26,21 +26,26 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--mode", choices=("dual", "primal", "advanced"), default="dual")
     parser.add_argument("--iteration-limit", type=int)
+    parser.add_argument("--wall-seconds", type=float, default=20.0)
     parser.add_argument("--models", nargs="*", help="benchmark only these Netlib names")
     parser.add_argument("--output", type=Path)
     return parser.parse_args()
 
 
 def run(
-    binary: Path, model: Path, mode: str, iteration_limit: int | None
+    binary: Path, model: Path, mode: str, iteration_limit: int | None,
+    wall_seconds: float,
 ) -> tuple[float, str, int, float]:
     command = [str(binary), str(model)]
-    if mode != "dual" or iteration_limit is not None:
+    if mode != "dual" or iteration_limit is not None or wall_seconds != 20.0:
         command.extend(("1", mode))
-    if iteration_limit is not None:
-        command.append(str(iteration_limit))
+    if iteration_limit is not None or wall_seconds != 20.0:
+        command.append(str(iteration_limit if iteration_limit is not None else 1000000))
+    if wall_seconds != 20.0:
+        command.append(str(wall_seconds))
     completed = subprocess.run(
-        command, check=True, capture_output=True, text=True, timeout=30.0
+        command, check=True, capture_output=True, text=True,
+        timeout=max(30.0, wall_seconds + 30.0),
     )
     elapsed, status, iterations, objective = completed.stdout.split()
     return float(elapsed), status, int(iterations), float(objective)
@@ -60,6 +65,8 @@ def main() -> None:
     options = arguments()
     if options.iteration_limit is not None and options.iteration_limit < 0:
         raise ValueError("iteration limit must be nonnegative")
+    if not math.isfinite(options.wall_seconds) or options.wall_seconds <= 0:
+        raise ValueError("wall-seconds must be finite and positive")
     with gzip.open(FIXTURE, "rt", encoding="utf-8") as stream:
         fixture = json.load(stream)
     with MANIFEST.open(encoding="utf-8") as stream:
@@ -68,17 +75,23 @@ def main() -> None:
     expected_results = fixture["results"]
     if options.models is not None:
         selected = set(options.models)
-        expected_results = [item for item in expected_results if item["name"] in selected]
-        missing = selected - {item["name"] for item in expected_results}
+        missing = selected - model_metadata.keys()
         if missing:
             raise ValueError(f"unknown Netlib models: {sorted(missing)}")
+        fixture_by_name = {item["name"]: item for item in expected_results}
+        expected_results = [
+            fixture_by_name.get(name, {"name": name, "input": model_metadata[name]["path"]})
+            for name in options.models
+        ]
 
     results = []
     for number, expected in enumerate(expected_results, start=1):
         model = DATASET_ROOT / expected["input"]
         for _ in range(options.warmups):
-            run(NATIVE, model, options.mode, options.iteration_limit)
-            run(RUST, model, options.mode, options.iteration_limit)
+            run(NATIVE, model, options.mode, options.iteration_limit,
+                options.wall_seconds)
+            run(RUST, model, options.mode, options.iteration_limit,
+                options.wall_seconds)
 
         native_times = []
         rust_times = []
@@ -91,10 +104,12 @@ def main() -> None:
             trial_outcomes = {}
             for binary, times in order:
                 elapsed, status, iterations, objective = run(
-                    binary, model, options.mode, options.iteration_limit
+                    binary, model, options.mode, options.iteration_limit,
+                    options.wall_seconds,
                 )
                 if options.iteration_limit is None and (
-                    status != expected["status"] or iterations != expected["iterations"]
+                    "status" in expected and
+                    (status != expected["status"] or iterations != expected["iterations"])
                 ):
                     raise RuntimeError(
                         f"{expected['name']}: {binary.name} produced "
@@ -168,6 +183,7 @@ def main() -> None:
         "timing_scope": "serial in-process direct RevisedSimplex solve; parsing and output excluded",
         "mode": options.mode,
         "iteration_limit": options.iteration_limit,
+        "wall_seconds": options.wall_seconds,
         "trials": options.trials,
         "warmups": options.warmups,
         "native_total_seconds": native_total,

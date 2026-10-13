@@ -8,6 +8,12 @@ Both use default GLOP parameters and a retained LU object, as the simplex
 refactorization path does. Matrix Market parsing, column-vector construction,
 and LU object initialization occur **before** the timer. The reported time is
 the total time for the requested number of `ComputeFactorization` calls.
+These probes preserve the numerical basis entries and their within-column
+order, but materialize each selected basis as a new contiguous matrix. In a
+live solve, LU instead reads a selected-column view of the original compact
+problem matrix. Thus the benchmark measures factorization parity on matched
+materialized inputs, not necessarily the memory-access cost of live
+refactorization.
 
 Build both release executables against the pinned upstream checkout:
 
@@ -31,6 +37,8 @@ python3 tools/benchmark_netlib_factorizations.py
 The defaults are one untimed warm-up, three timed factorizations per trial,
 and three trials. Use `--warmups 0 --repetitions 1 --trials 1` to measure a
 first construction for every probe; `--limit 20` makes a quick smoke test.
+Use `--models qap15 --pivot-min 20000 --pivot-max 40000` to isolate saved
+bases from a particular simplex interval (inclusive endpoints).
 The executable interfaces are also usable directly:
 
 ```sh

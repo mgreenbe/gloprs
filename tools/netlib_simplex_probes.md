@@ -54,6 +54,20 @@ For a single instance, the release example can also be run directly:
 target/release/examples/netlib_simplex_probe ../datasets/netlib/mps/afiro.mps 120
 ```
 
+For a direct, unscaled dual-simplex comparison matching `netlib_timing`, use
+the opt-in factorization-only mode. The final positional argument is the
+iteration cap (40,000 by default):
+
+```sh
+target/release/examples/netlib_simplex_probe \
+  ../datasets/netlib/mps/qap15.mps 600 \
+  target/phase8-qap15-direct-probes --direct-factorizations 40000
+```
+
+This mode skips preprocessing and scaling, saves only
+`factorization-SSSS.mtx`, and avoids the large RHS corpus. It does not change
+the default presolved/scaled probe behavior described above.
+
 ## Sparse FTRAN/BTRAN benchmark
 
 The paired adapters benchmark the same sparse LU solve stages that GLOP uses
