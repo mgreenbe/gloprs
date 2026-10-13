@@ -70,8 +70,9 @@ impl EtaMatrix {
                 value = (-values[row]).mul_add(coefficient, value);
             }
         } else {
-            for (row, &coefficient) in self.coefficients.iter().enumerate() {
-                value = (-values[row]).mul_add(coefficient, value);
+            assert_eq!(values.len(), self.coefficients.len());
+            for (&entry, &coefficient) in values.iter().zip(&self.coefficients) {
+                value = (-entry).mul_add(coefficient, value);
             }
         }
         values[self.column] = value / self.pivot;
@@ -102,11 +103,13 @@ impl EtaMatrix {
         let multiplier = values[self.column] / self.pivot;
         if let Some(entries) = &self.sparse_coefficients {
             for &(row, coefficient) in entries {
-                values[row] = (-coefficient).mul_add(multiplier, values[row]);
+                let slot = &mut values[row];
+                *slot = (-coefficient).mul_add(multiplier, *slot);
             }
         } else {
-            for (row, &coefficient) in self.coefficients.iter().enumerate() {
-                values[row] = (-coefficient).mul_add(multiplier, values[row]);
+            assert_eq!(values.len(), self.coefficients.len());
+            for (slot, &coefficient) in values.iter_mut().zip(&self.coefficients) {
+                *slot = (-coefficient).mul_add(multiplier, *slot);
             }
         }
         values[self.column] = multiplier;

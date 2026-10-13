@@ -8,6 +8,7 @@ use crate::lp_types::{
 use crate::permutation::{ColumnPermutation, RowPermutation};
 use crate::scattered_vector::ScatteredColumn;
 use crate::sparse_vector::SparseColumn;
+use std::rc::Rc;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SparseMatrix {
@@ -24,7 +25,27 @@ pub struct CompactSparseMatrix {
     num_cols: ColIndex,
 }
 
+/// Proof that this immutable compact matrix's row indices fit a dense vector.
+/// Owning an `Rc` prevents mutation while the token exists; the identity check
+/// prevents reuse after a different matrix is rebound.
+#[derive(Clone, Debug)]
+pub struct ValidatedCompactRows {
+    matrix: Rc<CompactSparseMatrix>,
+    dimension: usize,
+}
+
 impl CompactSparseMatrix {
+    /// Validates sparse gathers once for repeated products with this matrix.
+    #[must_use]
+    pub fn validated_rows(matrix: Rc<Self>, dimension: usize) -> Option<ValidatedCompactRows> {
+        if matrix.rows.iter().all(|row| {
+            row.value() >= 0 && usize::try_from(row.value()).is_ok_and(|index| index < dimension)
+        }) {
+            Some(ValidatedCompactRows { matrix, dimension })
+        } else {
+            None
+        }
+    }
     #[must_use]
     pub fn from_sparse(matrix: &SparseMatrix) -> Self {
         Self::from_matrix_view(&MatrixView::from_matrix(matrix))
@@ -240,6 +261,35 @@ impl CompactSparseMatrix {
         column: ColIndex,
         vector: &[Fractional],
     ) -> Fractional {
+        self.column_scalar_product_slice_impl::<false>(column, vector)
+    }
+
+    /// Same product after all sparse row indices have been validated once.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the token belongs to another matrix or the vector is too short.
+    #[must_use]
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub fn column_scalar_product_validated(
+        &self,
+        rows: &ValidatedCompactRows,
+        column: ColIndex,
+        vector: &[Fractional],
+    ) -> Fractional {
+        assert!(std::ptr::eq(Rc::as_ptr(&rows.matrix), self));
+        assert!(vector.len() >= rows.dimension);
+        self.column_scalar_product_slice_impl::<true>(column, vector)
+    }
+
+    #[allow(unsafe_code, clippy::inline_always, clippy::cast_sign_loss)]
+    #[inline(always)]
+    fn column_scalar_product_slice_impl<const VALIDATED: bool>(
+        &self,
+        column: ColIndex,
+        vector: &[Fractional],
+    ) -> Fractional {
         let start = self.starts[column.to_usize()];
         let end = self.starts[column.to_usize() + 1];
         debug_assert_eq!(self.rows.len(), self.coefficients.len());
@@ -257,30 +307,39 @@ impl CompactSparseMatrix {
                 )
             }
         };
+        let gathered = |row: usize| {
+            if VALIDATED {
+                // SAFETY: the identity-bound token was created by scanning
+                // every stored row and the vector length was checked above.
+                unsafe { *vector.get_unchecked(row) }
+            } else {
+                vector[row]
+            }
+        };
         let shifted_end = end.saturating_sub(3);
         let mut entry = start;
         let (mut result1, mut result2, mut result3, mut result4) = (0.0, 0.0, 0.0, 0.0);
         while entry < shifted_end {
             let (coefficient, row) = entry_data(entry);
-            result1 = coefficient.mul_add(vector[row], result1);
+            result1 = coefficient.mul_add(gathered(row), result1);
             let (coefficient, row) = entry_data(entry + 1);
-            result2 = coefficient.mul_add(vector[row], result2);
+            result2 = coefficient.mul_add(gathered(row), result2);
             let (coefficient, row) = entry_data(entry + 2);
-            result3 = coefficient.mul_add(vector[row], result3);
+            result3 = coefficient.mul_add(gathered(row), result3);
             let (coefficient, row) = entry_data(entry + 3);
-            result4 = coefficient.mul_add(vector[row], result4);
+            result4 = coefficient.mul_add(gathered(row), result4);
             entry += 4;
         }
         let mut result = result1 + result2 + result3 + result4;
         if entry < end {
             let (coefficient, row) = entry_data(entry);
-            result = coefficient.mul_add(vector[row], result);
+            result = coefficient.mul_add(gathered(row), result);
             if entry + 1 < end {
                 let (coefficient, row) = entry_data(entry + 1);
-                result = coefficient.mul_add(vector[row], result);
+                result = coefficient.mul_add(gathered(row), result);
                 if entry + 2 < end {
                     let (coefficient, row) = entry_data(entry + 2);
-                    result = coefficient.mul_add(vector[row], result);
+                    result = coefficient.mul_add(gathered(row), result);
                 }
             }
         }
@@ -296,9 +355,11 @@ impl CompactSparseMatrix {
         if multiplier == 0.0 {
             return;
         }
-        for entry in self.starts[column.to_usize()]..self.starts[column.to_usize() + 1] {
-            output[self.rows[entry]] =
-                multiplier.mul_add(self.coefficients[entry], output[self.rows[entry]]);
+        // The column view bounds the paired matrix arrays once. Each output
+        // slot is borrowed once, retaining a checked gather for public callers.
+        for (row, coefficient) in self.column(column).iter() {
+            let slot = &mut output.as_mut_slice()[row.to_usize()];
+            *slot = multiplier.mul_add(coefficient, *slot);
         }
     }
 
@@ -311,8 +372,8 @@ impl CompactSparseMatrix {
         if multiplier == 0.0 {
             return;
         }
-        for entry in self.starts[column.to_usize()]..self.starts[column.to_usize() + 1] {
-            output.add(self.rows[entry], multiplier * self.coefficients[entry]);
+        for (row, coefficient) in self.column(column).iter() {
+            output.add(row, multiplier * coefficient);
         }
     }
 
@@ -323,8 +384,8 @@ impl CompactSparseMatrix {
 
     pub fn column_copy_to_cleared_dense_column(&self, column: ColIndex, output: &mut DenseColumn) {
         output.resize(self.num_rows, 0.0);
-        for entry in self.starts[column.to_usize()]..self.starts[column.to_usize() + 1] {
-            output[self.rows[entry]] = self.coefficients[entry];
+        for (row, coefficient) in self.column(column).iter() {
+            output[row] = coefficient;
         }
     }
 
@@ -336,9 +397,9 @@ impl CompactSparseMatrix {
     ) {
         output.resize(self.num_rows, 0.0);
         nonzeros.clear();
-        for entry in self.starts[column.to_usize()]..self.starts[column.to_usize() + 1] {
-            output[self.rows[entry]] = self.coefficients[entry];
-            nonzeros.push(self.rows[entry]);
+        for (row, coefficient) in self.column(column).iter() {
+            output[row] = coefficient;
+            nonzeros.push(row);
         }
     }
 
@@ -1055,5 +1116,39 @@ mod tests {
         compact.add_entry_to_current_column(RowIndex::new(-1), 2.0);
         compact.close_current_column();
         let _ = compact.column_scalar_product_slice(ColIndex::new(0), &[1.0]);
+    }
+
+    #[test]
+    fn validated_compact_rows_match_checked_dot_and_reject_bad_rows() {
+        let mut matrix = CompactSparseMatrix::default();
+        matrix.reset(RowIndex::new(3));
+        matrix.add_entry_to_current_column(RowIndex::new(0), 2.0);
+        matrix.add_entry_to_current_column(RowIndex::new(2), -3.0);
+        matrix.close_current_column();
+        let matrix = Rc::new(matrix);
+        let validated = CompactSparseMatrix::validated_rows(Rc::clone(&matrix), 3).unwrap();
+        let rhs = [1.0, 4.0, 5.0];
+        assert_eq!(
+            matrix
+                .column_scalar_product_validated(&validated, ColIndex::new(0), &rhs)
+                .to_bits(),
+            matrix
+                .column_scalar_product_slice(ColIndex::new(0), &rhs)
+                .to_bits()
+        );
+        assert!(CompactSparseMatrix::validated_rows(Rc::clone(&matrix), 2).is_none());
+        assert!(
+            std::panic::catch_unwind(|| {
+                matrix.column_scalar_product_validated(&validated, ColIndex::new(0), &rhs[..2])
+            })
+            .is_err()
+        );
+        let other = CompactSparseMatrix::from_sparse(&SparseMatrix::new());
+        assert!(
+            std::panic::catch_unwind(|| {
+                other.column_scalar_product_validated(&validated, ColIndex::new(0), &rhs)
+            })
+            .is_err()
+        );
     }
 }

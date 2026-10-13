@@ -163,6 +163,14 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
         self.coefficients[position]
     }
 
+    /// Parallel entry storage, in the column's existing traversal order.
+    #[must_use]
+    #[inline]
+    pub fn entry_slices(&self) -> (&[I], &[Fractional]) {
+        debug_assert_eq!(self.indices.len(), self.coefficients.len());
+        (&self.indices, &self.coefficients)
+    }
+
     #[inline]
     pub fn mutable_index(&mut self, position: usize) -> &mut I {
         &mut self.indices[position]
@@ -486,7 +494,8 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
             return;
         }
         for entry in self {
-            dense[entry.index] = multiplier.mul_add(entry.coefficient, dense[entry.index]);
+            let slot = &mut dense[entry.index];
+            *slot = multiplier.mul_add(entry.coefficient, *slot);
         }
     }
 

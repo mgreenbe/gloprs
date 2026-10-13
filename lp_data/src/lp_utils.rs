@@ -25,16 +25,13 @@ pub fn fractionality(value: f64) -> f64 {
 pub fn scalar_product(left: &[f64], right: &[f64]) -> f64 {
     assert_eq!(left.len(), right.len());
     let mut sum = 0.0;
-    let blocks = left.len() / 4;
-    for block in 0..blocks {
-        let i = 4 * block;
-        sum += left[i] * right[i]
-            + left[i + 1] * right[i + 1]
-            + left[i + 2] * right[i + 2]
-            + left[i + 3] * right[i + 3];
+    let mut left_chunks = left.chunks_exact(4);
+    let mut right_chunks = right.chunks_exact(4);
+    for (a, b) in left_chunks.by_ref().zip(right_chunks.by_ref()) {
+        sum += a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
     }
-    for i in 4 * blocks..left.len() {
-        sum += left[i] * right[i];
+    for (&a, &b) in left_chunks.remainder().iter().zip(right_chunks.remainder()) {
+        sum += a * b;
     }
     sum
 }

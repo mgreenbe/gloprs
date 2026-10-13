@@ -6,7 +6,7 @@ use std::rc::Rc;
 use lp_data::lp_types::{ColBitVec, ColIndex, VectorIndex, deterministic_time_for_fp_operations};
 use lp_data::lp_utils::{precise_squared_norm, scattered_squared_norm};
 use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow};
-use lp_data::sparse::{CompactSparseMatrix, SparseMatrix};
+use lp_data::sparse::{CompactSparseMatrix, SparseMatrix, ValidatedCompactRows};
 
 use crate::basis_representation::BasisRepresentation;
 use crate::lu_factorization::FactorizationError;
@@ -25,6 +25,7 @@ pub enum PricingRule {
 #[derive(Clone, Debug)]
 pub struct PrimalEdgeNorms {
     matrix: Rc<CompactSparseMatrix>,
+    validated_rows: Option<ValidatedCompactRows>,
     pricing_rule: PricingRule,
     recompute_edge_squared_norms: bool,
     reset_devex_weights: bool,
@@ -51,8 +52,10 @@ impl PrimalEdgeNorms {
     #[must_use]
     pub fn new_shared(matrix: Rc<CompactSparseMatrix>) -> Self {
         let num_rows = matrix.num_rows().to_usize();
+        let validated_rows = CompactSparseMatrix::validated_rows(Rc::clone(&matrix), num_rows);
         Self {
             matrix,
+            validated_rows,
             pricing_rule: PricingRule::Dantzig,
             recompute_edge_squared_norms: true,
             reset_devex_weights: true,
@@ -83,6 +86,8 @@ impl PrimalEdgeNorms {
     /// Rebind to the current immutable problem matrix while retaining the
     /// edge-norm clock and its recomputation watchers.
     pub(crate) fn rebind_shared(&mut self, matrix: Rc<CompactSparseMatrix>) {
+        self.validated_rows =
+            CompactSparseMatrix::validated_rows(Rc::clone(&matrix), matrix.num_rows().to_usize());
         self.matrix = matrix;
         self.clear();
     }
@@ -392,21 +397,25 @@ impl PrimalEdgeNorms {
                 self.direction_left_inverse
                     .value(ColIndex::from_usize(column - first_slack))
             } else {
-                self.matrix.column_scalar_product_slice(
-                    ColIndex::from_usize(column),
-                    self.direction_left_inverse.values().as_slice(),
-                )
+                let column = ColIndex::from_usize(column);
+                let values = self.direction_left_inverse.values().as_slice();
+                if let Some(validated) = &self.validated_rows {
+                    self.matrix
+                        .column_scalar_product_validated(validated, column, values)
+                } else {
+                    self.matrix.column_scalar_product_slice(column, values)
+                }
             };
             self.num_operations +=
                 i64::try_from(self.matrix.column(ColIndex::from_usize(column)).len())
                     .unwrap_or(i64::MAX);
             let inner = coefficient.mul_add(leaving_squared_norm, factor * scalar_product);
-            self.edge_squared_norms[column] =
-                coefficient.mul_add(inner, self.edge_squared_norms[column]);
+            let norm = &mut self.edge_squared_norms[column];
+            *norm = coefficient.mul_add(inner, *norm);
             let scaled_coefficient = coefficient / pivot;
             let lower_bound = 1.0 + scaled_coefficient * scaled_coefficient;
-            if self.edge_squared_norms[column] < lower_bound {
-                self.edge_squared_norms[column] = lower_bound;
+            if *norm < lower_bound {
+                *norm = lower_bound;
                 lower_bounded_norms += 1;
             }
         }
@@ -430,7 +439,8 @@ impl PrimalEdgeNorms {
         let leaving_norm = (entering_norm / pivot_magnitude).max(1.0);
         for &column in update_row.non_zero_positions() {
             let update_norm = update_row.coefficient(column).abs() * leaving_norm;
-            self.devex_weights[column] = self.devex_weights[column].max(update_norm * update_norm);
+            let weight = &mut self.devex_weights[column];
+            *weight = (*weight).max(update_norm * update_norm);
         }
         self.devex_weights[leaving_column] = leaving_norm * leaving_norm;
     }

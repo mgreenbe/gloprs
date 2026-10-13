@@ -174,9 +174,10 @@ impl DualEdgeNorms {
             }
             // Koberstein 8.2.2.1: this operation ordering is intentional.
             let inner = coefficient.mul_add(new_leaving_squared_norm, -(factor * tau[row]));
-            self.edge_squared_norms[row] = coefficient.mul_add(inner, self.edge_squared_norms[row]);
-            if row != leaving_row && self.edge_squared_norms[row] < 1e-4 {
-                self.edge_squared_norms[row] = 1e-4;
+            let norm = &mut self.edge_squared_norms[row];
+            *norm = coefficient.mul_add(inner, *norm);
+            if row != leaving_row && *norm < 1e-4 {
+                *norm = 1e-4;
             }
         }
         self.edge_squared_norms[leaving_row] = new_leaving_squared_norm;

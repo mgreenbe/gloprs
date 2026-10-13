@@ -417,7 +417,7 @@ impl TriangularMatrix {
     }
 
     #[inline]
-    pub fn column(&self, column: usize) -> impl Iterator<Item = (usize, f64)> + '_ {
+    pub fn column(&self, column: usize) -> impl DoubleEndedIterator<Item = (usize, f64)> + '_ {
         let range = self.starts[column]..self.starts[column + 1];
         self.rows[range.clone()]
             .iter()
@@ -620,7 +620,8 @@ impl TriangularMatrix {
             debug_assert_ne!(column, invalid);
             for position in self.starts[column]..self.starts[column + 1] {
                 let row = usize::try_from(self.rows[position]).unwrap();
-                scratchpad[row] = (-self.coefficients[position]).mul_add(pivot, scratchpad[row]);
+                let slot = &mut scratchpad[row];
+                *slot = (-self.coefficients[position]).mul_add(pivot, *slot);
             }
         }
         lower.clear();
@@ -733,7 +734,11 @@ impl TriangularMatrix {
                         coefficient
                     };
                     for (row, entry_coefficient) in self.column(column) {
-                        rhs[row] = (-coefficient).mul_add(entry_coefficient, rhs[row]);
+                        // SAFETY: builders validate every stored row < dimension;
+                        // the entry check above established rhs.len() == dimension.
+                        #[allow(unsafe_code)]
+                        let slot = unsafe { rhs.get_unchecked_mut(row) };
+                        *slot = (-coefficient).mul_add(entry_coefficient, *slot);
                     }
                 }
             }
@@ -750,9 +755,11 @@ impl TriangularMatrix {
                         rhs[column] = pivot;
                         pivot
                     };
-                    for position in (self.starts[column]..self.starts[column + 1]).rev() {
-                        let row = usize::try_from(self.rows[position]).unwrap();
-                        rhs[row] = (-self.coefficients[position]).mul_add(pivot, rhs[row]);
+                    for (row, entry_coefficient) in self.column(column).rev() {
+                        // SAFETY: stored rows and rhs have the validated dimension.
+                        #[allow(unsafe_code)]
+                        let slot = unsafe { rhs.get_unchecked_mut(row) };
+                        *slot = (-entry_coefficient).mul_add(pivot, *slot);
                     }
                 }
             }
@@ -787,7 +794,10 @@ impl TriangularMatrix {
                 pivot
             };
             for (row, coefficient) in self.column(column) {
-                rhs[row] = (-pivot).mul_add(coefficient, rhs[row]);
+                // SAFETY: builders validate rows; rhs length was checked above.
+                #[allow(unsafe_code)]
+                let slot = unsafe { rhs.get_unchecked_mut(row) };
+                *slot = (-pivot).mul_add(coefficient, *slot);
             }
         }
         Ok(())
@@ -1009,7 +1019,8 @@ impl TriangularMatrix {
             };
             rhs[row] = pivot;
             for (entry_row, coefficient) in self.column(row) {
-                rhs[entry_row] = (-pivot).mul_add(coefficient, rhs[entry_row]);
+                let slot = &mut rhs[entry_row];
+                *slot = (-pivot).mul_add(coefficient, *slot);
             }
             non_zeros[write] = non_zeros[read];
             write += 1;
@@ -1037,7 +1048,8 @@ impl TriangularMatrix {
             };
             rhs[row] = pivot;
             for (entry_row, coefficient) in self.column(row) {
-                rhs[entry_row] = (-pivot).mul_add(coefficient, rhs[entry_row]);
+                let slot = &mut rhs[entry_row];
+                *slot = (-pivot).mul_add(coefficient, *slot);
             }
             new_start -= 1;
             non_zeros[new_start] = typed_row;

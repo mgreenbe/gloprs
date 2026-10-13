@@ -6,35 +6,20 @@ use lp_data::lp_types::{ColIndex, RowIndex, VectorIndex, deterministic_time_for_
 use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow};
 
 pub(crate) fn sparse_scalar_product(entries: &[(usize, f64)], values: &[f64]) -> f64 {
-    let shifted_end = entries.len().saturating_sub(3);
-    let mut entry = 0;
+    // Four-entry chunks prove positional reads of the packed update storage
+    // in range. The gathered RHS remains checked: public elementary matrices
+    // can carry arbitrary indices and public solves accept arbitrary slices.
+    let mut chunks = entries.chunks_exact(4);
     let (mut result1, mut result2, mut result3, mut result4) = (0.0, 0.0, 0.0, 0.0);
-    while entry < shifted_end {
-        result1 = entries[entry].1.mul_add(values[entries[entry].0], result1);
-        result2 = entries[entry + 1]
-            .1
-            .mul_add(values[entries[entry + 1].0], result2);
-        result3 = entries[entry + 2]
-            .1
-            .mul_add(values[entries[entry + 2].0], result3);
-        result4 = entries[entry + 3]
-            .1
-            .mul_add(values[entries[entry + 3].0], result4);
-        entry += 4;
+    for chunk in chunks.by_ref() {
+        result1 = chunk[0].1.mul_add(values[chunk[0].0], result1);
+        result2 = chunk[1].1.mul_add(values[chunk[1].0], result2);
+        result3 = chunk[2].1.mul_add(values[chunk[2].0], result3);
+        result4 = chunk[3].1.mul_add(values[chunk[3].0], result4);
     }
     let mut result = result1 + result2 + result3 + result4;
-    if entry < entries.len() {
-        result = entries[entry].1.mul_add(values[entries[entry].0], result);
-        if entry + 1 < entries.len() {
-            result = entries[entry + 1]
-                .1
-                .mul_add(values[entries[entry + 1].0], result);
-            if entry + 2 < entries.len() {
-                result = entries[entry + 2]
-                    .1
-                    .mul_add(values[entries[entry + 2].0], result);
-            }
-        }
+    for &(index, coefficient) in chunks.remainder() {
+        result = coefficient.mul_add(values[index], result);
     }
     result
 }
@@ -68,7 +53,8 @@ impl RankOneUpdateElementaryMatrix {
         debug_assert!(!self.is_singular());
         let multiplier = -sparse_scalar_product(&self.v, values) / self.mu;
         for &(index, value) in &self.u {
-            values[index] = multiplier.mul_add(value, values[index]);
+            let slot = &mut values[index];
+            *slot = multiplier.mul_add(value, *slot);
         }
     }
 
@@ -76,21 +62,24 @@ impl RankOneUpdateElementaryMatrix {
         debug_assert!(!self.is_singular());
         let multiplier = -sparse_scalar_product(&self.u, values) / self.mu;
         for &(index, value) in &self.v {
-            values[index] = multiplier.mul_add(value, values[index]);
+            let slot = &mut values[index];
+            *slot = multiplier.mul_add(value, *slot);
         }
     }
 
     pub fn right_multiply(&self, values: &mut [f64]) {
         let multiplier = sparse_scalar_product(&self.v, values);
         for &(index, value) in &self.u {
-            values[index] = multiplier.mul_add(value, values[index]);
+            let slot = &mut values[index];
+            *slot = multiplier.mul_add(value, *slot);
         }
     }
 
     pub fn left_multiply(&self, values: &mut [f64]) {
         let multiplier = sparse_scalar_product(&self.u, values);
         for &(index, value) in &self.v {
-            values[index] = multiplier.mul_add(value, values[index]);
+            let slot = &mut values[index];
+            *slot = multiplier.mul_add(value, *slot);
         }
     }
 
@@ -165,7 +154,8 @@ impl RankOneUpdateFactorization {
                 -sparse_scalar_product(&self.entries[matrix.v_start..matrix.v_end], values)
                     / matrix.mu;
             for &(index, value) in &self.entries[matrix.u_start..matrix.u_end] {
-                values[index] = multiplier.mul_add(value, values[index]);
+                let slot = &mut values[index];
+                *slot = multiplier.mul_add(value, *slot);
             }
         }
         self.add_deterministic_time();
@@ -177,7 +167,8 @@ impl RankOneUpdateFactorization {
                 -sparse_scalar_product(&self.entries[matrix.u_start..matrix.u_end], values)
                     / matrix.mu;
             for &(index, value) in &self.entries[matrix.v_start..matrix.v_end] {
-                values[index] = multiplier.mul_add(value, values[index]);
+                let slot = &mut values[index];
+                *slot = multiplier.mul_add(value, *slot);
             }
         }
         self.add_deterministic_time();
@@ -201,7 +192,8 @@ impl RankOneUpdateFactorization {
             if use_dense {
                 let dense = values.values_mut().as_mut_slice();
                 for &(index, value) in &self.entries[matrix.u_start..matrix.u_end] {
-                    dense[index] = multiplier.mul_add(value, dense[index]);
+                    let slot = &mut dense[index];
+                    *slot = multiplier.mul_add(value, *slot);
                 }
             } else {
                 for &(index, value) in &self.entries[matrix.u_start..matrix.u_end] {
@@ -233,7 +225,8 @@ impl RankOneUpdateFactorization {
             if use_dense {
                 let dense = values.values_mut().as_mut_slice();
                 for &(index, value) in &self.entries[matrix.v_start..matrix.v_end] {
-                    dense[index] = multiplier.mul_add(value, dense[index]);
+                    let slot = &mut dense[index];
+                    *slot = multiplier.mul_add(value, *slot);
                 }
             } else {
                 for &(index, value) in &self.entries[matrix.v_start..matrix.v_end] {
@@ -375,5 +368,11 @@ mod tests {
                 .to_bits(),
             0.0_f64.to_bits()
         );
+    }
+
+    #[test]
+    fn public_update_rejects_out_of_range_dense_gathers() {
+        let update = RankOneUpdateElementaryMatrix::new(vec![], vec![(2, 1.0)], 0.0);
+        assert!(std::panic::catch_unwind(|| update.right_solve(&mut [1.0, 2.0])).is_err());
     }
 }

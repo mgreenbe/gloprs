@@ -24,6 +24,69 @@ optimization variable.
 
 ## Workspace-audit rerun (12 October 2026)
 
+### Update-row reset fidelity and kernel attribution
+
+Paired probe timings on all 271 `dfl001` and 89 `fit2d` saved basis matrices
+(three alternating trials, five factorizations per timing) measured LU at
+1.070x native for `dfl001` and 0.963x for `fit2d`. The paired sparse solve
+probe run sampled at most five RHSs of each kind per basis, with three trials
+and 50 in-process repetitions. `dfl001` FTRAN was 1.101x over 275 RHSs,
+BTRAN 0.992x over 563; `fit2d` FTRAN was 1.054x over 93 and BTRAN 1.202x
+over 181. These isolated costs are too small in absolute time to explain the
+full-solve excess. Raw files are
+`target/phase8-dfl001-fit2d-{factorizations,solve-probes}.csv`.
+
+Ten-second serial `sample` profiles of presolved `fit2d` solves on both
+binaries put the bulk of execution in primal edge-norm updates, column-wise
+update-row computation, and primal-price updates. Rust's column-wise path
+had a fidelity mismatch: it filled the entire coefficient vector with zero
+every pivot, whereas upstream resizes and retains its existing entries,
+writing only active coefficients. That full clear was removed. A five-trial
+alternating old/new Rust A/B gave new/old 0.997 for both `fit2d` and `dfl001`,
+with identical status, iterations, and objective bits; this is too small to
+claim a reliable speedup. The strict fast-96 trajectory gate passes.
+
+The serial full fast-96 rerun after this edit (three trials, one warm-up)
+measured matched presolved solve at 9.607 s native versus 10.838 s Rust
+(1.128x), and public default pipeline at 9.785 s versus 10.998 s (1.124x).
+All 96 cases matched status and iteration count. Raw trials are in
+`target/phase8-{presolved-solve,public}-update-row-retain-fast96.json`.
+The residual gap is concentrated in per-pivot update-row, edge-norm, and
+pricing work; the present samples do not isolate which implementation detail
+accounts for it.
+
+### Validated compact gathers in primal edge norms
+
+The hot primal edge-norm update repeatedly dots immutable compact columns
+against a row-sized dense vector. A new validation token scans the compact
+row indices once at binding, owns an `Rc` to prevent subsequent mutation,
+and is tied to the exact matrix identity. Each product checks token identity
+and RHS length once, then uses unchecked per-entry gathers. Matrices with an
+invalid row cannot obtain a token and continue through the checked path;
+ordinary public compact products remain checked. Tests cover exact result
+bits, invalid rows, wrong matrix, and short RHS. This is a localized
+optimization of GLOP's unchecked compact-column traversal, not a change to
+the floating-point operation order.
+
+Five alternating old/new Rust trials of matched presolved solves measured
+new/old 0.947 on `fit2d` and 0.994 on `dfl001`, with identical status,
+iterations, and objective bits. The strict fast-96 trajectory and public
+postsolve/KKT gates, workspace tests, formatting, and Clippy pass. A clean
+serial fast-96 rerun (three timed trials and one warm-up per solver/model)
+measured matched presolved solve at 9.590 s native versus 10.676 s Rust
+(1.113x, previously 1.128x), and public default pipeline at 9.863 s versus
+10.937 s (1.109x, previously 1.124x). The `fit2d` matched-solve ratio fell
+from 1.257x to 1.193x. Raw trials are in ignored
+`target/phase8-{presolved-solve,public}-validated-compact-dot-fast96.json`.
+
+The same token was experimentally threaded through the solver's column-wise
+`UpdateRow` path. A paired five-trial A/B was noisy (`fit2d` new/old 0.988,
+`dfl001` 1.002), and a serial fast-96 rerun measured 1.113x native versus
+1.113x without that extension. Strict trajectories still passed, but no
+reliable aggregate benefit was established, so the additional `UpdateRow` and
+`RevisedSimplex` wiring was removed. Its ignored diagnostic run is
+`target/phase8-presolved-solve-validated-update-row-fast96.json`.
+
 ### Follow-up ownership-scan rerun
 
 After removing the transient sparse-index and retired adjacency-list clones
@@ -83,6 +146,68 @@ Those artifacts identify the parent commit because the measured Rust binary
 contains the current uncommitted workspace-audit edits.
 
 ## Compact-dot bounds-check follow-up
+
+### Bounded numerical-kernel access follow-up
+
+A second source audit replaced redundant repeated indexing in compact-matrix
+column add/copy, triangular direct and hypersparse solves, rank-one updates,
+sparse-vector dense updates, edge-norm updates, update rows, and residual
+accumulation. Paired storage is traversed through bounded column views or
+four-entry chunks; read/modify/write operations borrow one destination slot.
+The generic dense scalar product likewise uses paired four-entry chunks.
+These are safe rewrites, with no new `unsafe` and no change to numerical
+operation order. Index-dependent gathers from public sparse vectors or
+caller-supplied slices remain checked: their APIs do not establish a dimension
+bound for every stored index. Removing those checks requires an API/invariant
+change, not merely replacing `[]` with `get_unchecked`.
+
+One warm-up and three alternating serial trials on the fast-96 matched
+presolved solves measured 9.668 s native versus 10.938 s Rust, or 1.131×;
+the preceding paired-slice-only run was 1.125×. To distinguish a regression
+from machine variation, a separate five-trial alternating old/new Rust A/B
+used the parent-commit release binary on four large contributors. New/old
+median ratios were 0.997 (`dfl001`), 1.002 (`fit2d`), 0.998 (`truss`), and
+0.995 (`stocfor3`), with matching statuses, iterations, and objective bits.
+This does not show a material solve regression or a material aggregate gain.
+The full per-model serial trials are in ignored
+`target/phase8-solve-bounded-kernels-fast96.json`. The 1,000-case native
+triangular, compact-matrix, and rank-one traces, full workspace suite, strict
+fast-96 trajectory fixture, and public postsolve/KKT gate pass.
+
+### Update-row sparse-column dot
+
+An ARM64 release disassembly of `UpdateRow`'s four-accumulator sparse-column
+dot showed checks for positional reads of its parallel row/coefficient arrays
+in addition to the necessary caller-supplied RHS gather checks. The production
+kernel now traverses paired four-entry slices, preserving the exact fused
+accumulation and tail order; it keeps the RHS checks and uses no `unsafe`.
+The in-repo `update_row_dot_benchmark` compares the old indexed and new paired
+forms with identical generated columns, 1,024 columns, 4,096 rows, 500
+repetitions, one warm-up, and seven alternating trials. Median nanoseconds per
+dot were 3.565/3.542 (old/new) at four entries, 10.090/7.789 at 16, and
+39.083/25.796 at 64. Thus the long-column speedups are about 23% and 34%,
+while the four-entry case is tied. Checksums matched. The 500-case native
+update-row trace and strict fast-96 pivot trajectory fixture pass.
+
+A subsequent full serial fast-96 rerun used one warm-up and three alternating
+trials per model, with the release Rust binaries rebuilt from the uncommitted
+paired-slice source. Results are summed per-model medians:
+
+| Timed scope | Native | Rust | Rust/native | Prior ratio |
+| --- | ---: | ---: | ---: | ---: |
+| Parse | 0.217 s | 0.202 s | 0.929× | 0.926× |
+| Presolve | 0.262 s | 0.264 s | 1.009× | 1.005× |
+| Solve after matched presolve | 9.699 s | 10.910 s | 1.125× | 1.127× |
+| Public default pipeline | 9.973 s | 11.195 s | 1.122× | 1.127× |
+| Direct unscaled dual | 23.774 s | 22.793 s | 0.959× | 0.960× |
+
+Every timed case retained matching outcomes; the public run matched all 96
+iteration counts. The direct-dual sqrt-nnz-weighted ratio is 1.176×, nearly
+unchanged from 1.175×. The small full-solver movements are within the range
+of run-to-run variation and do not establish an end-to-end gain from this
+specific kernel edit. Per-model trials and dispersion are in ignored
+`target/phase8-{stages,public,direct-dual}-update-row-slices-fast96.json`;
+their revision field records parent commit `c7201e2`, not the uncommitted edit.
 
 The compact-column dot product remained 1.7–1.8× native in matched isolated
 measurements. A scoped unchecked read of only the matrix-owned coefficient and
@@ -273,3 +398,20 @@ The raw artifacts are `phase8-direct-dual-fast96.json`,
 `phase8-memory-fast96.json`. Each timing JSON includes per-model trial times
 and median absolute deviations. The memory JSON includes all three peak-RSS
 and footprint trials per model.
+### Validated triangular-solve bounds-check pass
+
+Three sparse RHS updates in `TriangularMatrix::solve` and
+`lower_solve_starting_at` now use unchecked mutable access. The invariant is
+established by triangular builders (each stored row is below the dimension)
+and by the solve's RHS-length check. The dense eta left/right solves use paired
+slice iteration after a length assertion, avoiding positional indexing.
+Caller-controlled sparse gathers in the other audited kernels remain checked:
+their public APIs do not guarantee that every index fits the supplied slice.
+The release strict fast-96 trajectory test, workspace tests, and Clippy pass.
+
+A serial three-trial, one-warmup presolved-solve sample on `dfl001`, `fit2d`,
+`truss`, and `stocfor3` measured Rust/native 1.187x in aggregate (artifact
+`target/phase8-solve-unchecked-triangular-sample.json`). Against the earlier
+bounded-kernel run on the same four instances, Rust medians changed by -0.5%,
+-1.4%, -0.4%, and -0.8%, respectively. This is a cross-run comparison, not a
+paired A/B; the small differences are not evidence of a reliable speedup.

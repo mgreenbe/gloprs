@@ -2030,9 +2030,43 @@ so paired kernel measurements remain the next performance evidence to collect.
 1. Continue Phase 8 with paired kernel-level measurements on `dfl001`'s
    FTRAN, refactorization, and basis-update shares, and `fit2d`'s remaining
    update-row/edge-norm work. Actual `dfl001` BTRAN probes are at parity,
-   while compact-dot bounds-check work already improved `fit2d`. Preserve
+   while compact-dot bounds-check work already improved `fit2d`. An isolated
+   release disassembly and paired benchmark also found redundant positional
+   bounds checks in the sparse-column update-row dot; four-entry slices retain
+   exact arithmetic and accelerate 16-/64-entry columns by about 23%/34%,
+   with no measurable change at four entries. The serial fast-96 rerun measured
+   1.125× native for matched presolved solve (previously 1.127×) and 1.122×
+   for the public pipeline (previously 1.127×); this does not establish a
+   separate end-to-end gain from the edit. A subsequent bounded-access pass
+   removed further repeated checks via safe paired views, chunks, and
+   one-borrow read/modify/write updates. Its 1.131× fast-96 solve sample is
+   slightly slower than 1.125×, but a paired five-trial Rust old/new check on
+   four large contributors ranged from 0.995× to 1.002× with matching
+   outcomes, so no material regression is established. Public APIs that allow
+   out-of-range sparse indices still require checked gathers. Preserve
    upstream operation order and validate any edit with strict trajectories
    and the public-postsolve KKT gate.
+   A subsequent paired probe run measured `dfl001` LU at 1.070×, FTRAN at
+   1.101×, and BTRAN at 0.992×; `fit2d` LU is at parity. Their small absolute
+   costs do not explain the solver gap. Serial native/Rust `fit2d` profiles
+   localize most time to column-wise update-row, primal edge-norm, and
+   primal-price updates. Column-wise update-row no longer clears its full
+   coefficient vector each pivot, matching upstream's retaining `resize`.
+   The five-trial Rust A/B was about 0.997× old on `fit2d` and `dfl001`;
+   full fast-96 presolved solve and public pipeline remain 1.128× and
+   1.124× native. Next isolate the per-pivot work in those three kernels
+   with matched inputs and operation counts before changing their hot loops.
+   Validating the immutable compact matrix's row indices once at binding
+   allowed the primal edge-norm hot path to use upstream-equivalent unchecked
+   gathers while retaining checked public/invalid-input behavior. Five-trial
+   paired A/B gave `fit2d` new/old 0.947×; the full fast-96 matched solve and
+   public pipeline now measure 1.113× and 1.109× native, respectively, with
+   strict trajectories and postsolve/KKT unchanged. Threading the same token
+   through column-wise update-row produced no reliable further gain (fast-96
+   stayed 1.113×), so that extra wiring was removed. Next profile the
+   remaining update-row kernel and pricing/edge-norm shares with matched
+   inputs and operation counts; avoid broad unchecked access without an
+   equally strong lifetime/dimension proof.
 2. Repeat the serial fast-96 stage and public-pipeline comparisons after a
    measured change; record medians and dispersion, and rank regressions by
    absolute time. Keep `qap15` outside deterministic wall-time gates until

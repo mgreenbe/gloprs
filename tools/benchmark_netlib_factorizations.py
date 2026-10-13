@@ -48,6 +48,7 @@ def main() -> None:
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--trials", type=int, default=3)
     parser.add_argument("--limit", type=int, help="use the first N paths for a smoke test")
+    parser.add_argument("--models", nargs="+", help="restrict probes to these Netlib models")
     options = parser.parse_args()
     if options.repetitions < 1 or options.warmups < 0 or options.trials < 1:
         parser.error("repetitions and trials must be positive; warmups must be nonnegative")
@@ -55,6 +56,9 @@ def main() -> None:
         if not binary.is_file():
             parser.error(f"build the benchmark executable first: {binary}")
     paths = sorted(options.root.glob("*-*/factorization-*.mtx"))
+    if options.models:
+        models = set(options.models)
+        paths = [path for path in paths if path.parent.name.rsplit("-", 1)[0] in models]
     if options.limit is not None:
         if options.limit < 1:
             parser.error("--limit must be positive")

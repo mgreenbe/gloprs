@@ -25,30 +25,26 @@ pub enum UpdateRowAlgorithm {
 }
 
 fn column_scalar_product(column: &SparseColumn, values: &[f64]) -> f64 {
-    let mut position = 0;
-    let shifted_end = column.num_entries().saturating_sub(3);
+    // Both entry arrays are built together. Four-entry slices prove their
+    // positional accesses in range, while sparse gathers from the caller's
+    // `values` remain checked. Keep GLOP's four accumulators and tail order.
+    let (rows, coefficients) = column.entry_slices();
+    let mut row_chunks = rows.chunks_exact(4);
+    let mut coefficient_chunks = coefficients.chunks_exact(4);
     let (mut result1, mut result2, mut result3, mut result4) = (0.0, 0.0, 0.0, 0.0);
-    while position < shifted_end {
-        result1 = column
-            .coefficient(position)
-            .mul_add(values[column.index(position).to_usize()], result1);
-        result2 = column
-            .coefficient(position + 1)
-            .mul_add(values[column.index(position + 1).to_usize()], result2);
-        result3 = column
-            .coefficient(position + 2)
-            .mul_add(values[column.index(position + 2).to_usize()], result3);
-        result4 = column
-            .coefficient(position + 3)
-            .mul_add(values[column.index(position + 3).to_usize()], result4);
-        position += 4;
+    for (r, c) in row_chunks.by_ref().zip(coefficient_chunks.by_ref()) {
+        result1 = c[0].mul_add(values[r[0].to_usize()], result1);
+        result2 = c[1].mul_add(values[r[1].to_usize()], result2);
+        result3 = c[2].mul_add(values[r[2].to_usize()], result3);
+        result4 = c[3].mul_add(values[r[3].to_usize()], result4);
     }
     let mut result = result1 + result2 + result3 + result4;
-    while position < column.num_entries() {
-        result = column
-            .coefficient(position)
-            .mul_add(values[column.index(position).to_usize()], result);
-        position += 1;
+    for (&row, &coefficient) in row_chunks
+        .remainder()
+        .iter()
+        .zip(coefficient_chunks.remainder())
+    {
+        result = coefficient.mul_add(values[row.to_usize()], result);
     }
     result
 }
@@ -466,7 +462,8 @@ impl UpdateRow {
                 .iter()
             {
                 let column = column.to_usize();
-                self.coefficients[column] = multiplier.mul_add(value, self.coefficients[column]);
+                let slot = &mut self.coefficients[column];
+                *slot = multiplier.mul_add(value, *slot);
             }
         }
         self.rebuild_non_zeros(relevant);
@@ -526,7 +523,11 @@ impl UpdateRow {
     }
 
     fn compute_column_wise(&mut self, matrix: MatrixSource<'_>, relevant: &ColBitVec) {
-        self.coefficients.fill(0.0);
+        // GLOP's coefficient_.resize(num_cols, 0.0) retains existing entries.
+        // Only columns reported in non_zero_positions are read by consumers;
+        // clearing this full vector each pivot is both unnecessary and unlike
+        // the upstream column-wise kernel.
+        self.coefficients.resize(matrix.num_cols().to_usize(), 0.0);
         self.non_zero_positions.clear();
         for typed_column in relevant.iter_ones() {
             let column = typed_column.to_usize();
@@ -582,6 +583,45 @@ pub fn compute_update_row(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn column_dot_keeps_four_accumulator_order_and_checks_rhs_indices() {
+        let values = [1.0e16, -1.0e16, 3.0, 0.25];
+        for count in 0..12 {
+            let mut column = SparseColumn::new();
+            for position in 0..count {
+                column.add_entry(
+                    RowIndex::from_usize(position % values.len()),
+                    (f64::from(u32::try_from(position).unwrap()) - 4.0) * 0.125,
+                );
+            }
+            let mut sums = [0.0_f64; 4];
+            for position in 0..count / 4 * 4 {
+                sums[position % 4] = column.coefficient(position).mul_add(
+                    values[column.index(position).to_usize()],
+                    sums[position % 4],
+                );
+            }
+            let mut expected = sums[0] + sums[1] + sums[2] + sums[3];
+            for position in count / 4 * 4..count {
+                expected = column
+                    .coefficient(position)
+                    .mul_add(values[column.index(position).to_usize()], expected);
+            }
+            assert_eq!(
+                column_scalar_product(&column, &values).to_bits(),
+                expected.to_bits()
+            );
+        }
+        let mut invalid = SparseColumn::new();
+        invalid.add_entry(RowIndex::from_usize(values.len()), 1.0);
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                column_scalar_product(&invalid, &values)
+            }))
+            .is_err()
+        );
+    }
 
     #[test]
     fn advanced_update_row_shares_the_transposed_compact_matrix() {

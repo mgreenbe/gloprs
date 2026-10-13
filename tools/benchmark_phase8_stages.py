@@ -68,6 +68,8 @@ def main() -> None:
     parser.add_argument("--presolve-repetitions", type=int, default=3)
     parser.add_argument("--solve-repetitions", type=int, default=1)
     parser.add_argument("--models", nargs="+")
+    parser.add_argument("--rust", type=Path, default=RUST,
+                        help="release Rust adapter to compare with native GLOP")
     parser.add_argument("--output", type=Path)
     options = parser.parse_args()
     if (options.trials < 1 or options.warmups < 0
@@ -92,10 +94,10 @@ def main() -> None:
                            else options.solve_repetitions)
             for _ in range(options.warmups):
                 run(NATIVE, model, stage, repetitions)
-                run(RUST, model, stage, repetitions)
+                run(options.rust, model, stage, repetitions)
             times: dict[str, list[float]] = {"native": [], "rust": []}
             for trial in range(options.trials):
-                order = (("native", NATIVE), ("rust", RUST))
+                order = (("native", NATIVE), ("rust", options.rust))
                 if trial % 2:
                     order = tuple(reversed(order))
                 outcomes = {}
