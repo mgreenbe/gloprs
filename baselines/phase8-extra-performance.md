@@ -76,6 +76,51 @@ credible follow-up targets. `fome12` is near parity but its Rust trial spread
 is larger (38.425–38.978 s), so its 1.000x median ratio should not be read
 as sub-percent precision.
 
+## Outlier follow-up (working tree after `2ce68ff`)
+
+Paired macOS stack samples localized `neos-1445765` presolve to
+`DoubletonFreeColumnPreprocessor`, especially its ordered sparse-vector merge.
+Rust had been building an array of entry pairs and then copying it into its
+index and coefficient arrays. The pinned C++ implementation builds the two
+arrays directly in a temporary sparse vector and swaps it into place. The
+Rust port now does likewise and uses the upstream multiply-then-add order.
+With 100 presolve repetitions, one warmup, and three alternating trial pairs,
+the Rust/native ratio fell from 1.956x to 1.484x. A fresh three-pair public
+run measured 1.416x on this model, versus 1.732x in the pinned baseline.
+
+The same profile campaign identified dense permutation in LU BTRAN and
+symbolic triangular reachability as hot on `piperout-27`. Iterating the two
+permutation inputs together eliminates their redundant bounds checks without
+unsafe code, and symbolic reach now traverses row-index storage directly,
+without loading coefficients. In a five-model, ten-solve-per-trial comparison,
+the aggregate matched-solve ratio changed from 1.266x to 1.249x after the
+permutation edit. The subsequent seven-model, five-solve-per-trial run measured
+1.298x for `piperout-27` and 1.219x for `unitcal_7`; these remain substantial
+regressions. A packed-bitset symbolic-workspace experiment did not improve
+timing and was removed.
+
+The latest public ratios for the nine leading ratio outliers are:
+
+| Model | Pinned ratio | Follow-up ratio |
+|---|---:|---:|
+| `neos-1445765` | 1.732x | 1.416x |
+| `fhnw-binpack4-48` | 1.582x | 1.535x |
+| `pg` | 1.483x | 1.434x |
+| `decomp2` | 1.378x | 1.363x |
+| `bnatt500` | 1.365x | 1.336x |
+| `bnatt400` | 1.341x | 1.329x |
+| `neos-950242` | 1.324x | 1.327x |
+| `piperout-27` | 1.303x | 1.259x |
+| `unitcal_7` | 1.220x | 1.206x |
+
+Raw follow-up results and stack samples are ignored under `target/phase8-extra-*`.
+The complete 164-model pinned-native status/iteration/objective gate and the
+strict fast-96 Netlib trajectory fixture passed after these edits. The
+remaining short-model ratios are **not resolved**; sampled `fhnw-binpack4-48`
+still spends substantial Rust time in basis refactorization, while `bnatt500`
+and `piperout-27` emphasize BTRAN/edge-norm work. These need isolated paired
+kernel timing before a claim of parity.
+
 `miplib2017/enlight_hard` was solved completely by presolve, so it is
 inapplicable to matched-presolved simplex timing but included in the public
 result. `miplib2017/rmatr200-p5` and

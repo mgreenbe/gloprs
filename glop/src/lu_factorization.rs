@@ -1003,10 +1003,13 @@ impl LuFactorization {
         vector.values_mut().swap_storage_with_raw(&mut scratch);
         let (values, non_zeros) = vector.mutable_parts();
         if non_zeros.is_empty() {
-            for source in 0..n {
-                let value = scratch[source];
+            debug_assert_eq!(scratch.len(), destination_by_source.len());
+            // Iterating the two equally sized input arrays together lets the
+            // compiler eliminate their per-entry bounds checks in this hot
+            // dense permutation, while preserving GLOP's traversal order.
+            for (&value, &destination) in scratch.iter().zip(destination_by_source) {
                 if value != 0.0 {
-                    values[destination_by_source[source]] = value;
+                    values[destination] = value;
                 }
             }
             scratch.fill(0.0);

@@ -2390,3 +2390,16 @@ absolute gaps are `satellites2-60-fs`, `neos-827175`, both `brazil3` copies,
 Pinned selection, trial data, build fingerprints, and caveats are in
 `baselines/phase8-extra-performance.md`. A strict pivot-by-pivot fixture
 for this corpus remains future validation work.
+
+The first outlier pass repaired a concrete upstream-fidelity gap in the
+doubleton-free-column sparse merge: direct structure-of-arrays construction
+and storage swap cut `neos-1445765` presolve from 1.956x to 1.484x native
+under matched 100-repetition trials. Dense LU permutation and triangular
+symbolic traversal received smaller upstream-aligned improvements. Workspace
+tests, strict fast-96 trajectories, and the complete 164-model extra-corpus
+outcome gate pass. The leading nine public ratio outliers are improved in a
+fresh three-pair run except `neos-950242` (roughly unchanged), but most still
+exceed 1.2x. Profile their dominant BTRAN, primal-edge-norm, and refactorization
+kernels with isolated paired timings before declaring the outliers resolved;
+the measurements and model-by-model ratios are in
+`baselines/phase8-extra-performance.md`.

@@ -1364,7 +1364,11 @@ impl TriangularMatrix {
             }
             workspace.nodes_to_explore.pop();
             workspace.nodes_to_explore.push(SymbolicNode::Exit(row));
-            for (successor, _) in self.column(row) {
+            // Symbolic reachability depends only on structure. Traverse the
+            // stored row-index slice directly, as upstream does, without
+            // loading coefficients or constructing entry pairs.
+            for &successor in &self.rows[self.starts[row]..self.starts[row + 1]] {
+                let successor = successor as usize;
                 operations += 1;
                 if !workspace.stored[successor] {
                     workspace
@@ -1411,7 +1415,9 @@ impl TriangularMatrix {
         let mut position = 0;
         while position < non_zeros.len() {
             let column = non_zeros[position].to_usize();
-            for (row, _) in self.column(column) {
+            // The coefficient array is irrelevant to this symbolic pass.
+            for &row in &self.rows[self.starts[column]..self.starts[column + 1]] {
+                let row = row as usize;
                 operations += 1;
                 if !workspace.stored[row] {
                     workspace.stored[row] = true;

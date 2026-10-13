@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Serial paired stack samples of repeated matched-presolve Netlib solves."""
+"""Serial paired stack samples of repeated LP pipeline stages."""
 
 from __future__ import annotations
 
@@ -20,7 +20,8 @@ BINARIES = {
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("model", help="Netlib model name, without .mps")
+    parser.add_argument("model", help="Netlib model name or path to an MPS model")
+    parser.add_argument("--stage", choices=("presolve", "solve"), default="solve")
     parser.add_argument("--repetitions", type=int, default=20)
     parser.add_argument("--delay", type=float, default=1.0)
     parser.add_argument("--duration", type=int, default=8)
@@ -29,7 +30,7 @@ def main() -> None:
     args = parser.parse_args()
     if args.repetitions < 1 or args.delay < 0 or args.duration < 1 or args.interval_ms < 1:
         parser.error("invalid repetitions or sample interval")
-    model = MODELS / f"{args.model}.mps"
+    model = Path(args.model) if args.model.endswith(".mps") else MODELS / f"{args.model}.mps"
     if not model.is_file():
         parser.error(f"missing model: {model}")
 
@@ -37,7 +38,9 @@ def main() -> None:
     for label, binary in BINARIES.items():
         print(f"sampling {args.model} {label}", flush=True)
         process = subprocess.Popen(
-            [binary, model, "presolved_solve_timing", str(args.repetitions)],
+            [binary, model,
+             "presolved_solve_timing" if args.stage == "solve" else "presolve_timing",
+             str(args.repetitions)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

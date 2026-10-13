@@ -999,6 +999,23 @@ qap15 solves to pivot 30,000 have a 0.975x median Rust/native ratio. Strict
 fast-96 trajectories, public KKT, and direct qap15 snapshots still pass.
 See `baselines/phase8-performance.md` for the trial data and scope limits.
 
+## Extra-corpus performance fidelity follow-up
+
+The validated `sparse_vector.h` row now also has upstream-style direct
+structure-of-arrays construction and storage swap in the common-index merge.
+Previously it built an array of entry pairs and copied it back, an extra pass
+that made `neos-1445765` doubleton-free-column presolve 1.956x native. The
+direct port measured 1.484x under the same 100-repetition protocol. It also
+restores upstream's multiply-then-add order. The validated `sparse.{h,cc}`
+triangular symbolic pass now visits stored row indices directly, matching
+GLOP's structural traversal without reading coefficients. The validated
+`lu_factorization.{h,cc}` dense permutation now zips source values and
+permutation indices to avoid two redundant bounds checks while retaining the
+upstream traversal and reusable zero scratchpad. These edits passed the
+complete 164-model extra-corpus outcome gate and strict 96-model Netlib pivot
+fixture. They do not explain the remaining short-model BTRAN and
+refactorization timing gaps; see `baselines/phase8-extra-performance.md`.
+
 ## Test inventory caveat
 
 

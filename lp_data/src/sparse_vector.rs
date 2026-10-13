@@ -595,6 +595,7 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
         );
     }
 
+    #[allow(clippy::comparison_chain, clippy::float_cmp)] // Preserve upstream branch order and exact-zero preconditions.
     fn add_multiple_to_sparse_vector_with_common_index(
         &self,
         multiplier: Fractional,
@@ -605,61 +606,68 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
     ) {
         debug_assert!(self.is_cleaned_up());
         debug_assert!(accumulator.is_cleaned_up());
-        let mut merged = Vec::with_capacity(self.num_entries() + accumulator.num_entries());
+        debug_assert_ne!(self.look_up_coefficient(common_index), 0.0);
+        debug_assert_ne!(accumulator.look_up_coefficient(common_index), 0.0);
+        // Upstream builds the result in a temporary sparse vector and swaps
+        // its storage with the accumulator. Keep the same structure here:
+        // materializing an array of entry pairs and copying it back into two
+        // arrays adds a full extra pass on this presolve hot path.
+        let mut merged = Self::new();
+        merged.reserve(
+            (self.num_entries() + accumulator.num_entries())
+                .saturating_sub(usize::from(!retain_common) * 2),
+        );
         let (mut source, mut destination) = (0, 0);
-        while source < self.num_entries() || destination < accumulator.num_entries() {
-            let source_index = self.indices.get(source).copied();
-            let destination_index = accumulator.indices.get(destination).copied();
-            match (source_index, destination_index) {
-                (Some(left), Some(right)) if left == right => {
-                    if left == common_index {
-                        if retain_common {
-                            merged.push(accumulator.entry(destination));
-                        }
-                    } else {
-                        let value = accumulator.coefficients[destination]
-                            + multiplier * self.coefficients[source];
-                        if value.abs() > drop_tolerance {
-                            merged.push(SparseEntry {
-                                index: left,
-                                coefficient: value,
-                            });
-                        }
+        while source < self.num_entries() && destination < accumulator.num_entries() {
+            let source_index = self.indices[source];
+            let destination_index = accumulator.indices[destination];
+            if source_index == destination_index {
+                if source_index != common_index {
+                    let value = multiplier * self.coefficients[source]
+                        + accumulator.coefficients[destination];
+                    if value.abs() > drop_tolerance {
+                        merged.indices.push(source_index);
+                        merged.coefficients.push(value);
                     }
-                    source += 1;
-                    destination += 1;
+                } else if retain_common {
+                    merged.indices.push(destination_index);
+                    merged
+                        .coefficients
+                        .push(accumulator.coefficients[destination]);
                 }
-                (Some(left), Some(right)) if left < right => {
-                    let value = multiplier * self.coefficients[source];
-                    if left != common_index && value.abs() > drop_tolerance {
-                        merged.push(SparseEntry {
-                            index: left,
-                            coefficient: value,
-                        });
-                    }
-                    source += 1;
+                source += 1;
+                destination += 1;
+            } else if source_index < destination_index {
+                let value = multiplier * self.coefficients[source];
+                if value.abs() > drop_tolerance {
+                    merged.indices.push(source_index);
+                    merged.coefficients.push(value);
                 }
-                (Some(_) | None, Some(_)) => {
-                    let entry = accumulator.entry(destination);
-                    if entry.index != common_index || retain_common {
-                        merged.push(entry);
-                    }
-                    destination += 1;
-                }
-                (Some(left), None) => {
-                    let value = multiplier * self.coefficients[source];
-                    if left != common_index && value.abs() > drop_tolerance {
-                        merged.push(SparseEntry {
-                            index: left,
-                            coefficient: value,
-                        });
-                    }
-                    source += 1;
-                }
-                (None, None) => break,
+                source += 1;
+            } else {
+                merged.indices.push(destination_index);
+                merged
+                    .coefficients
+                    .push(accumulator.coefficients[destination]);
+                destination += 1;
             }
         }
-        accumulator.replace_entries(merged);
+        while source < self.num_entries() {
+            let value = multiplier * self.coefficients[source];
+            if value.abs() > drop_tolerance {
+                merged.indices.push(self.indices[source]);
+                merged.coefficients.push(value);
+            }
+            source += 1;
+        }
+        while destination < accumulator.num_entries() {
+            merged.indices.push(accumulator.indices[destination]);
+            merged
+                .coefficients
+                .push(accumulator.coefficients[destination]);
+            destination += 1;
+        }
+        accumulator.swap(&mut merged);
         accumulator.may_contain_duplicates.set(false);
     }
 
