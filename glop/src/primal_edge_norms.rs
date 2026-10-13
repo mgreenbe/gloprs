@@ -248,9 +248,10 @@ impl PrimalEdgeNorms {
             return Err(FactorizationError::DimensionMismatch);
         }
         if !self.recompute_edge_squared_norms {
-            update_row.compute_update_row_compact(
+            update_row.compute_update_row_compact_validated(
                 basis,
                 &self.matrix,
+                self.validated_rows.as_ref(),
                 relevant,
                 num_entries_in_relevant_columns,
                 leaving_row,
@@ -279,11 +280,16 @@ impl PrimalEdgeNorms {
                 self.direction_left_inverse.non_zeros_mut().clear();
             }
             if (direction.non_zeros().len() as f64) < threshold {
-                *self.direction_left_inverse.non_zeros_mut() = direction
-                    .non_zeros()
-                    .iter()
-                    .map(|row| ColIndex::from_usize(row.to_usize()))
-                    .collect();
+                // GLOP assigns to its retained std::vector here. Extend the
+                // existing Vec so repeated pivots reuse its allocation.
+                let non_zeros = self.direction_left_inverse.non_zeros_mut();
+                non_zeros.clear();
+                non_zeros.extend(
+                    direction
+                        .non_zeros()
+                        .iter()
+                        .map(|row| ColIndex::from_usize(row.to_usize())),
+                );
             }
             basis.transpose_solve_with_nonzeros(&mut self.direction_left_inverse)?;
             self.update_edge_squared_norms(
@@ -299,9 +305,10 @@ impl PrimalEdgeNorms {
             if self.num_devex_updates_since_reset > self.devex_weights_reset_period {
                 self.reset_devex_weights = true;
             } else {
-                update_row.compute_update_row_compact(
+                update_row.compute_update_row_compact_validated(
                     basis,
                     &self.matrix,
+                    self.validated_rows.as_ref(),
                     relevant,
                     num_entries_in_relevant_columns,
                     leaving_row,
@@ -351,7 +358,10 @@ impl PrimalEdgeNorms {
         basis: &BasisRepresentation,
         relevant: &ColBitVec,
     ) -> Result<(), FactorizationError> {
-        self.edge_squared_norms = vec![1.0; self.matrix.num_cols().to_usize()];
+        // GLOP resizes its retained norm vector; existing entries remain until
+        // the relevant-column loop overwrites them on recomputation.
+        self.edge_squared_norms
+            .resize(self.matrix.num_cols().to_usize(), 1.0);
         let test_limit = self.time_limit.is_some() && basis.number_of_entries_in_lu() > 10_000;
         for typed_column in relevant.iter_ones() {
             let column = typed_column.to_usize();
@@ -390,6 +400,11 @@ impl PrimalEdgeNorms {
             .num_cols()
             .to_usize()
             .saturating_sub(self.matrix.num_rows().to_usize());
+        let left_inverse_values = self.direction_left_inverse.values().as_slice();
+        let validated_dot = self
+            .validated_rows
+            .as_ref()
+            .map(|rows| rows.bind(&self.matrix, left_inverse_values));
         let mut lower_bounded_norms = 0_i64;
         for &column in update_row.non_zero_positions() {
             let coefficient = update_row.coefficient(column);
@@ -398,12 +413,11 @@ impl PrimalEdgeNorms {
                     .value(ColIndex::from_usize(column - first_slack))
             } else {
                 let column = ColIndex::from_usize(column);
-                let values = self.direction_left_inverse.values().as_slice();
-                if let Some(validated) = &self.validated_rows {
-                    self.matrix
-                        .column_scalar_product_validated(validated, column, values)
+                if let Some(dot) = validated_dot {
+                    dot.column_scalar_product(column)
                 } else {
-                    self.matrix.column_scalar_product_slice(column, values)
+                    self.matrix
+                        .column_scalar_product_slice(column, left_inverse_values)
                 }
             };
             self.num_operations +=

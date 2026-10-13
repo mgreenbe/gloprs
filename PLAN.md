@@ -2067,6 +2067,138 @@ so paired kernel measurements remain the next performance evidence to collect.
    remaining update-row kernel and pricing/edge-norm shares with matched
    inputs and operation counts; avoid broad unchecked access without an
    equally strong lifetime/dimension proof.
+   The failed update-row extension had targeted the solver's later cached
+   call, not the hot first call inside `PrimalEdgeNorms`. Passing its existing
+   validated matrix token through those two first-call sites reduced paired
+   `fit2d` solve time by 7.1% with bitwise-identical terminal outcomes.
+   Fast-96 matched-solve and public-pipeline ratios are now 1.104× and
+   1.090× native; strict trajectories and public KKT still pass. Continue
+   with residual pricing and column-wise update-row profiling rather than
+   broad bounds-check removal. A fresh `dfl001` sample after this change
+   shows substantial time in both implementations' update-row, edge-norm,
+   pricing, and transpose-solve kernels. Native's three transpose-solve
+   instantiations collectively have more top-of-stack samples than Rust's
+   single symbol, so this sample does not isolate transpose substitution
+   as the source of the remaining gap. Use matched kernel inputs and paired
+   timing before modifying that path.
+   A literal branchless bitset-XOR translation of GLOP's primal-price
+   candidate test was also measured and dropped: a serial paired A/B showed
+   no gain (`dfl001` 1.004× and `fit2d` 1.009× old). Its short-circuit Rust
+   form makes the same decisions, and the strict trajectory gate passed.
+   A validated trailing-slack direct lookup in column-wise update-row was
+   also exact but slower on paired `fit2d` solves (1.010× after hoisting
+   validation), so it was dropped. The one-entry compact-column dot remains
+   a semantic match; revisit only with a measured whole-loop specialization.
+   The primal Harris first pass now matches upstream's sign-specialized
+   template dispatch. Paired `dfl001` and `fit2d` solves were both 1.000×
+   old; this is a fidelity improvement, not a measured performance gain.
+   In primal edge norms, sparse direction positions now clear-and-extend a
+   retained buffer instead of allocating a temporary vector each pivot, and
+   exact norm recomputation resizes the retained norm vector as GLOP does.
+   Paired timings were near neutral; the edits primarily correct allocation
+   and storage-lifecycle fidelity. The serial fast-96 matched-presolve
+   rerun measured 1.098× native (previous cross-run sample: 1.104×), with
+   all statuses and iteration counts unchanged; strict trajectories and
+   original-model public KKT checks pass.
+   Binding the validated compact matrix and RHS once per update-row/edge-norm
+   loop eliminates repeated identity and length checks without changing
+   arithmetic. Seven-trial paired old/new solves improved `fit2d` by 2.4%
+   and `dfl001` by 1.0%. The serial fast-96 matched-presolve ratio is now
+   1.088× native (previous cross-run 1.098×), with strict trajectories and
+   public KKT unchanged. The public pipeline remains 1.090× native in the
+   serial fast-96 rerun, with all 96 path lengths matched. Next target
+   residual short-column compact-dot
+   overhead and the still-slower per-pivot pricing/update-row work using
+   matched inputs.
+   The middle-product update path now keeps GLOP's separate compact row and
+   coefficient arrays, reuses the right scattered scratchpad, and appends its
+   stored left column directly instead of building two temporary sparse
+   vectors per pivot. The packed four-accumulator dot retains upstream's
+   reduction order. All six 300-case native basis-update suites, the 1,000-case
+   isolated rank-one trace, strict fast-96 trajectories, the public fast-96
+   postsolve/KKT gate, and the release workspace suite pass. Paired direct
+   append versus scratch-only timing improved `fit2d` and `dfl001` by 1.8%
+   and 1.3%; the combined representation/lifecycle edit versus the pre-audit
+   Rust binary measured 0.996 on `fit2d`, 0.972 on `fit2p` and `stocfor3`,
+   and an inconclusive 0.995 on thermally variable `dfl001`. A serial
+   fast-96 sample measured 1.063× native for matched solves and 1.060× for
+   the public pipeline; cross-run differences are not assigned entirely to
+   this edit. An isolated seven-trial rank-one right/left dense-solve probe
+   with 32–96 updates and 4–64 entries per update places Rust at 0.827–0.996×
+   native. Thus the packed update solve itself is not the next bottleneck on
+   these patterns. Continue with matched update-row/edge-norm kernel timing
+   and paired end-to-end evidence.
+   A safe two-element slice for compact-column start pointers was tested as
+   a way to collapse two bounds checks. The isolated bound-dot benchmark
+   became slower at 16/64 entries per column (6.04→6.43 ns and 19.36→19.86
+   ns); the change was reverted. It is not evidence that start-pointer checks
+   explain the short-column gap.
+   A matched native/Rust column-wise `UpdateRow` benchmark exposed a fidelity
+   error in Rust's benchmark hook: it scattered its dense lhs while GLOP
+   assigned the dense vector. After matching the hook, all 500 native traces
+   still agree. With 2,048 structural plus 2,048 slack columns, validated
+   Rust/native ratios are 1.201× for empty structural columns, 1.231× at
+   four entries, 1.023× at 16, and 0.851× at 64. Subtracting the empty-case
+   baseline leaves 3.03 µs Rust versus 2.30 µs native for the four-entry
+   structural products. The unvalidated four-entry ratio is 1.344×. An
+   exact-order short-column branch was slower and reverted. Next inspect
+   generated short-column code and per-column overhead with this corrected
+   hook; do not conflate input scattering with product cost.
+   Hoisting the compact/sparse and validated/unvalidated dispatch out of the
+   update-row column loop lowered the corrected validated four-entry hook
+   ratio from 1.231× to 1.142× native, with 16/64-entry ratios now 0.962×
+   and 0.829×. A serial paired fast-96 old/new presolved full-solve run (three
+   trials and one warm-up) totaled 10.241 s versus 10.191 s (0.995×), with
+   unchanged status and iteration count for every model. Focused seven-trial
+   `fit2d` improved 2.4%, while `dfl001` worsened 0.9%, so this is a small
+   aggregate gain, not universal. Strict fast-96 trajectories and public
+   original-model KKT checks pass. Continue to profile `dfl001` separately.
+   Opt-in production capture and native/Rust replay now isolate actual
+   column-wise operands for `dfl001` and `fit2d` (captured under ignored
+   `target/phase8-update-row-production/`). On a later `dfl001` call, a
+   5,702-column replay showed a large `Vec::push`/output-path cost; GLOP
+   instead pre-sizes its nonzero list and writes through a cursor. Mirroring
+   that pattern improved the isolated Rust replay from about 27–28 to 21 us,
+   but serial paired presolved solves did not improve: `dfl001` 1.004x,
+   `fit2d` 0.992x, `fit2p` 0.997x, `stocfor3` 1.013x (new/old; seven timed
+   trials). The production edit was reverted. Keep the replay to investigate
+   the short-column dot and output interaction, but prioritize measured
+   full-solve gains; the isolated kernel gap is not yet a demonstrated
+   end-to-end bottleneck.
+   The follow-up fidelity fix now stores the nonzero-position list at full
+   column width with a separate occupied-prefix count, exactly as upstream
+   does. All four population paths write into the retained buffer; same-size
+   rebinds keep its allocation. A dedicated test checks the buffer pointer
+   across repeated updates and a rebind. Five-trial serial paired presolved
+   solves versus the append implementation gave new/old `dfl001` 1.003x,
+   `fit2d` 0.988x, `fit2p` 0.998x, and `stocfor3` 1.009x, with aggregate
+   1.000x. Retain this change for upstream fidelity and allocation stability,
+   not a claimed whole-solver speedup.
+   Fresh matched `fit2d`/`dfl001` native/Rust solve samples no longer show a
+   clear pricing, edge-norm, or column-wise update-row excess after the above
+   changes. In `dfl001`, the primal Harris ratio test was the clearer outlier:
+   473 Rust top-of-stack samples versus 270 native first-pass samples in an
+   eight-second sample. The Rust first pass indexed three parallel variable
+   arrays independently. Asserting their equal lengths once before the scan
+   lets the compiler share the index bound while retaining entirely safe
+   indexing and GLOP's numerical order. A follow-up Rust sample fell to 243
+   ratio-test samples. Five-trial paired presolved solves gave `dfl001`
+   new/old 0.958x and `fit2d` 1.001x; the complete fast-96 three-trial A/B
+   improved 10.131 to 9.914 s (0.979x) with all outcomes matched. The
+   serial native/Rust fast-96 rerun measured 9.632 versus 9.980 s (1.036x),
+   median model 1.070x and sqrt-nnz weighted geometric 1.066x. Strict
+   fast-96 trajectories, public postsolve/KKT, release workspace tests, and
+   Clippy pass. Next profile the residual absolute outliers `dfl001`,
+   `fit2d`, `stocfor3`, `fit2p`, and `d6cube` rather than assume the prior
+   update-row/pricing attribution still holds.
+   A first matched `stocfor3` sample places Rust's largest costs in
+   transpose triangular solve (1,069 samples), scattered permutation (324),
+   scattered clear (298), and the primal loop; native's transpose-lower and
+   transpose-upper variants contribute at least 1,153 samples, with another
+   413 in a deduplicated symbol that needs attribution. Thus the 1.183x
+   full-solve ratio should be localized with a matched `stocfor3` BTRAN/
+   permutation probe before changing the transpose solve. The two samples
+   are ignored `target/phase8-stocfor3-current-{rust,native}.sample.txt`.
 2. Repeat the serial fast-96 stage and public-pipeline comparisons after a
    measured change; record medians and dispersion, and rank regressions by
    absolute time. Keep `qap15` outside deterministic wall-time gates until

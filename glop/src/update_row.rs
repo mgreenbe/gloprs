@@ -10,7 +10,7 @@ use lp_data::lp_types::{
     ColBitVec, ColIndex, RowIndex, VectorIndex, deterministic_time_for_fp_operations,
 };
 use lp_data::scattered_vector::ScatteredRow;
-use lp_data::sparse::{CompactSparseMatrix, SparseMatrix};
+use lp_data::sparse::{CompactSparseMatrix, SparseMatrix, ValidatedCompactRows};
 use lp_data::sparse_vector::SparseColumn;
 
 use crate::basis_representation::BasisRepresentation;
@@ -52,28 +52,32 @@ fn column_scalar_product(column: &SparseColumn, values: &[f64]) -> f64 {
 #[derive(Clone, Copy)]
 enum MatrixSource<'a> {
     Sparse(&'a SparseMatrix),
-    Compact(&'a CompactSparseMatrix),
+    Compact(&'a CompactSparseMatrix, Option<&'a ValidatedCompactRows>),
 }
 
 impl MatrixSource<'_> {
     fn num_rows(self) -> RowIndex {
         match self {
             Self::Sparse(matrix) => matrix.num_rows(),
-            Self::Compact(matrix) => matrix.num_rows(),
+            Self::Compact(matrix, _) => matrix.num_rows(),
         }
     }
 
     fn num_cols(self) -> ColIndex {
         match self {
             Self::Sparse(matrix) => matrix.num_cols(),
-            Self::Compact(matrix) => matrix.num_cols(),
+            Self::Compact(matrix, _) => matrix.num_cols(),
         }
     }
 
+    #[cfg(test)]
     fn column_scalar_product(self, column: ColIndex, values: &[f64]) -> f64 {
         match self {
             Self::Sparse(matrix) => column_scalar_product(matrix.column(column), values),
-            Self::Compact(matrix) => matrix.column_scalar_product_slice(column, values),
+            Self::Compact(matrix, Some(rows)) => {
+                matrix.column_scalar_product_validated(rows, column, values)
+            }
+            Self::Compact(matrix, None) => matrix.column_scalar_product_slice(column, values),
         }
     }
 }
@@ -85,6 +89,7 @@ pub struct UpdateRow {
     unit_row_left_inverse: ScatteredRow,
     filtered_non_zeros: Vec<usize>,
     non_zero_positions: Vec<usize>,
+    num_non_zeros: usize,
     non_zero_position_set: ColBitVec,
     coefficients: Vec<f64>,
     left_inverse_computed_for: Option<usize>,
@@ -117,7 +122,9 @@ impl UpdateRow {
             transposed_matrix,
             unit_row_left_inverse: ScatteredRow::new(ColIndex::new(num_rows.value())),
             filtered_non_zeros: Vec::new(),
-            non_zero_positions: Vec::new(),
+            // GLOP keeps one slot per column and tracks the occupied prefix.
+            non_zero_positions: vec![0; num_cols.to_usize()],
+            num_non_zeros: 0,
             non_zero_position_set: ColBitVec::new(num_cols),
             coefficients: vec![0.0; num_cols.to_usize()],
             left_inverse_computed_for: None,
@@ -138,7 +145,9 @@ impl UpdateRow {
         transposed.populate_from_transpose(matrix);
         self.transposed_matrix = Rc::new(transposed);
         self.unit_row_left_inverse = ScatteredRow::new(ColIndex::new(matrix.num_rows().value()));
-        self.non_zero_positions.clear();
+        self.non_zero_positions
+            .resize(matrix.num_cols().to_usize(), 0);
+        self.num_non_zeros = 0;
         self.non_zero_position_set = ColBitVec::new(matrix.num_cols());
         self.coefficients.resize(matrix.num_cols().to_usize(), 0.0);
         self.invalidate();
@@ -231,7 +240,26 @@ impl UpdateRow {
     ) -> Result<(), FactorizationError> {
         self.compute_update_row_from_source(
             basis,
-            MatrixSource::Compact(matrix),
+            MatrixSource::Compact(matrix, None),
+            relevant,
+            num_entries_in_relevant_columns,
+            leaving_row,
+        )
+    }
+
+    /// Reuses a once-validated immutable compact matrix for the hot product.
+    pub(crate) fn compute_update_row_compact_validated(
+        &mut self,
+        basis: &BasisRepresentation,
+        matrix: &CompactSparseMatrix,
+        rows: Option<&ValidatedCompactRows>,
+        relevant: &ColBitVec,
+        num_entries_in_relevant_columns: usize,
+        leaving_row: usize,
+    ) -> Result<(), FactorizationError> {
+        self.compute_update_row_from_source(
+            basis,
+            MatrixSource::Compact(matrix, rows),
             relevant,
             num_entries_in_relevant_columns,
             leaving_row,
@@ -344,7 +372,7 @@ impl UpdateRow {
 
     #[must_use]
     pub fn non_zero_positions(&self) -> &[usize] {
-        &self.non_zero_positions
+        &self.non_zero_positions[..self.num_non_zeros]
     }
 
     #[must_use]
@@ -421,18 +449,55 @@ impl UpdateRow {
         left_inverse: &[f64],
         algorithm: UpdateRowAlgorithm,
     ) -> Result<(), FactorizationError> {
+        self.compute_update_row_for_benchmark_source(
+            MatrixSource::Sparse(matrix),
+            relevant,
+            left_inverse,
+            algorithm,
+        )
+    }
+
+    /// Runs GLOP's benchmark hook against the solver's compact matrix layout.
+    ///
+    /// # Errors
+    ///
+    /// Returns a dimension error when either input slice has the wrong size.
+    #[doc(hidden)]
+    pub fn compute_update_row_for_benchmark_compact(
+        &mut self,
+        matrix: &CompactSparseMatrix,
+        validated_rows: Option<&ValidatedCompactRows>,
+        relevant: &ColBitVec,
+        left_inverse: &[f64],
+        algorithm: UpdateRowAlgorithm,
+    ) -> Result<(), FactorizationError> {
+        self.compute_update_row_for_benchmark_source(
+            MatrixSource::Compact(matrix, validated_rows),
+            relevant,
+            left_inverse,
+            algorithm,
+        )
+    }
+
+    fn compute_update_row_for_benchmark_source(
+        &mut self,
+        matrix: MatrixSource<'_>,
+        relevant: &ColBitVec,
+        left_inverse: &[f64],
+        algorithm: UpdateRowAlgorithm,
+    ) -> Result<(), FactorizationError> {
         if left_inverse.len() != matrix.num_rows().to_usize()
             || relevant.len().to_usize() != matrix.num_cols().to_usize()
         {
             return Err(FactorizationError::DimensionMismatch);
         }
-        self.unit_row_left_inverse.clear();
-        for (index, &value) in left_inverse.iter().enumerate() {
-            if value != 0.0 {
-                self.unit_row_left_inverse
-                    .scatter_entry_without_mask(ColIndex::from_usize(index), value);
-            }
-        }
+        // GLOP's benchmark hook assigns the dense lhs once, then computes
+        // its nonzero positions separately; it does not scatter each entry.
+        self.unit_row_left_inverse
+            .values_mut()
+            .as_mut_slice()
+            .copy_from_slice(left_inverse);
+        self.unit_row_left_inverse.non_zeros_mut().clear();
         self.filtered_non_zeros.clear();
         self.filtered_non_zeros.extend(
             left_inverse
@@ -442,7 +507,7 @@ impl UpdateRow {
         );
         match algorithm {
             UpdateRowAlgorithm::Column => {
-                self.compute_column_wise(MatrixSource::Sparse(matrix), relevant);
+                self.compute_column_wise(matrix, relevant);
             }
             UpdateRowAlgorithm::Row => self.compute_row_wise(relevant),
             UpdateRowAlgorithm::RowHypersparse => {
@@ -491,18 +556,19 @@ impl UpdateRow {
             }
         }
         self.non_zero_position_set.intersection(relevant);
-        self.non_zero_positions.clear();
+        self.num_non_zeros = 0;
         for position in self.non_zero_position_set.iter_ones() {
             let column = position.to_usize();
             if self.coefficients[column].abs() > self.drop_tolerance {
-                self.non_zero_positions.push(column);
+                self.non_zero_positions[self.num_non_zeros] = column;
+                self.num_non_zeros += 1;
             }
         }
     }
 
     fn compute_single_row(&mut self, relevant: &ColBitVec) {
         self.coefficients.fill(0.0);
-        self.non_zero_positions.clear();
+        self.num_non_zeros = 0;
         let row = self.filtered_non_zeros[0];
         let multiplier = self.left_inverse_value(row);
         for (column, entry_value) in self
@@ -517,43 +583,173 @@ impl UpdateRow {
             let value = multiplier * entry_value;
             if value.abs() > self.drop_tolerance {
                 self.coefficients[column] = value;
-                self.non_zero_positions.push(column);
+                self.non_zero_positions[self.num_non_zeros] = column;
+                self.num_non_zeros += 1;
             }
         }
     }
 
     fn compute_column_wise(&mut self, matrix: MatrixSource<'_>, relevant: &ColBitVec) {
+        let left_inverse_values = self.unit_row_left_inverse.values().as_slice();
+        #[cfg(feature = "phase8_update_row_probe")]
+        phase8_probe::record(matrix, relevant, left_inverse_values);
+        match matrix {
+            MatrixSource::Compact(compact, Some(rows)) => {
+                let dot = rows.bind(compact, left_inverse_values);
+                Self::compute_column_wise_loop(
+                    &mut self.coefficients,
+                    &mut self.non_zero_positions,
+                    &mut self.num_non_zeros,
+                    self.drop_tolerance,
+                    matrix.num_cols(),
+                    relevant,
+                    |column| dot.column_scalar_product(column),
+                );
+            }
+            MatrixSource::Compact(compact, None) => {
+                Self::compute_column_wise_loop(
+                    &mut self.coefficients,
+                    &mut self.non_zero_positions,
+                    &mut self.num_non_zeros,
+                    self.drop_tolerance,
+                    matrix.num_cols(),
+                    relevant,
+                    |column| compact.column_scalar_product_slice(column, left_inverse_values),
+                );
+            }
+            MatrixSource::Sparse(sparse) => {
+                Self::compute_column_wise_loop(
+                    &mut self.coefficients,
+                    &mut self.non_zero_positions,
+                    &mut self.num_non_zeros,
+                    self.drop_tolerance,
+                    matrix.num_cols(),
+                    relevant,
+                    |column| column_scalar_product(sparse.column(column), left_inverse_values),
+                );
+            }
+        }
+    }
+
+    #[inline]
+    fn compute_column_wise_loop(
+        coefficients: &mut Vec<f64>,
+        non_zero_positions: &mut [usize],
+        num_non_zeros: &mut usize,
+        drop_tolerance: f64,
+        num_cols: ColIndex,
+        relevant: &ColBitVec,
+        dot: impl Fn(ColIndex) -> f64,
+    ) {
         // GLOP's coefficient_.resize(num_cols, 0.0) retains existing entries.
         // Only columns reported in non_zero_positions are read by consumers;
         // clearing this full vector each pivot is both unnecessary and unlike
         // the upstream column-wise kernel.
-        self.coefficients.resize(matrix.num_cols().to_usize(), 0.0);
-        self.non_zero_positions.clear();
+        coefficients.resize(num_cols.to_usize(), 0.0);
+        // The full-width buffer is allocated at construction (or expanded on
+        // rebind) and is never shrunk after an update. Match GLOP's cursor
+        // writes into its retained non_zero_position_list_.
+        *num_non_zeros = 0;
         for typed_column in relevant.iter_ones() {
             let column = typed_column.to_usize();
-            let coefficient = matrix.column_scalar_product(
-                ColIndex::from_usize(column),
-                self.unit_row_left_inverse.values().as_slice(),
-            );
-            if coefficient.abs() > self.drop_tolerance {
-                self.coefficients[column] = coefficient;
-                self.non_zero_positions.push(column);
+            let coefficient = dot(typed_column);
+            if coefficient.abs() > drop_tolerance {
+                coefficients[column] = coefficient;
+                non_zero_positions[*num_non_zeros] = column;
+                *num_non_zeros += 1;
             }
         }
     }
 
     fn rebuild_non_zeros(&mut self, relevant: &ColBitVec) {
-        self.non_zero_positions.clear();
+        self.num_non_zeros = 0;
         for (column, &value) in self.coefficients.iter().enumerate() {
             if relevant.contains(ColIndex::from_usize(column)) && value.abs() > self.drop_tolerance
             {
-                self.non_zero_positions.push(column);
+                self.non_zero_positions[self.num_non_zeros] = column;
+                self.num_non_zeros += 1;
             }
         }
     }
 
     fn left_inverse_value(&self, row: usize) -> f64 {
         self.unit_row_left_inverse.value(ColIndex::from_usize(row))
+    }
+}
+
+#[cfg(feature = "phase8_update_row_probe")]
+mod phase8_probe {
+    use std::fs::{self, File};
+    use std::io::Write;
+    use std::path::PathBuf;
+    use std::sync::OnceLock;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use super::{ColBitVec, ColIndex, MatrixSource, VectorIndex};
+
+    struct Config {
+        directory: PathBuf,
+        calls: Vec<usize>,
+    }
+
+    static CONFIG: OnceLock<Option<Config>> = OnceLock::new();
+    static CALL: AtomicUsize = AtomicUsize::new(0);
+
+    pub(super) fn record(matrix: MatrixSource<'_>, relevant: &ColBitVec, lhs: &[f64]) {
+        let Some(config) = CONFIG.get_or_init(|| {
+            let directory = std::env::var_os("GLOPRS_UPDATE_ROW_CAPTURE_DIR")?;
+            let calls = std::env::var("GLOPRS_UPDATE_ROW_CAPTURE_CALLS")
+                .unwrap_or_else(|_| "0".to_owned())
+                .split(',')
+                .filter_map(|value| value.parse().ok())
+                .collect();
+            Some(Config {
+                directory: PathBuf::from(directory),
+                calls,
+            })
+        }) else {
+            return;
+        };
+        let call = CALL.fetch_add(1, Ordering::Relaxed);
+        if !config.calls.contains(&call) {
+            return;
+        }
+        fs::create_dir_all(&config.directory).expect("create update-row probe directory");
+        let mut file = File::create(config.directory.join(format!("call-{call:06}.txt")))
+            .expect("create update-row probe");
+        writeln!(file, "{} {}", lhs.len(), matrix.num_cols().to_usize()).unwrap();
+        for column in 0..matrix.num_cols().to_usize() {
+            match matrix {
+                MatrixSource::Compact(compact, _) => {
+                    let entries = compact.column(ColIndex::from_usize(column));
+                    writeln!(file, "{}", entries.len()).unwrap();
+                    for (row, coefficient) in entries.iter() {
+                        writeln!(file, "{} {coefficient:.17e}", row.to_usize()).unwrap();
+                    }
+                }
+                MatrixSource::Sparse(sparse) => {
+                    let entries = sparse.column(ColIndex::from_usize(column));
+                    writeln!(file, "{}", entries.num_entries()).unwrap();
+                    for entry in entries {
+                        writeln!(
+                            file,
+                            "{} {:.17e}",
+                            entry.index().to_usize(),
+                            entry.coefficient()
+                        )
+                        .unwrap();
+                    }
+                }
+            }
+        }
+        for value in lhs {
+            writeln!(file, "{value:.17e}").unwrap();
+        }
+        let positions: Vec<_> = relevant.iter_ones().collect();
+        writeln!(file, "{}", positions.len()).unwrap();
+        for column in positions {
+            writeln!(file, "{}", column.to_usize()).unwrap();
+        }
     }
 }
 
@@ -636,5 +832,66 @@ mod tests {
             ColIndex::new(2),
         );
         assert!(Rc::ptr_eq(&update_row.transposed_matrix, &transpose));
+    }
+
+    #[test]
+    fn nonzero_position_storage_is_full_width_and_reused() {
+        let mut matrix = CompactSparseMatrix::default();
+        matrix.reset(RowIndex::new(2));
+        for _ in 0..4 {
+            matrix.close_current_column();
+        }
+        let mut update_row = UpdateRow::new_from_compact(&matrix);
+        let storage = update_row.non_zero_positions.as_ptr();
+        assert_eq!(update_row.non_zero_positions.len(), 4);
+        let mut relevant = ColBitVec::new(ColIndex::new(4));
+        for column in 0..4 {
+            relevant.set(ColIndex::new(column));
+        }
+        for _ in 0..10 {
+            UpdateRow::compute_column_wise_loop(
+                &mut update_row.coefficients,
+                &mut update_row.non_zero_positions,
+                &mut update_row.num_non_zeros,
+                1e-14,
+                ColIndex::new(4),
+                &relevant,
+                |column| if column.value() % 2 == 0 { 1.0 } else { 0.0 },
+            );
+            assert_eq!(update_row.non_zero_positions(), &[0, 2]);
+            assert_eq!(update_row.non_zero_positions.len(), 4);
+            assert_eq!(update_row.non_zero_positions.as_ptr(), storage);
+        }
+        update_row.rebind_compact(&matrix);
+        assert_eq!(update_row.non_zero_positions.as_ptr(), storage);
+        assert!(update_row.non_zero_positions().is_empty());
+        update_row
+            .coefficients
+            .copy_from_slice(&[0.0, 2.0, 0.0, 3.0]);
+        update_row.rebuild_non_zeros(&relevant);
+        assert_eq!(update_row.non_zero_positions(), &[1, 3]);
+        assert_eq!(update_row.non_zero_positions.as_ptr(), storage);
+    }
+
+    #[test]
+    fn validated_compact_update_row_dot_matches_checked_bits() {
+        let mut matrix = CompactSparseMatrix::default();
+        matrix.reset(RowIndex::new(4));
+        for (row, value) in [(0, 1.25), (2, -0.5), (3, 3.0), (1, 0.75)] {
+            matrix.add_entry_to_current_column(RowIndex::from_usize(row), value);
+        }
+        matrix.close_current_column();
+        let matrix = Rc::new(matrix);
+        let rows = CompactSparseMatrix::validated_rows(Rc::clone(&matrix), 4).unwrap();
+        let values = [1.0e16, 0.5, -2.0, -1.0e16];
+        let column = ColIndex::new(0);
+        assert_eq!(
+            MatrixSource::Compact(&matrix, Some(&rows))
+                .column_scalar_product(column, &values)
+                .to_bits(),
+            MatrixSource::Compact(&matrix, None)
+                .column_scalar_product(column, &values)
+                .to_bits()
+        );
     }
 }

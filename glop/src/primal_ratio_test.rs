@@ -32,6 +32,54 @@ pub struct PrimalRatioWorkspace {
     equivalent_leaving_choices: Vec<RowIndex>,
 }
 
+// GLOP instantiates the Harris first pass separately for each entering
+// direction. Keep the sign out of the per-entry loop in the Rust port too.
+#[allow(clippy::too_many_arguments)]
+fn harris_candidates<const POSITIVE: bool>(
+    direction: &ScatteredColumn,
+    variable_values: &[f64],
+    lower_bounds: &[f64],
+    upper_bounds: &[f64],
+    basis: &RowToColMapping,
+    threshold: f64,
+    minimum_delta: f64,
+    harris_tolerance: f64,
+    bound_flip_ratio: f64,
+    candidates: &mut Vec<(RowIndex, f64)>,
+) -> f64 {
+    let mut harris_ratio = bound_flip_ratio;
+    candidates.clear();
+    for entry in direction {
+        let coefficient = entry.coefficient();
+        let magnitude = coefficient.abs();
+        if magnitude <= threshold {
+            continue;
+        }
+        let row = entry.row();
+        let column = basis[row].to_usize();
+        // Equal lengths are asserted before the Harris scan so the checked
+        // value access establishes the index bound for all three arrays.
+        let value = variable_values[column];
+        let ratio = if POSITIVE {
+            if coefficient > 0.0 {
+                (upper_bounds[column] - value) / coefficient
+            } else {
+                (lower_bounds[column] - value) / coefficient
+            }
+        } else if coefficient > 0.0 {
+            (value - lower_bounds[column]) / coefficient
+        } else {
+            (value - upper_bounds[column]) / coefficient
+        };
+        if ratio <= harris_ratio {
+            candidates.push((row, ratio));
+            harris_ratio = harris_ratio
+                .min((minimum_delta / magnitude).max(ratio + harris_tolerance / magnitude));
+        }
+    }
+    harris_ratio
+}
+
 #[must_use]
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_lines)]
@@ -81,6 +129,8 @@ pub fn choose_leaving_variable_row_with_workspace(
     random: &SharedRandom,
     workspace: &mut PrimalRatioWorkspace,
 ) -> LeavingChoice {
+    assert_eq!(variable_values.len(), lower_bounds.len());
+    assert_eq!(variable_values.len(), upper_bounds.len());
     debug_assert_ne!(reduced_cost, 0.0);
     let entering = entering_column.to_usize();
     let mut current_ratio = if reduced_cost > 0.0 {
@@ -98,34 +148,34 @@ pub fn choose_leaving_variable_row_with_workspace(
     } else {
         parameters.ratio_test_zero_threshold
     };
-    let mut harris_ratio = current_ratio;
-    workspace.candidates.clear();
     workspace.equivalent_leaving_choices.clear();
-    for entry in direction {
-        let magnitude = entry.coefficient().abs();
-        if magnitude <= threshold {
-            continue;
-        }
-        let row = entry.row();
-        let column = basis[row].to_usize();
-        let value = variable_values[column];
-        let ratio = if reduced_cost > 0.0 {
-            if entry.coefficient() > 0.0 {
-                (upper_bounds[column] - value) / entry.coefficient()
-            } else {
-                (lower_bounds[column] - value) / entry.coefficient()
-            }
-        } else if entry.coefficient() > 0.0 {
-            (value - lower_bounds[column]) / entry.coefficient()
-        } else {
-            (value - upper_bounds[column]) / entry.coefficient()
-        };
-        if ratio <= harris_ratio {
-            workspace.candidates.push((row, ratio));
-            harris_ratio = harris_ratio
-                .min((minimum_delta / magnitude).max(ratio + harris_tolerance / magnitude));
-        }
-    }
+    let harris_ratio = if reduced_cost > 0.0 {
+        harris_candidates::<true>(
+            direction,
+            variable_values,
+            lower_bounds,
+            upper_bounds,
+            basis,
+            threshold,
+            minimum_delta,
+            harris_tolerance,
+            current_ratio,
+            &mut workspace.candidates,
+        )
+    } else {
+        harris_candidates::<false>(
+            direction,
+            variable_values,
+            lower_bounds,
+            upper_bounds,
+            basis,
+            threshold,
+            minimum_delta,
+            harris_tolerance,
+            current_ratio,
+            &mut workspace.candidates,
+        )
+    };
     if current_ratio <= harris_ratio {
         return LeavingChoice::BoundFlip {
             step: current_ratio,

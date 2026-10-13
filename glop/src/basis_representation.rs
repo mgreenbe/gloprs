@@ -178,6 +178,12 @@ enum ReplacementColumn {
     Problem(ColIndex),
 }
 
+#[derive(Clone, Copy)]
+enum LeftUpdateSource<'a> {
+    Scattered(&'a ScatteredRow),
+    Stored(ColIndex),
+}
+
 impl BasisMatrix {
     fn probe_entries(&self) -> Vec<(usize, usize, f64)> {
         let mut entries = Vec::new();
@@ -332,6 +338,7 @@ pub struct BasisRepresentation {
     left_pool_mapping: RefCell<Vec<Option<ColIndex>>>,
     right_storage: RefCell<CompactSparseMatrix>,
     right_pool_mapping: RefCell<Vec<Option<ColIndex>>>,
+    right_update_scratch: Option<ScatteredColumn>,
     stats: StatsGroup,
     probe: Option<Rc<RefCell<SimplexProbe>>>,
 }
@@ -518,6 +525,7 @@ impl BasisRepresentation {
             left_pool_mapping: RefCell::new(Vec::new()),
             right_storage: RefCell::new(right_storage),
             right_pool_mapping: RefCell::new(Vec::new()),
+            right_update_scratch: Some(ScatteredColumn::new(RowIndex::from_usize(dimension))),
             stats: StatsGroup::new("BasisFactorization"),
             probe: None,
         })
@@ -1182,8 +1190,8 @@ impl BasisRepresentation {
         self.finish_column_replacement(
             leaving_column,
             ReplacementColumn::Owned(entering_column),
-            right_update,
-            &left_update,
+            &mut right_update,
+            LeftUpdateSource::Scattered(&left_update),
         )
     }
 
@@ -1274,24 +1282,31 @@ impl BasisRepresentation {
             self.force_refactorization()?;
             return Ok(());
         };
-        let mut right_update =
-            ScatteredColumn::new(lp_data::lp_types::RowIndex::from_usize(self.dimension()));
+        let mut right_update = self
+            .right_update_scratch
+            .take()
+            .expect("reusable right update workspace is available");
+        right_update.clear();
         for (row, value) in self.right_storage.get_mut().column(right_index).iter() {
             right_update.scatter_entry_without_mask(row, value);
         }
-        let mut left_update = ScatteredRow::new(ColIndex::from_usize(self.dimension()));
-        for (row, value) in self.left_storage.get_mut().column(left_index).iter() {
-            left_update.scatter_entry_without_mask(ColIndex::from_usize(row.to_usize()), value);
-        }
-        self.finish_column_replacement(leaving_column, entering_column, right_update, &left_update)
+        let result = self.finish_column_replacement(
+            leaving_column,
+            entering_column,
+            &mut right_update,
+            LeftUpdateSource::Stored(left_index),
+        );
+        right_update.clear();
+        self.right_update_scratch = Some(right_update);
+        result
     }
 
     fn finish_column_replacement(
         &mut self,
         leaving_column: usize,
         entering_column: ReplacementColumn,
-        mut right_update: ScatteredColumn,
-        left_update: &ScatteredRow,
+        right_update: &mut ScatteredColumn,
+        left_update: LeftUpdateSource<'_>,
     ) -> Result<(), FactorizationError> {
         if self.updates.len() >= self.max_updates
             && (!self.parameters.dynamically_adjust_refactorization_period
@@ -1319,51 +1334,70 @@ impl BasisRepresentation {
         for (row, value) in self.factorization.column_of_upper(leaving_column) {
             right_update.add(lp_data::lp_types::RowIndex::from_usize(row), -value);
         }
-        let u: Vec<_> = if right_update_is_dense {
-            right_update
-                .values()
-                .as_slice()
-                .iter()
-                .copied()
-                .enumerate()
-                .filter(|entry| entry.1 != 0.0)
-                .collect()
-        } else {
-            right_update
-                .iter()
-                .map(|entry| (entry.index().to_usize(), entry.coefficient()))
-                .filter(|entry| entry.1 != 0.0)
-                .collect()
-        };
-        let v: Vec<_> = if left_update.non_zeros().is_empty() {
-            left_update
-                .values()
-                .as_slice()
-                .iter()
-                .copied()
-                .enumerate()
-                .filter(|entry| entry.1 != 0.0)
-                .collect()
-        } else {
-            left_update
-                .iter()
-                .map(|entry| (entry.index().to_usize(), entry.coefficient()))
-                .filter(|entry| entry.1 != 0.0)
-                .collect()
-        };
-        // GLOP obtains this denominator from
-        // CompactSparseMatrix::ColumnScalarProduct(). Preserve its
-        // four-accumulator reduction order; a linear fold changes later
-        // pricing ties after a sufficiently long update chain.
-        let u_dot_v = sparse_scalar_product(&v, right_update.values().as_slice());
-        let update = RankOneUpdateElementaryMatrix::new(u, v, u_dot_v);
-        if update.is_singular() {
-            return Err(FactorizationError::Singular {
-                step: leaving_column,
-            });
+        match left_update {
+            LeftUpdateSource::Stored(index) => {
+                // GLOP computes this product from its stored left column, then
+                // appends the right scratchpad and that same compact column.
+                let storage = self.left_storage.get_mut();
+                let u_dot_v =
+                    storage.column_scalar_product_slice(index, right_update.values().as_slice());
+                if 1.0 + u_dot_v == 0.0 {
+                    return Err(FactorizationError::Singular {
+                        step: leaving_column,
+                    });
+                }
+                self.basis.install(leaving_column, entering_column);
+                self.updates.update_from_compact(
+                    right_update,
+                    right_update_is_dense,
+                    storage.column(index),
+                    u_dot_v,
+                );
+            }
+            LeftUpdateSource::Scattered(left_update) => {
+                let u: Vec<_> = if right_update_is_dense {
+                    right_update
+                        .values()
+                        .as_slice()
+                        .iter()
+                        .copied()
+                        .enumerate()
+                        .filter(|entry| entry.1 != 0.0)
+                        .collect()
+                } else {
+                    right_update
+                        .iter()
+                        .map(|entry| (entry.index().to_usize(), entry.coefficient()))
+                        .filter(|entry| entry.1 != 0.0)
+                        .collect()
+                };
+                let v: Vec<_> = if left_update.non_zeros().is_empty() {
+                    left_update
+                        .values()
+                        .as_slice()
+                        .iter()
+                        .copied()
+                        .enumerate()
+                        .filter(|entry| entry.1 != 0.0)
+                        .collect()
+                } else {
+                    left_update
+                        .iter()
+                        .map(|entry| (entry.index().to_usize(), entry.coefficient()))
+                        .filter(|entry| entry.1 != 0.0)
+                        .collect()
+                };
+                let u_dot_v = sparse_scalar_product(&v, right_update.values().as_slice());
+                let update = RankOneUpdateElementaryMatrix::new(u, v, u_dot_v);
+                if update.is_singular() {
+                    return Err(FactorizationError::Singular {
+                        step: leaving_column,
+                    });
+                }
+                self.basis.install(leaving_column, entering_column);
+                self.updates.update(update);
+            }
         }
-        self.basis.install(leaving_column, entering_column);
-        self.updates.update(update);
         Ok(())
     }
 

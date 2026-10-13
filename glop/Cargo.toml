@@ -11,6 +11,9 @@ repository.workspace = true
 lp_data = { package = "gloprs-lp-data", path = "../lp_data" }
 rand = "0.9.2"
 
+[features]
+phase8_update_row_probe = []
+
 [lib]
 name = "glop"
 

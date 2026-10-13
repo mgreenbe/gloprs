@@ -34,6 +34,43 @@ pub struct ValidatedCompactRows {
     dimension: usize,
 }
 
+/// An immutable compact matrix and RHS whose gather bounds were checked once.
+/// The borrowed matrix cannot be mutated while this view is live.
+#[derive(Clone, Copy)]
+pub struct ValidatedCompactDot<'a> {
+    matrix: &'a CompactSparseMatrix,
+    vector: &'a [Fractional],
+}
+
+impl ValidatedCompactDot<'_> {
+    /// Computes a compact-column product using the validated gather path.
+    #[must_use]
+    #[inline]
+    pub fn column_scalar_product(self, column: ColIndex) -> Fractional {
+        self.matrix
+            .column_scalar_product_slice_impl::<true>(column, self.vector)
+    }
+}
+
+impl ValidatedCompactRows {
+    /// Bind this identity-checked token to one RHS for a sequence of products.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the token belongs to another matrix or the RHS is too short.
+    #[must_use]
+    #[inline]
+    pub fn bind<'a>(
+        &self,
+        matrix: &'a CompactSparseMatrix,
+        vector: &'a [Fractional],
+    ) -> ValidatedCompactDot<'a> {
+        assert!(std::ptr::eq(Rc::as_ptr(&self.matrix), matrix));
+        assert!(vector.len() >= self.dimension);
+        ValidatedCompactDot { matrix, vector }
+    }
+}
+
 impl CompactSparseMatrix {
     /// Validates sparse gathers once for repeated products with this matrix.
     #[must_use]
@@ -278,9 +315,7 @@ impl CompactSparseMatrix {
         column: ColIndex,
         vector: &[Fractional],
     ) -> Fractional {
-        assert!(std::ptr::eq(Rc::as_ptr(&rows.matrix), self));
-        assert!(vector.len() >= rows.dimension);
-        self.column_scalar_product_slice_impl::<true>(column, vector)
+        rows.bind(self, vector).column_scalar_product(column)
     }
 
     #[allow(unsafe_code, clippy::inline_always, clippy::cast_sign_loss)]
@@ -1131,6 +1166,15 @@ mod tests {
         assert_eq!(
             matrix
                 .column_scalar_product_validated(&validated, ColIndex::new(0), &rhs)
+                .to_bits(),
+            matrix
+                .column_scalar_product_slice(ColIndex::new(0), &rhs)
+                .to_bits()
+        );
+        assert_eq!(
+            validated
+                .bind(&matrix, &rhs)
+                .column_scalar_product(ColIndex::new(0))
                 .to_bits(),
             matrix
                 .column_scalar_product_slice(ColIndex::new(0), &rhs)

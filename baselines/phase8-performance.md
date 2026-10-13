@@ -24,6 +24,159 @@ optimization variable.
 
 ## Workspace-audit rerun (12 October 2026)
 
+### Validated compact gathers in the hot update-row call
+
+The earlier attempt to pass the validated compact-row token through
+`RevisedSimplex` missed the hot call: primal steepest-edge maintenance calls
+`UpdateRow::compute_update_row_compact()` first, and the solver's later call
+usually returns its cached result. The validated token already held by
+`PrimalEdgeNorms` is now passed at its two actual update-row call sites.
+Public update-row calls and malformed matrices still use checked gathers;
+the token proves the immutable matrix's row indices and RHS dimension before
+unchecked per-entry access. The compact-dot benchmark was extended to time
+both modes. At 4, 16, and 64 entries per column, validated/checked medians
+were 0.767, 0.732, and 0.785, respectively, while checksums matched native.
+
+Five alternating, serial old/new Rust solves with identical status,
+iterations, and objective bits measured `fit2d` new/old 0.929 (tight trials)
+and `dfl001` 0.997. The strict fast-96 trajectory, public postsolve/KKT, full
+workspace tests, formatting, and Clippy pass. The three-trial, one-warmup
+serial fast-96 rerun measured matched presolved solve at 9.831 s native versus
+10.851 s Rust (1.104x, previously 1.113x), and the public pipeline at
+9.958 s native versus 10.856 s Rust (1.090x, previously 1.109x). `fit2d`
+was 1.098x in matched solve and 1.093x in the public pipeline. The raw
+trials are ignored artifacts
+`target/phase8-{presolved-solve,public}-edge-update-row-validated-fast96.json`.
+Cross-run total times varied, so the paired model A/B is stronger causal
+evidence than subtraction of aggregate totals.
+
+An experimental literal port of native `PrimalPrices::UpdateEnteringCandidates`
+used its branchless `ConditionalXorOfTwoBits` expression in all three Rust
+candidate-update sites. The strict fast-96 trajectory gate passed, but an
+uncontended alternating five-trial presolved-solve A/B measured new/old 1.004
+on `dfl001` and 1.009 on `fit2d`; the change was dropped. The Boolean
+decisions are equivalent because the two reduced-cost threshold conditions
+are mutually exclusive. `tools/benchmark_phase8_ab.py` now accepts
+`--mode presolved` for these paired timing checks.
+
+GLOP's column-wise update row also reads equation-form trailing slack
+coefficients directly from its left-inverse vector. An experimental Rust
+version validated those trailing identity columns once at matrix binding and
+used the same lookup. It was exact on a focused test, but paired `fit2d`
+solves were 1.028× old with per-column validation and 1.010× old after
+hoisting validation out of the loop; `dfl001` was 1.002× old in the first
+form. The shortcut was removed. The existing one-entry compact-column dot
+computes the same value, and no useful speedup was established.
+
+The primal Harris first pass was then split into positive- and negative-
+reduced-cost const-generic instantiations, mirroring upstream's templated
+`ComputeHarrisRatioAndLeavingCandidates`. This removes the entering-sign
+branch from each direction entry without changing its arithmetic. Alternating
+five-trial `dfl001` and `fit2d` presolved solves both measured 1.000× old;
+the edit is kept for source-level correspondence, not claimed as a speedup.
+
+The primal edge-norm update also built a fresh converted nonzero-position
+`Vec` for sparse directions; upstream assigns into its retained vector.
+Rust now clears and extends that retained buffer. A paired five-trial A/B
+measured 1.006× old on `fit2d` and 1.003× on `dfl001`, so this is an
+allocation/fidelity correction, not a timing win. Exact edge-norm
+recomputation then switched from `vec![1.0; n]` to the upstream-equivalent
+`resize(n, 1.0)`, preserving the existing storage and entries until relevant
+columns are overwritten. Paired new/old medians were 0.997× on each model;
+again, the small difference should not be read as a durable speedup.
+The serial fast-96 matched-presolve solve rerun (three timed trials after one
+warm-up per model) matched all native statuses and iteration counts, with
+9.652 s native versus 10.596 s Rust (1.098×); the previous cross-run ratio
+was 1.104×. The median model ratio was 1.134× and sqrt-nnz-weighted
+geometric ratio 1.121×. Raw per-model trials are in ignored
+`target/phase8-presolved-solve-edge-norm-reuse-fast96.json`.
+
+### Bound compact-column dot view
+
+`ValidatedCompactRows::bind()` now checks matrix identity and RHS length once
+for a borrowed matrix/vector pair; its short-lived `ValidatedCompactDot`
+performs the same four-accumulator fused product without repeating those
+checks for each column. The bound view is used in the column-wise update row
+and incremental primal edge-norm loop. Public/invalid-input products remain
+checked, and the token still owns the immutable matrix that was validated.
+Seven alternating old/new Rust presolved solves measured new/old 0.976 on
+`fit2d` and 0.990 on `dfl001`, with unchanged statuses and iterations.
+
+The isolated 4096-row, 1024-column benchmark (seven trials, 1000 in-process
+repetitions) measured bound/per-call-validated 0.933 at four entries per
+column, 1.001 at 16 entries, and 1.003 at 64 entries. Bound/native ratios
+were 1.420, 1.230, and 1.069, respectively; checksums agreed. The serial
+fast-96 matched-presolve rerun measured 9.631 s native and 10.481 s Rust
+(1.088×), down from the prior cross-run 1.098×. All 96 statuses and
+iteration counts matched; strict trajectories, public postsolve/KKT, and
+workspace tests pass. Raw per-model trials are in ignored
+`target/phase8-presolved-solve-bound-compact-dot-fast96.json`.
+The corresponding serial public default-pipeline run measured 9.917 s native
+versus 10.813 s Rust (1.090×), with all 96 status, iteration, and path-length
+outcomes matched. This is effectively unchanged from the prior cross-run
+public ratio of 1.090×; parsing and presolve dilute the solve-only gain.
+Its raw trials are in ignored
+`target/phase8-public-bound-compact-dot-fast96.json`.
+
+### Packed middle-product update and reusable scratchpad
+
+The rank-one update chain now uses parallel 32-bit row and `f64` coefficient
+arrays like GLOP's `CompactSparseMatrix`. The simplex path reuses its right
+scattered scratchpad and appends the stored compact left column directly,
+avoiding temporary u/v vectors. The four-accumulator dot retains GLOP's
+arithmetic order. Six 300-case native basis-update suites, 1,000 isolated
+rank-one cases, strict fast-96 trajectories, public fast-96 postsolve/KKT,
+and the release workspace suite pass.
+
+Paired seven-trial old/new presolved solves versus the pre-audit Rust binary
+gave new/old 0.996 for `fit2d`, 0.972 for `fit2p`, 0.972 for `stocfor3`, and
+0.995 for `dfl001`, whose samples varied considerably. Direct append alone
+versus the scratch-reuse build gave 0.982 on `fit2d` and 0.987 on `dfl001` in
+five paired trials. The serial fast-96 run measured 9.395 s native versus
+9.989 s Rust (1.063×) for matched presolved solves and 9.811 s versus
+10.401 s (1.060×) for the public pipeline. All 96 status/iteration outcomes
+matched. These cross-run ratios should not be interpreted as an isolated
+effect of the edit. Raw per-model reports are ignored artifacts at
+`target/phase8-{presolved,public}-rank-one-direct-fast96.json`.
+
+An isolated native/Rust packed-update benchmark excludes factor construction
+and times repeated dense right/left solves with the same deterministic chain
+and checksums. Seven alternating trials, 1,000 repetitions, dimension 4096:
+at 32 updates, Rust/native ranged from 0.892× to 0.982× across 4, 16, and
+64 entries per update; at 96 updates it ranged from 0.827× to 0.996×.
+Consequently the retained rank-one dense solve kernel does not explain the
+remaining solver-level excess on these patterns. Reproduce with
+`tools/benchmark_rank_one_solve.py` after building the matching release
+example and pinned native adapter.
+
+The native `ComputeUpdateRowForBenchmark()` hook and the Rust equivalent were
+then measured on matched compact matrices with 2,048 rows, 2,048 structural
+columns, and 2,048 slack columns. The first Rust hook scattered the dense lhs
+each repetition, unlike native's dense assignment; this added roughly 3 µs
+per call and was corrected. Five hundred differential cases still agree.
+Seven alternating trials of 1,000 column-wise products excluded matrix
+construction. After hook alignment, at 0/4/16/64 entries per structural
+column the validated Rust/native ratios were 1.201×/1.231×/1.023×/0.851×.
+Without the row-validation token they were 1.202×/1.344×/1.236×/1.029×.
+Subtracting each implementation's empty-column baseline leaves about 2.30 µs
+native versus 3.03 µs Rust for the four-entry structural products. The
+short-column product, not packed rank-one dense solve, is the clearer residual
+kernel gap. An exact-order branch for columns of at most four entries was
+tested before the hook correction and reverted because the four-entry timing
+increased. Reproduce with `tools/benchmark_update_row.py` after building its
+matching release example and pinned native adapter.
+
+Hoisting matrix representation and validation dispatch out of each column
+iteration reduced the corrected validated whole-hook ratios to 1.142× at four
+entries, 0.962× at 16, and 0.829× at 64. In a serial alternating old/new
+presolved full-solve comparison over all fast-96 models (three trials plus
+one untimed warm-up), the summed per-model medians were 10.241 s old and
+10.191 s new (0.995×); median model ratio was 0.993×. All status/iteration
+outcomes matched. Focused seven-trial paired solves measured `fit2d` 0.976×,
+`dfl001` 1.009×, `fit2p` 1.000×, and `stocfor3` 0.996×. The strict fast-96
+pivot trajectory and public postsolve/KKT gates pass, so the small aggregate
+gain does not trade off fidelity.
+
 ### Update-row reset fidelity and kernel attribution
 
 Paired probe timings on all 271 `dfl001` and 89 `fit2d` saved basis matrices
@@ -398,6 +551,113 @@ The raw artifacts are `phase8-direct-dual-fast96.json`,
 `phase8-memory-fast96.json`. Each timing JSON includes per-model trial times
 and median absolute deviations. The memory JSON includes all three peak-RSS
 and footprint trials per model.
+### Residual `dfl001` sampling after validated update-row dispatch
+
+Serial 1 ms samples of ten repeated matched-presolve solves are saved in
+`target/phase8-dfl001-{rust,native}-after-update-row.sample.txt` (ignored
+local artifacts). Both samples captured about 8,300 solver samples. Rust's
+largest top-of-stack entries were transpose solve (1,563), column-wise
+update-row (1,068), primal edge norms (732), ratio test (614), and primal
+pricing (424). Native's three transpose-solve instantiations total 1,768
+samples, while column-wise update-row (1,248), edge norms (720), and pricing
+(520) are also prominent. Sampling symbols and inlining differ across the
+two builds; these counts do not establish a transpose-solve regression.
+The residual cost is distributed enough to require paired, matched-input
+kernel timing before another code change.
+
+### Production-input update-row replay
+
+An opt-in `phase8_update_row_probe` build captured exact compact matrices,
+dense left inverses, and relevant-column masks from presolved `dfl001` and
+`fit2d` update-row calls under ignored
+`target/phase8-update-row-production/`. The replay adapters load these
+operands before timing and compare native/Rust checksums. In `dfl001`, 12,494
+of 13,818 columns contain at most four entries, versus only 25 of 10,388 in
+`fit2d`. This justifies analyzing the short-column and longer-column cases
+separately. The adapters split the dot, threshold/count, coefficient write,
+position write, and full work; mode dispatch is outside the measured loops.
+
+For `dfl001` call 500 (5,702 relevant columns), seven alternating 100-replay
+trials gave native/Rust medians of 12.37/12.21 us for dot plus nonzero count,
+14.30/22.93 us for dot plus position appends, and 15.31/27.88 us for the
+full append-based replay. The dot-only mode gave 12.49/19.30 us but has a
+different anti-elision barrier in the two languages; its ratio should not be
+interpreted as an isolated product cost. The source comparison identified
+GLOP's pre-sized cursor writes versus Rust's `Vec::push`. Matching GLOP's
+cursor pattern in both replay adapters reduced the Rust full replay to about
+21.5 us at call 500 and 21.1 us at call 2000. This is diagnostic, not a
+solver-level result.
+
+The corresponding production edit was then tested with immediate before/after
+release solver binaries, serial alternating trials, one warm-up, and seven
+timed trials per model, using
+`tools/benchmark_phase8_ab.py --mode presolved`. New/old medians were
+`dfl001` 1.004x (3.3703/3.3846 s), `fit2d` 0.992x (1.1523/1.1428 s),
+`fit2p` 0.997x, and `stocfor3` 1.013x; aggregate 1.002x. The edit was
+reverted. It is not evidence that output append explains the remaining
+full-solve discrepancy; its hot-loop share and interaction with dot/pricing
+work require further profiling.
+
+The follow-up implementation retains an `n`-slot position array and a
+separate active count, rather than truncating/refilling the array each call.
+It is the direct counterpart of GLOP's `non_zero_position_list_` and
+`num_non_zeros_` and allocates at construction, with reallocation only if a
+later rebind increases column count beyond capacity. A release unit test
+checks pointer stability over ten repeated column-wise calls, a same-size
+rebind, and a rebuild of nonzero positions. A fresh five-trial serial A/B
+against the append binary measured new/old medians of `dfl001` 1.003x,
+`fit2d` 0.988x, `fit2p` 0.998x, and `stocfor3` 1.009x; aggregate
+5.183947/5.186412 s (1.000x). This is a fidelity/allocation correction,
+not a material full-solve speedup.
+
+### Harris ratio-test bound sharing
+
+Fresh eight-second, 1-ms serial samples of matched presolved `fit2d` and
+`dfl001` solves are in ignored
+`target/phase8-{fit2d,dfl001}-current-{rust,native}.sample.txt`. The current
+`fit2d` sample placed edge-norm update at 2,496 Rust versus 2,485 native
+samples, column-wise update row at 2,174 versus 2,167, and incremental
+pricing at 1,198 versus 1,398. These counts do not support the prior guess
+that those three kernels explain the remaining gap. In `dfl001`, Rust's
+primal Harris ratio test took 473 top-of-stack samples versus 270 in native's
+Harris first pass; update row, edge norms, and pricing were near parity.
+
+The Harris first pass uses a variable value and one bound from parallel dense
+arrays at each candidate. Adding two constant-time equal-length assertions
+before the scan lets optimized Rust reuse the checked variable-value index
+bound for the chosen bound array. Indexing remains safe, arithmetic and
+candidate order unchanged, and no per-pivot workspace is added. The follow-up
+Rust sample (`target/phase8-dfl001-harris-length-rust.sample.txt`) had 243
+ratio-test samples. ARM64 release disassembly of the before/after solver
+binary shows 18 versus 12 out-of-line bounds-panic sites in the enclosing
+ratio-test function (plus two one-time length assertions in the new version),
+consistent with fewer repeated bound checks. Five serial alternating timed solve trials after one
+warm-up measured `dfl001` old/new 3.383835/3.240146 s (new/old 0.958x,
+tight ranges) and `fit2d` 1.138637/1.139753 s (1.001x). The three-trial
+fast-96 A/B (`target/phase8-harris-length-fast96-ab.txt`) matched status and
+iterations on every model and reduced summed model medians from 10.131284
+to 9.914437 s (0.979x; median model 0.994x).
+
+A serial native/Rust full fast-96 solve rerun (three timed trials, one warm-up,
+matched presolved models) recorded 9.631649 s native versus 9.980340 s Rust:
+1.036x aggregate, 1.070x median model, and 1.066x sqrt-nnz weighted
+geometric ratio. The largest absolute residuals are `dfl001` (+0.210 s),
+`fit2d` (+0.049 s), `stocfor3` (+0.049 s), `fit2p` (+0.046 s), and `d6cube`
+(+0.045 s). Raw per-model trials and outcomes are in ignored
+`target/phase8-harris-length-native-rust-fast96.json`. The strict fast-96
+trajectory fixture, public original-model postsolve/KKT gate, release
+workspace suite, formatting, and all-features Clippy pass.
+
+Six-second, 1-ms `stocfor3` samples after this change, on 20 repeated
+presolved solves per implementation, are in ignored
+`target/phase8-stocfor3-current-{rust,native}.sample.txt`. Rust's largest
+top-of-stack entries are transpose triangular solve (1,069), scattered
+permutation (324), and scattered clear (298). Native's identified transpose
+lower/upper variants total at least 1,153 samples, with 413 additional
+samples under a deduplicated symbol. The symbol ambiguity prevents a claim
+that transpose solve is the `stocfor3` regression; a matched BTRAN and
+permutation probe is the next useful localization step.
+
 ### Validated triangular-solve bounds-check pass
 
 Three sparse RHS updates in `TriangularMatrix::solve` and
