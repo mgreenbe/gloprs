@@ -3628,6 +3628,7 @@ fn scale_using_auxiliary_lp(lp: &mut LinearProgram, scaler: &mut SparseMatrixSca
 #[cfg(test)]
 mod scaling_dispatch_tests {
     use super::*;
+    use lp_data::lp_data::CostScalingAlgorithm as ModelCostScaling;
 
     #[test]
     fn failed_auxiliary_solve_falls_back_to_equilibration() {
@@ -3654,5 +3655,95 @@ mod scaling_dispatch_tests {
         assert_eq!(lp.matrix().column(col), expected.matrix().column(col));
         assert_eq!(actual_scaler.row_scales(), expected_scaler.row_scales());
         assert_eq!(actual_scaler.col_scales(), expected_scaler.col_scales());
+    }
+
+    // Retain the native adapter's printed decimals without rounding them for lint.
+    #[allow(clippy::unreadable_literal, clippy::excessive_precision)]
+    #[test]
+    fn injected_failure_matches_native_equilibration_whole_model() {
+        // Native `LpScalingHelper::Scale()` with EQUILIBRATION on this input
+        // produces the values below. Its LINEAR_PROGRAM scaling is distinct,
+        // so this fixture checks the fallback rather than a coincidental tie.
+        let mut lp = LinearProgram::new();
+        let x = lp.create_new_variable();
+        let y = lp.create_new_variable();
+        let first = lp.create_new_constraint();
+        let second = lp.create_new_constraint();
+        lp.set_coefficient(first, x, 1000.0);
+        lp.set_coefficient(second, x, 0.1);
+        lp.set_coefficient(first, y, 0.2);
+        lp.set_coefficient(second, y, 10.0);
+        lp.set_variable_bounds(x, 0.0, 10.0);
+        lp.set_variable_bounds(y, -1.0, 5.0);
+        lp.set_objective_coefficient(x, 1.0);
+        lp.set_objective_coefficient(y, 2.0);
+        lp.set_constraint_bounds(first, -2.0, 8.0);
+        lp.set_constraint_bounds(second, 0.0, 3.0);
+        lp.clean_up();
+
+        let mut scaler = SparseMatrixScaler::new();
+        scale_matrix_with_method_using(
+            &mut lp,
+            &mut scaler,
+            ScalingAlgorithm::LinearProgram,
+            |_, _| false,
+        );
+        assert_eq!(lp.scale_objective(ModelCostScaling::NoCostScaling), 1.0);
+        assert_eq!(lp.scale_bounds(), 1.0);
+        let check = |actual: f64, expected: f64| {
+            assert!(
+                (actual - expected).abs() <= 4e-15 * expected.abs().max(1.0),
+                "{actual} differs from native {expected}"
+            );
+        };
+        for (actual, expected) in lp
+            .objective_coefficients()
+            .iter()
+            .zip([0.37606030930863937, 5.3182958969449894])
+        {
+            check(*actual, expected);
+        }
+        for (actual, expected) in lp
+            .variable_lower_bounds()
+            .iter()
+            .zip([0.0, -0.37606030930863932])
+        {
+            check(*actual, expected);
+        }
+        for (actual, expected) in lp
+            .variable_upper_bounds()
+            .iter()
+            .zip([26.591479484724942, 1.8803015465431967])
+        {
+            check(*actual, expected);
+        }
+        for (actual, expected) in lp
+            .constraint_lower_bounds()
+            .iter()
+            .zip([-0.0053182958969449877, 0.0])
+        {
+            check(*actual, expected);
+        }
+        for (actual, expected) in lp
+            .constraint_upper_bounds()
+            .iter()
+            .zip([0.021273183587779951, 0.11281809279259179])
+        {
+            check(*actual, expected);
+        }
+        let expected = [
+            [(0, 1.0), (1, 0.001414213562373095)],
+            [(0, 0.001414213562373095), (1, 1.0)],
+        ];
+        for (column, entries) in expected.into_iter().enumerate() {
+            for (entry, (row, value)) in lp
+                .sparse_column(ColIndex::from_usize(column))
+                .into_iter()
+                .zip(entries)
+            {
+                assert_eq!(entry.index().to_usize(), row);
+                check(entry.coefficient(), value);
+            }
+        }
     }
 }

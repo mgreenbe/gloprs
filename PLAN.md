@@ -260,8 +260,11 @@ on the investigated case. These randomized LP-method cases require every row
 to contain an entry: upstream creates an absent row's scaling variable only
 after solving, so its empty-row factor is not a stable solution value. A
 separate native fixture retains empty-row coverage. The error-to-equilibration
-dispatch is tested with an injected auxiliary-solve error; a naturally failing
-native auxiliary LP remains to be found for differential fallback validation.
+dispatch is tested with an injected auxiliary-solve error, and a whole-model
+fallback fixture agrees with native equilibration output. A deterministic
+search of 11,000 finite sparse auxiliary LPs (dimensions up to 100, including
+subnormal and near-maximum coefficients) produced no native solver error.
+The native-error branch remains defensive; no naturally failing case is known.
 The basis now uses
 GLOP's middle-product-form rank-one updates and the same identity-basis,
 fixed-period, and deterministic-time-adjusted refactorization policy. The
@@ -2327,5 +2330,7 @@ so paired kernel measurements remain the next performance evidence to collect.
    measured change; record medians and dispersion, and rank regressions by
    absolute time. Keep `qap15` outside deterministic wall-time gates until
    its performance is tractable.
-3. Find a naturally failing auxiliary-LP scaling case for native differential
-   fallback validation; the injected-error branch test already pins dispatch.
+3. If a native auxiliary-LP solver error appears in production or a numerical
+   stress case, retain it as a differential fixture. The injected-error fallback
+   and whole-model native-equilibration output are already covered; a search of
+   11,000 finite sparse cases found no natural failure.
