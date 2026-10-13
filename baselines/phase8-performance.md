@@ -7,6 +7,63 @@ regression and the 96-model public-postsolve KKT gate also pass after the
 changes described below. Numerical and path fidelity is a gate, not an
 optimization variable.
 
+## Late qap15 localization and fast-96 rerun (13 October 2026)
+
+Paired serial direct solves (one warm-up, three alternating timed trials)
+reproduce the late `qap15` regression. At 25,000 pivots the native/Rust
+medians were 17.965/18.120 s (1.009x); at 30,000 they were 76.660/82.193 s
+(1.072x). Median absolute deviations were at most 0.087 s. The independent
+cap differences estimate 58.696/64.073 s (1.092x) over pivots 25,000–30,000;
+they are **not** direct timers of that interval. Status, iteration count, and
+objective agreed. Raw trials: `target/phase8-qap15-caps-current.json`.
+
+Ten-millisecond live stack samples in the late window found about 92% of
+native and 91% of Rust main-thread samples under forced LU refactorization.
+These are approximate sample fractions, not exact stage times. Both paths
+spend most of that time in Markowitz's partially permuted lower solve. The
+previously reported 1.026x selected-view LU result used the *default* pivot
+threshold of 0.01. Both live solvers raise that threshold to 0.9 by pivot
+30,000 (Rust begins at pivot 28,090 and reaches 0.9 at 28,252). Replaying all
+823 saved selections from pivots 25,000–30,000 with a retained LU object and
+threshold 0.9, excluding file loading, gave native/Rust totals of
+60.623/67.460, 60.563/67.354, and 60.580/67.400 s: 1.112–1.113x. At
+threshold 0.01, the corresponding retained chronological replay was near
+parity. A 32-MiB cache-eviction experiment at 0.01 remained only 1.020–1.028x.
+Thus high-threshold LU work, not an unexplained pricing or ratio-test cost,
+accounts for the live late-stage discrepancy. The fixed-0.9 replay is not an
+exact live-stage timer because the live threshold changes during the interval.
+Raw CSVs: `target/phase8-qap15-retained-threshold09-late.csv`,
+`target/phase8-qap15-retained-chronological-to30k.csv`, and
+`target/phase8-qap15-selected-view-cold-late.csv`.
+
+The lower-solve port now scatters its RHS after symbolic DFS, matching native
+operation order, and stores DFS row lists as 32-bit indices, matching upstream
+`RowIndex` width. The latter's paired 671-basis A/B measured 0.998, 0.993,
+and 1.003 new/old; a bounds-check removal experiment measured
+1.001–1.002 and was reverted. These fidelity edits have no demonstrated
+speedup. Full workspace tests, formatting, Clippy, strict fast-96 trajectories,
+public KKT, and the 30,000-pivot direct qap15 snapshot pass.
+
+The first complete serial fast-96 stage rerun after this work measured
+parse 0.911x (0.219/0.200 s native/Rust), presolve 1.012x
+(0.261/0.264 s), and matched presolved solve 1.021x
+(9.616/9.818 s). The paired public pipeline was 1.015x. The largest
+absolute matched-solve gaps were `dfl001` +0.175 s, `fit2d` +0.049 s,
+`d6cube` +0.035 s, and `stocfor3` +0.035 s. Per-instance medians, MADs,
+statuses, and iterations are in `target/phase8-stages-current-fast96.json`
+and `target/phase8-public-current-fast96.json`. Subsequent complete runs
+measured 1.021x and 1.043x for the stage solve and 1.002x for the public
+pipeline; `dfl001` individual trials and concurrent desktop CPU load show
+that the latter runs have appreciable environmental noise. These aggregate
+numbers should not be interpreted as a measured benefit of the lower-solve
+edits. Paired repeated-solve samples of `dfl001` show 3.075/3.220 s per solve
+at identical 16,966 iterations. The corresponding `fit2d` samples show
+1.122/1.177 s per solve at identical 5,642 iterations and objective bits.
+Both profiles put their bulk in the same upstream/Rust primal-edge-norm and
+update-row path; no isolated outlier kernel change has yet passed a paired
+old/new timing test. Remaining fast-96 outliers and the
+high-threshold lower-solve code path deserve targeted performance work.
+
 ## Environment and method
 
 - Apple M2, macOS 15.6.1 arm64; `rustc 1.95.0`, Apple Clang 17.

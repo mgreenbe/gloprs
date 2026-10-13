@@ -2320,16 +2320,28 @@ so paired kernel measurements remain the next performance evidence to collect.
    and 50.125/51.477 seconds native/Rust: 1.022x, 1.026x, and 1.027x.
    Per-selection median totals are 50.192/51.515 seconds (1.026x), with
    matched dimension, nnz, and determinant on every input. This is close to
-   the 1.024x materialized-basis result: selected-column indirection alone
-   does not explain the 1.079x live-solve ratio at pivot 30,000. The next
-   step remains timing complete live stages, including basis-update solves,
-   rather than inferring their costs from broad samples.
+   the 1.024x materialized-basis result, but both used the default 0.01 LU
+   pivot threshold. The live direct solve raises this threshold to 0.9 during
+   pivots 28,090–28,252. A retained-LU chronological selected-view replay
+   of 823 late bases at threshold 0.9 reproduces a stable 1.112–1.113x
+   native/Rust LU gap across three serial trials. Matched late-window stack
+   samples put roughly 91–92% of both solvers' time under refactorization;
+   pricing, ratio tests, and update solves are not the primary explanation.
+   The remaining work is to reconcile the high-threshold Markowitz lower
+   sparse solve at the kernel/codegen level without changing trajectories.
+   The RHS scatter order and DFS index width now follow upstream, but paired
+   A/B trials show no speedup from these fidelity changes.
    The ~1.7 GB diagnostic corpus and raw results are ignored under
    `target/phase8-qap15-direct-*`.
-2. Repeat the serial fast-96 stage and public-pipeline comparisons after a
-   measured change; record medians and dispersion, and rank regressions by
-   absolute time. Keep `qap15` outside deterministic wall-time gates until
-   its performance is tractable.
+2. The serial fast-96 stage and public-pipeline comparisons were repeated
+   with per-instance trial medians and dispersion; the cleanest stage solve
+   rerun is 1.021x Rust/native and public pipeline 1.015x. `dfl001`, `fit2d`,
+   `d6cube`, and `stocfor3` remain the largest absolute solve outliers.
+   Inspect paired profiles and use old/new alternating trials before claiming
+   an improvement; later full-corpus runs showed desktop-load noise.
+   Keep `qap15` outside deterministic wall-time gates until its performance
+   is tractable. Details and raw artifact paths are in
+   `baselines/phase8-performance.md`.
 3. If a native auxiliary-LP solver error appears in production or a numerical
    stress case, retain it as a differential fixture. The injected-error fallback
    and whole-model native-equilibration output are already covered; a search of

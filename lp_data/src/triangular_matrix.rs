@@ -70,9 +70,9 @@ enum SymbolicNode {
 struct PermutedLowerWorkspace {
     stored: RowBitVec,
     marked: RowBitVec,
-    lower_rows: Vec<usize>,
-    upper_rows: Vec<usize>,
-    nodes_to_explore: Vec<usize>,
+    lower_rows: Vec<u32>,
+    upper_rows: Vec<u32>,
+    nodes_to_explore: Vec<u32>,
     scratchpad: Vec<f64>,
     pruned_ends: Vec<usize>,
     num_fp_operations: i64,
@@ -437,7 +437,13 @@ impl TriangularMatrix {
     /// # Panics
     ///
     /// Panics if the permutation or an input row is outside the matrix.
-    #[allow(clippy::needless_range_loop, clippy::too_many_lines, unsafe_code)]
+    // num_rows < u32::MAX is asserted before converting validated input rows.
+    #[allow(
+        clippy::needless_range_loop,
+        clippy::too_many_lines,
+        clippy::cast_possible_truncation,
+        unsafe_code
+    )]
     pub fn permuted_lower_sparse_solve(
         &mut self,
         lower: &mut SparseColumn,
@@ -448,6 +454,11 @@ impl TriangularMatrix {
         assert!(self.unit_diagonal);
         assert_eq!(row_permutation.len(), self.num_rows);
         let invalid = usize::MAX;
+        // GLOP stores DFS rows as 32-bit RowIndex values; reserve u32::MAX for
+        // the postorder sentinel. Triangular builders use the same 32-bit row
+        // storage and reject out-of-range entries.
+        assert!(self.num_rows < u32::MAX as usize);
+        let invalid_row = u32::MAX;
         let Self {
             num_rows,
             starts,
@@ -463,12 +474,11 @@ impl TriangularMatrix {
         workspace.upper_rows.clear();
         workspace.nodes_to_explore.clear();
 
-        // Scatter the right-hand side before clearing `lower`, allowing the
-        // input and lower output to share the same SparseColumn allocation.
+        // Compute reachability before scattering, as GLOP does. Keeping the
+        // dense scratchpad untouched here reduces the DFS working set.
         for entry in &*lower {
             let row = entry.index().to_usize();
             assert!(row < *num_rows, "input row exceeds triangular dimension");
-            workspace.scratchpad[row] = entry.coefficient();
             let pivot_column = row_permutation[row];
             if pivot_column == invalid {
                 // SAFETY: input row was checked against num_rows above, and
@@ -476,23 +486,24 @@ impl TriangularMatrix {
                 if !unsafe { workspace.stored.contains_position_unchecked(row) } {
                     // SAFETY: same checked input row and workspace size.
                     unsafe { workspace.stored.set_position_unchecked(row) };
-                    workspace.lower_rows.push(row);
+                    workspace.lower_rows.push(row as u32);
                 }
             } else {
-                workspace.nodes_to_explore.push(row);
+                workspace.nodes_to_explore.push(row as u32);
             }
         }
 
         // DFS postorder with GLOP's sentinel stack. Marking every outgoing
         // edge on descent lets the return step prune edges implied by a path
         // through an already explored successor.
-        while let Some(&row) = workspace.nodes_to_explore.last() {
-            if row == invalid {
+        while let Some(&row_index) = workspace.nodes_to_explore.last() {
+            if row_index == invalid_row {
                 workspace.nodes_to_explore.pop();
-                let explored_row = workspace
+                let explored_index = workspace
                     .nodes_to_explore
                     .pop()
                     .expect("DFS sentinel follows its node");
+                let explored_row = explored_index as usize;
                 debug_assert!(
                     !workspace
                         .stored
@@ -501,7 +512,7 @@ impl TriangularMatrix {
                 // SAFETY: explored_row is a validated stack row, not the
                 // sentinel; stored was resized to num_rows at entry.
                 unsafe { workspace.stored.set_position_unchecked(explored_row) };
-                workspace.upper_rows.push(explored_row);
+                workspace.upper_rows.push(explored_index);
 
                 let column = row_permutation[explored_row];
                 let mut position = starts[column];
@@ -523,6 +534,7 @@ impl TriangularMatrix {
                 workspace.pruned_ends[column] = end;
                 continue;
             }
+            let row = row_index as usize;
             // SAFETY: stack rows originate in the checked input or in the
             // validated matrix rows; the sentinel was handled above.
             if unsafe { workspace.stored.contains_position_unchecked(row) } {
@@ -533,23 +545,28 @@ impl TriangularMatrix {
             if column == invalid {
                 // SAFETY: same validated stack row.
                 unsafe { workspace.stored.set_position_unchecked(row) };
-                workspace.lower_rows.push(row);
+                workspace.lower_rows.push(row_index);
                 workspace.nodes_to_explore.pop();
                 continue;
             }
-            workspace.nodes_to_explore.push(invalid);
+            workspace.nodes_to_explore.push(invalid_row);
             for &successor in &rows[starts[column]..workspace.pruned_ends[column]] {
-                let successor = usize::try_from(successor).expect("row index fits usize");
+                let successor_row = successor as usize;
                 // SAFETY: stored matrix row indices are below num_rows.
-                if !unsafe { workspace.stored.contains_position_unchecked(successor) } {
+                if !unsafe { workspace.stored.contains_position_unchecked(successor_row) } {
                     workspace.nodes_to_explore.push(successor);
                 }
                 // SAFETY: same validated matrix row.
-                unsafe { workspace.marked.set_position_unchecked(successor) };
+                unsafe { workspace.marked.set_position_unchecked(successor_row) };
             }
             debug_assert!(workspace.nodes_to_explore.len() <= 2 * *num_rows + rows.len());
         }
 
+        // The input and lower output may share an allocation. Scatter before
+        // clearing the column, but only after the symbolic DFS has finished.
+        for entry in &*lower {
+            workspace.scratchpad[entry.index().to_usize()] = entry.coefficient();
+        }
         workspace.num_fp_operations = 0;
         lower.clear();
         upper.reserve(
@@ -557,7 +574,8 @@ impl TriangularMatrix {
                 .num_entries()
                 .saturating_add(workspace.upper_rows.len()),
         );
-        for &pivot_row in workspace.upper_rows.iter().rev() {
+        for &pivot_index in workspace.upper_rows.iter().rev() {
+            let pivot_row = pivot_index as usize;
             let pivot = workspace.scratchpad[pivot_row];
             if pivot == 0.0 {
                 continue;
@@ -583,17 +601,22 @@ impl TriangularMatrix {
             }
         }
         lower.reserve(workspace.lower_rows.len());
-        for &row in &workspace.lower_rows {
+        for &row_index in &workspace.lower_rows {
+            let row = row_index as usize;
             lower.add_entry(RowIndex::from_usize(row), workspace.scratchpad[row]);
             workspace.scratchpad[row] = 0.0;
         }
         // Clear only buckets touched by this solve, as GLOP's stored_ bitset
         // does after its DFS. A bucket may contain several visited rows.
         for &row in &workspace.lower_rows {
-            workspace.stored.clear_bucket(RowIndex::from_usize(row));
+            workspace
+                .stored
+                .clear_bucket(RowIndex::from_usize(row as usize));
         }
         for &row in &workspace.upper_rows {
-            workspace.stored.clear_bucket(RowIndex::from_usize(row));
+            workspace
+                .stored
+                .clear_bucket(RowIndex::from_usize(row as usize));
         }
     }
 

@@ -2948,8 +2948,16 @@ impl RevisedSimplex {
     fn strengthen_lu_pivoting_after_early_imprecision(&mut self) -> Result<(), FactorizationError> {
         if self.basis_factorization.as_ref().unwrap().num_updates() < 10 {
             self.phase4_event("adaptive_lu_pivot_threshold");
-            self.parameters.lu_factorization_pivot_threshold =
-                (1.5 * self.parameters.lu_factorization_pivot_threshold).min(0.9);
+            let old_threshold = self.parameters.lu_factorization_pivot_threshold;
+            self.parameters.lu_factorization_pivot_threshold = (1.5 * old_threshold).min(0.9);
+            if self.parameters.lu_factorization_pivot_threshold != old_threshold
+                && std::env::var_os("GLOPRS_TRACE_LU_THRESHOLD").is_some()
+            {
+                eprintln!(
+                    "lu_pivot_threshold iteration={} value={:.17}",
+                    self.num_iterations, self.parameters.lu_factorization_pivot_threshold
+                );
+            }
             self.basis_factorization
                 .as_mut()
                 .unwrap()

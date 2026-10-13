@@ -19,8 +19,15 @@ RUST = ROOT / "target/release/examples/netlib_factorization_benchmark"
 
 
 def run(binary: Path, paths: list[Path], repetitions: int, warmups: int,
-        selected_source: Path | None) -> dict[Path, tuple[int, int, float, float]]:
+        selected_source: Path | None, evict_mib: int,
+        retain_factorization: bool, pivot_threshold: float | None) -> dict[Path, tuple[int, int, float, float]]:
     command = [binary, str(repetitions), str(warmups)]
+    if evict_mib:
+        command.extend(("--evict-mib", str(evict_mib)))
+    if retain_factorization:
+        command.append("--retain-factorization")
+    if pivot_threshold is not None:
+        command.extend(("--pivot-threshold", str(pivot_threshold)))
     if selected_source is not None:
         command.extend(("--selected-source", str(selected_source)))
     command.extend(str(path) for path in paths)
@@ -53,14 +60,24 @@ def main() -> None:
     parser.add_argument("--raw-output", type=Path, help="per-probe, per-trial timings (defaults beside --output)")
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--warmups", type=int, default=1)
+    parser.add_argument("--evict-mib", type=int, default=0,
+                        help="touch this many MiB outside each factorization timer")
+    parser.add_argument("--retain-factorization", action="store_true",
+                        help="reuse one LU object across all selected inputs")
+    parser.add_argument("--chronological", action="store_true",
+                        help="sort by numeric pivot, then selection filename")
+    parser.add_argument("--pivot-threshold", type=float,
+                        help="override the native/Rust LU pivot threshold")
     parser.add_argument("--trials", type=int, default=3)
     parser.add_argument("--limit", type=int, help="use the first N paths for a smoke test")
     parser.add_argument("--models", nargs="+", help="restrict probes to these Netlib models")
     parser.add_argument("--pivot-min", type=int, help="minimum refactorization pivot (inclusive)")
     parser.add_argument("--pivot-max", type=int, help="maximum refactorization pivot (inclusive)")
     options = parser.parse_args()
-    if options.repetitions < 1 or options.warmups < 0 or options.trials < 1:
+    if options.repetitions < 1 or options.warmups < 0 or options.trials < 1 or not 0 <= options.evict_mib <= 1024:
         parser.error("repetitions and trials must be positive; warmups must be nonnegative")
+    if options.pivot_threshold is not None and not 0 <= options.pivot_threshold <= 1:
+        parser.error("pivot threshold must lie in [0, 1]")
     for binary in (options.native, options.rust):
         if not binary.is_file():
             parser.error(f"build the benchmark executable first: {binary}")
@@ -68,6 +85,9 @@ def main() -> None:
         parser.error(f"selected source does not exist: {options.selected_source}")
     pattern = "*-*/selection-*.txt" if options.selected_source else "*-*/factorization-*.mtx"
     paths = sorted(options.root.glob(pattern))
+    if options.chronological:
+        paths.sort(key=lambda path: (path.parent.name.rsplit("-", 1)[0],
+                                     int(path.parent.name.rsplit("-", 1)[1]), path.name))
     if options.models:
         models = set(options.models)
         paths = [path for path in paths if path.parent.name.rsplit("-", 1)[0] in models]
@@ -89,15 +109,17 @@ def main() -> None:
     metadata: dict[Path, tuple[int, int]] = {}
     # Each native batch completes before its Rust counterpart starts. Neither
     # solver shares a CPU with the other, and matrix I/O is outside both clocks.
+    # Retained-LU mode must use one process for the whole chronological stream.
+    batch_size = len(paths) if options.retain_factorization else 50
     for trial in range(options.trials):
-        for start in range(0, len(paths), 50):
-            batch = paths[start : start + 50]
+        for start in range(0, len(paths), batch_size):
+            batch = paths[start : start + batch_size]
             if trial % 2 == 0:
-                native = run(options.native, batch, options.repetitions, options.warmups, options.selected_source)
-                rust = run(options.rust, batch, options.repetitions, options.warmups, options.selected_source)
+                native = run(options.native, batch, options.repetitions, options.warmups, options.selected_source, options.evict_mib, options.retain_factorization, options.pivot_threshold)
+                rust = run(options.rust, batch, options.repetitions, options.warmups, options.selected_source, options.evict_mib, options.retain_factorization, options.pivot_threshold)
             else:
-                rust = run(options.rust, batch, options.repetitions, options.warmups, options.selected_source)
-                native = run(options.native, batch, options.repetitions, options.warmups, options.selected_source)
+                rust = run(options.rust, batch, options.repetitions, options.warmups, options.selected_source, options.evict_mib, options.retain_factorization, options.pivot_threshold)
+                native = run(options.native, batch, options.repetitions, options.warmups, options.selected_source, options.evict_mib, options.retain_factorization, options.pivot_threshold)
             for path in batch:
                 n, nnz, native_seconds, native_det = native[path]
                 rust_n, rust_nnz, rust_seconds, rust_det = rust[path]
@@ -119,11 +141,11 @@ def main() -> None:
     raw_output.parent.mkdir(parents=True, exist_ok=True)
     with raw_output.open("w", newline="", encoding="utf-8") as stream:
         writer = csv.writer(stream)
-        writer.writerow(["probe", "dimension", "nonzeros", "trial", "repetitions", "warmups", "native_seconds", "rust_seconds", "ratio"])
+        writer.writerow(["probe", "dimension", "nonzeros", "trial", "repetitions", "warmups", "evict_mib", "pivot_threshold", "native_seconds", "rust_seconds", "ratio"])
         for path in paths:
             n, nnz = metadata[path]
             for trial, (native, rust) in enumerate(zip(native_times[path], rust_times[path]), start=1):
-                writer.writerow([path.relative_to(options.root), n, nnz, trial, options.repetitions, options.warmups, f"{native:.12g}", f"{rust:.12g}", f"{rust/native:.9g}"])
+                writer.writerow([path.relative_to(options.root), n, nnz, trial, options.repetitions, options.warmups, options.evict_mib, options.pivot_threshold if options.pivot_threshold is not None else "default", f"{native:.12g}", f"{rust:.12g}", f"{rust/native:.9g}"])
     total_native = 0.0
     total_rust = 0.0
     with options.output.open("w", newline="", encoding="utf-8") as stream:

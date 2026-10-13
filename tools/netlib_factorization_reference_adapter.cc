@@ -4,6 +4,7 @@
 // Time GLOP LU construction on already-loaded Matrix Market probe matrices.
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -97,12 +98,42 @@ int main(int argc, char** argv) {
     }
     GlopParameters parameters;
     int first_file = 3;
-    LoadedMatrix source;
-    const bool selected = argc >= 6 && std::string(argv[3]) == "--selected-source";
-    if (selected) {
-      ReadMatrixMarket(argv[4], &source);
-      first_file = 5;
+    int evict_mib = 0;
+    bool retain_factorization = false;
+    while (first_file < argc) {
+      if (std::string(argv[first_file]) == "--evict-mib") {
+        if (first_file + 1 >= argc) throw std::runtime_error("missing cache eviction size");
+        evict_mib = std::stoi(argv[first_file + 1]);
+        if (evict_mib < 0 || evict_mib > 1024) {
+          throw std::runtime_error("invalid cache eviction size");
+        }
+        first_file += 2;
+      } else if (std::string(argv[first_file]) == "--retain-factorization") {
+        retain_factorization = true;
+        ++first_file;
+      } else if (std::string(argv[first_file]) == "--pivot-threshold") {
+        if (first_file + 1 >= argc) throw std::runtime_error("missing pivot threshold");
+        const double threshold = std::stod(argv[first_file + 1]);
+        if (!std::isfinite(threshold) || threshold < 0.0 || threshold > 1.0) {
+          throw std::runtime_error("invalid pivot threshold");
+        }
+        parameters.set_lu_factorization_pivot_threshold(threshold);
+        first_file += 2;
+      } else {
+        break;
+      }
     }
+    std::vector<std::uint8_t> eviction(
+        static_cast<size_t>(evict_mib) * 1024 * 1024, 1);
+    LoadedMatrix source;
+    const bool selected = argc >= first_file + 3 &&
+                          std::string(argv[first_file]) == "--selected-source";
+    if (selected) {
+      ReadMatrixMarket(argv[first_file + 1], &source);
+      first_file += 2;
+    }
+    LuFactorization retained_factorization;
+    retained_factorization.SetParameters(parameters);
     for (int file = first_file; file < argc; ++file) {
       LoadedMatrix loaded;
       if (!selected) ReadMatrixMarket(argv[file], &loaded);
@@ -141,26 +172,49 @@ int main(int argc, char** argv) {
         selected_entries += matrix->ColumnNumEntries(column).value();
       }
       CompactSparseMatrixView view(matrix, &columns);
-      LuFactorization factorization;
-      factorization.SetParameters(parameters);
+      LuFactorization local_factorization;
+      local_factorization.SetParameters(parameters);
+      LuFactorization* factorization = retain_factorization
+                                           ? &retained_factorization
+                                           : &local_factorization;
       for (int warmup = 0; warmup < warmups; ++warmup) {
-        if (!factorization.ComputeFactorization(view).ok()) {
+        if (!factorization->ComputeFactorization(view).ok()) {
           throw std::runtime_error(std::string(argv[file]) + ": LU warmup failed");
         }
       }
-      const auto start = std::chrono::steady_clock::now();
-      for (int repetition = 0; repetition < repetitions; ++repetition) {
-        if (!factorization.ComputeFactorization(view).ok()) {
-          throw std::runtime_error(std::string(argv[file]) + ": LU failed");
+      double seconds = 0.0;
+      if (eviction.empty()) {
+        const auto start = std::chrono::steady_clock::now();
+        for (int repetition = 0; repetition < repetitions; ++repetition) {
+          if (!factorization->ComputeFactorization(view).ok()) {
+            throw std::runtime_error(std::string(argv[file]) + ": LU failed");
+          }
+        }
+        seconds = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - start).count();
+      } else {
+        for (int repetition = 0; repetition < repetitions; ++repetition) {
+          // Cold-cache diagnostic: intervening simplex work touches other
+          // arrays. Keep that traffic outside the numerical LU timer.
+          volatile const std::uint8_t* bytes = eviction.data();
+          std::uint64_t checksum = 0;
+          for (size_t offset = 0; offset < eviction.size(); offset += 64) {
+            checksum += bytes[offset];
+          }
+          if (checksum == 0) throw std::runtime_error("invalid eviction buffer");
+          const auto start = std::chrono::steady_clock::now();
+          if (!factorization->ComputeFactorization(view).ok()) {
+            throw std::runtime_error(std::string(argv[file]) + ": LU failed");
+          }
+          seconds += std::chrono::duration<double>(
+              std::chrono::steady_clock::now() - start).count();
         }
       }
-      const auto stop = std::chrono::steady_clock::now();
-      const std::chrono::duration<double> seconds = stop - start;
       std::cout << argv[file] << '\t' << columns.size() << '\t' << selected_entries
                 << '\t' << repetitions << '\t' << std::fixed
-                << std::setprecision(9) << seconds.count() << '\t'
+                << std::setprecision(9) << seconds << '\t'
                 << std::scientific << std::setprecision(17)
-                << factorization.ComputeDeterminant() << '\n';
+                << factorization->ComputeDeterminant() << '\n';
     }
     return 0;
   } catch (const std::exception& error) {

@@ -92,4 +92,10 @@ fn main() {
         simplex.number_of_iterations(),
         simplex.objective_value()
     );
+    if env::var_os("GLOPRS_SHOW_LU_THRESHOLD").is_some() {
+        eprintln!(
+            "lu_pivot_threshold {:.17}",
+            simplex.parameters().lu_factorization_pivot_threshold
+        );
+    }
 }

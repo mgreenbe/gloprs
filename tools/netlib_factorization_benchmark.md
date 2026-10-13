@@ -50,6 +50,17 @@ and three trials. Use `--warmups 0 --repetitions 1 --trials 1` to measure a
 first construction for every probe; `--limit 20` makes a quick smoke test.
 Use `--models qap15 --pivot-min 20000 --pivot-max 40000` to isolate saved
 bases from a particular simplex interval (inclusive endpoints).
+For live-lifecycle comparisons, `--retain-factorization --chronological`
+reuses one LU object per solver and processes saved selections in numeric
+pivot order. `--pivot-threshold 0.9` reproduces the high threshold that the
+direct qap15 solve reaches after numerical imprecision; the default probe
+threshold is 0.01 and seriously understates the late live gap.
+`--evict-mib 32` evicts cache outside the timed region for a cache-sensitivity
+check. On the 823 qap15 selections spanning pivots 25,000–30,000, three
+retained chronological selected-view trials at threshold 0.9 measured
+1.112–1.113x Rust/native, versus near parity at 0.01. This identifies the
+high-threshold LU kernel as the late live bottleneck without attributing the
+entire solve interval to a single exact stage timer.
 The executable interfaces are also usable directly:
 
 ```sh

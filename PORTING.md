@@ -970,7 +970,20 @@ fast-96 trajectories, and the public postsolve/KKT gate continue to agree.
 The paired large-model A/B found no material solver-level timing change; see
 `baselines/phase8-performance.md`.
 
+## High-threshold lower-solve performance follow-up
+
+The qap15 late-stage replay exposed a pivot-threshold-dependent performance
+gap in `TriangularMatrix::PermutedLowerSparseSolve`: selected-view LU is near
+parity at the default 0.01 threshold but 1.112–1.113x Rust/native with a
+retained object at 0.9. The Rust symbolic DFS now scatters the RHS after
+reachability and stores row stacks in 32-bit indices, matching upstream's
+operation order and `RowIndex` width. Both changes preserve differential
+behavior and strict trajectories, but neither improves paired timings. The
+remaining gap is therefore a performance-fidelity investigation, not a
+resolved port validation issue. See `baselines/phase8-performance.md`.
+
 ## Test inventory caveat
+
 
 The pinned public tree does not contain the historical file-local unit tests for
 most `ortools/glop` and `ortools/lp_data` components. Available integration tests

@@ -84,6 +84,10 @@ int main(int argc, char** argv) {
             << glop::GetProblemStatusString(simplex->GetProblemStatus()) << ' '
             << simplex->GetNumberOfIterations() << ' '
             << simplex->GetObjectiveValue() << '\n';
+  if (std::getenv("GLOPRS_SHOW_LU_THRESHOLD") != nullptr) {
+    std::cerr << std::setprecision(17) << "lu_pivot_threshold "
+              << simplex->GetParameters().lu_factorization_pivot_threshold() << '\n';
+  }
   if (std::getenv("GLOPRS_SHOW_NATIVE_STATS") != nullptr) {
     std::cerr << simplex->StatString();
   }
