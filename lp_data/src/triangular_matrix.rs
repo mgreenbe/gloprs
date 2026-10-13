@@ -450,6 +450,43 @@ impl TriangularMatrix {
         row_permutation: &[usize],
         upper: &mut SparseColumn,
     ) {
+        self.permuted_compute_rows_to_consider(
+            lower.iter().map(crate::sparse_vector::SparseEntry::index),
+            row_permutation,
+        );
+        for entry in &*lower {
+            self.permuted_workspace.scratchpad[entry.index().to_usize()] = entry.coefficient();
+        }
+        self.permuted_lower_sparse_solve_scattered(lower, row_permutation, upper);
+    }
+
+    /// Solve directly from an immutable source column, as upstream Markowitz
+    /// does when it first visits a compact basis column. The closure provides
+    /// two inexpensive traversals of the same borrowed column: one for the
+    /// symbolic reach and one for scattering its coefficients.
+    pub fn permuted_lower_sparse_solve_from_entries<F, I>(
+        &mut self,
+        rhs: F,
+        lower: &mut SparseColumn,
+        row_permutation: &[usize],
+        upper: &mut SparseColumn,
+    ) where
+        F: Fn() -> I,
+        I: Iterator<Item = (RowIndex, f64)>,
+    {
+        self.permuted_compute_rows_to_consider(rhs().map(|(row, _)| row), row_permutation);
+        for (row, coefficient) in rhs() {
+            self.permuted_workspace.scratchpad[row.to_usize()] = coefficient;
+        }
+        self.permuted_lower_sparse_solve_scattered(lower, row_permutation, upper);
+    }
+
+    #[allow(clippy::too_many_lines, clippy::cast_possible_truncation, unsafe_code)]
+    fn permuted_compute_rows_to_consider(
+        &mut self,
+        rhs_rows: impl Iterator<Item = RowIndex>,
+        row_permutation: &[usize],
+    ) {
         assert_eq!(self.triangle, Triangle::Lower);
         assert!(self.unit_diagonal);
         assert_eq!(row_permutation.len(), self.num_rows);
@@ -476,8 +513,8 @@ impl TriangularMatrix {
 
         // Compute reachability before scattering, as GLOP does. Keeping the
         // dense scratchpad untouched here reduces the DFS working set.
-        for entry in &*lower {
-            let row = entry.index().to_usize();
+        for entry_row in rhs_rows {
+            let row = entry_row.to_usize();
             assert!(row < *num_rows, "input row exceeds triangular dimension");
             let pivot_column = row_permutation[row];
             if pivot_column == invalid {
@@ -562,11 +599,26 @@ impl TriangularMatrix {
             debug_assert!(workspace.nodes_to_explore.len() <= 2 * *num_rows + rows.len());
         }
 
-        // The input and lower output may share an allocation. Scatter before
-        // clearing the column, but only after the symbolic DFS has finished.
-        for entry in &*lower {
-            workspace.scratchpad[entry.index().to_usize()] = entry.coefficient();
-        }
+        // The numerical solve starts only after the full symbolic DFS and
+        // RHS scatter, matching upstream's cache and mutation boundaries.
+    }
+
+    #[allow(clippy::too_many_lines, unsafe_code)]
+    fn permuted_lower_sparse_solve_scattered(
+        &mut self,
+        lower: &mut SparseColumn,
+        row_permutation: &[usize],
+        upper: &mut SparseColumn,
+    ) {
+        let Self {
+            num_rows,
+            starts,
+            rows,
+            coefficients,
+            permuted_workspace: workspace,
+            ..
+        } = self;
+        debug_assert_eq!(row_permutation.len(), *num_rows);
         workspace.num_fp_operations = 0;
         lower.clear();
         upper.reserve(
@@ -1589,13 +1641,23 @@ mod tests {
                 &mut expected_lower,
                 &mut expected_upper,
             );
-            let mut actual_lower = rhs;
+            let mut actual_lower = rhs.clone();
             let mut actual_upper = SparseColumn::new();
             factor.permuted_lower_sparse_solve(
                 &mut actual_lower,
                 &row_permutation,
                 &mut actual_upper,
             );
+            let mut borrowed_lower = SparseColumn::new();
+            let mut borrowed_upper = SparseColumn::new();
+            factor.permuted_lower_sparse_solve_from_entries(
+                || rhs.iter().map(|entry| (entry.index(), entry.coefficient())),
+                &mut borrowed_lower,
+                &row_permutation,
+                &mut borrowed_upper,
+            );
+            assert_eq!(borrowed_lower, actual_lower);
+            assert_eq!(borrowed_upper, actual_upper);
             for row in 0..5 {
                 let row = RowIndex::from_usize(row);
                 assert_eq!(

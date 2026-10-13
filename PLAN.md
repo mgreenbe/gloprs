@@ -2327,10 +2327,20 @@ so paired kernel measurements remain the next performance evidence to collect.
    native/Rust LU gap across three serial trials. Matched late-window stack
    samples put roughly 91–92% of both solvers' time under refactorization;
    pricing, ratio tests, and update solves are not the primary explanation.
-   The remaining work is to reconcile the high-threshold Markowitz lower
-   sparse solve at the kernel/codegen level without changing trajectories.
-   The RHS scatter order and DFS index width now follow upstream, but paired
-   A/B trials show no speedup from these fidelity changes.
+   This was traced to a data-flow mismatch in first-visit Markowitz columns:
+   native solves directly from the borrowed compact source column, whereas
+   Rust copied it into the mutable residual buffer first. Rust now uses the
+   borrowed source for both symbolic reach and numeric scatter. A three-trial
+   old/new Rust replay on 200 high-threshold late bases is 0.871–0.872x;
+   the two clean full 823-basis native/new Rust trials are 0.963–0.971x.
+   Three live direct solves to pivot 30,000 now have a median 0.975x
+   Rust/native ratio, with identical status, iterations, and objective,
+   versus 1.072x before the fix. Strict fast-96 trajectories, public KKT,
+   and the 30,000-pivot qap15 snapshot pass. The measured qap15 30,000-pivot
+   high-threshold regression is closed. One clean paired 40,000-pivot live
+   trial also measured 0.971x Rust/native with identical status, iterations,
+   and objective; a second native timing was contaminated, so the longer-run
+   distribution remains less certain than the 30,000-pivot result.
    The ~1.7 GB diagnostic corpus and raw results are ignored under
    `target/phase8-qap15-direct-*`.
 2. The serial fast-96 stage and public-pipeline comparisons were repeated

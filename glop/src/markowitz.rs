@@ -579,13 +579,24 @@ fn compute_column<'a, M: InputMatrix>(
     let mut residual = permuted_lower.take_column(column);
     if candidates[column].needs_solve {
         if first_time {
-            copy_input_column(matrix, column, &mut residual);
+            let source = matrix.column(column);
+            lower_factor.permuted_lower_sparse_solve_from_entries(
+                || {
+                    source
+                        .iter()
+                        .map(|entry| (entry.index(), entry.coefficient()))
+                },
+                &mut residual,
+                row_permutation,
+                permuted_upper.mutable_column(column),
+            );
+        } else {
+            lower_factor.permuted_lower_sparse_solve(
+                &mut residual,
+                row_permutation,
+                permuted_upper.mutable_column(column),
+            );
         }
-        lower_factor.permuted_lower_sparse_solve(
-            &mut residual,
-            row_permutation,
-            permuted_upper.mutable_column(column),
-        );
         *num_fp_operations += lower_factor.num_fp_operations_in_last_permuted_lower_sparse_solve();
     } else {
         // GLOP performs this test before populating a column seen for the

@@ -973,14 +973,18 @@ The paired large-model A/B found no material solver-level timing change; see
 ## High-threshold lower-solve performance follow-up
 
 The qap15 late-stage replay exposed a pivot-threshold-dependent performance
-gap in `TriangularMatrix::PermutedLowerSparseSolve`: selected-view LU is near
+gap in `TriangularMatrix::PermutedLowerSparseSolve`: selected-view LU was near
 parity at the default 0.01 threshold but 1.112–1.113x Rust/native with a
-retained object at 0.9. The Rust symbolic DFS now scatters the RHS after
-reachability and stores row stacks in 32-bit indices, matching upstream's
-operation order and `RowIndex` width. Both changes preserve differential
-behavior and strict trajectories, but neither improves paired timings. The
-remaining gap is therefore a performance-fidelity investigation, not a
-resolved port validation issue. See `baselines/phase8-performance.md`.
+retained object at 0.9. The symbolic DFS already matched upstream's scatter
+order and 32-bit row width. The missing fidelity was at the Markowitz caller:
+native passed a first-visit compact column by borrowed view, but Rust copied
+it into the residual sparse column before solving. The new borrowed-input
+triangular path reads that source directly for symbolic and numeric phases.
+Three old/new Rust trials on 200 late bases measured 0.871–0.872x, two clean
+native/new Rust full late replays measured 0.963–0.971x, and three live direct
+qap15 solves to pivot 30,000 have a 0.975x median Rust/native ratio. Strict
+fast-96 trajectories, public KKT, and direct qap15 snapshots still pass.
+See `baselines/phase8-performance.md` for the trial data and scope limits.
 
 ## Test inventory caveat
 

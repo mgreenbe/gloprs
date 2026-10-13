@@ -7,6 +7,45 @@ regression and the 96-model public-postsolve KKT gate also pass after the
 changes described below. Numerical and path fidelity is a gate, not an
 optimization variable.
 
+## Closing the late qap15 LU regression (13 October 2026)
+
+Upstream `Markowitz::ComputeColumn()` passes the borrowed original compact
+column directly to `PermutedLowerSparseSolve()` when a column is first visited.
+Rust instead copied that column into its mutable residual buffer before the
+solve. The Rust port now gives the triangular solver two traversals of a
+borrowed source column (symbolic reach, then numeric scatter), clearing and
+reusing the residual buffer only after the source has been read. Previously
+visited residual columns keep the existing in-place path. This removes a
+first-visit allocation/copy and restores the upstream data-flow boundary.
+
+On 200 qap15 bases after the live threshold reaches 0.9, three alternating
+old/new Rust retained-LU trials measured 16.359/14.273, 16.405/14.287,
+and 16.342/14.248 s: new/old 0.871–0.872x. On all 823 late selected-view
+bases, native/new Rust trials measured 60.844/58.620 and 60.379/58.635 s,
+or 0.963–0.971x. A third native trial was contaminated (102.866 s) and must
+not be used as a clean pair; per-basis median totals over all trials were
+60.641/58.631 s (0.967x). The harness checked matching dimensions, nnz,
+and determinants for every selection. Raw timings are in ignored artifacts
+`target/phase8-qap15-borrowed-column-{ab,native}*.csv`.
+
+Three serial, alternating live direct qap15 solves to pivot 30,000 measured
+native/Rust 76.723/74.819, 76.703/74.800, and 76.411/75.241 s. The
+median ratio is 0.975x, versus 1.072x before the borrowed-column change.
+Every trial had the same `IMPRECISE` status, 30,000 iterations, and objective
+812.2125021479343. The strict fast-96 native pivot trajectories, public
+postsolve/KKT gate, direct qap15 snapshot through pivot 30,000, workspace
+tests, formatting, and Clippy pass. A focused test also checks the borrowed
+and in-place triangular solves after DFS pruning. This closes the measured
+high-threshold qap15 regression at the 30,000-pivot endpoint. At 40,000
+pivots, one clean paired trial measured 140.635/136.564 s native/Rust
+(0.971x), with the same `DUAL_FEASIBLE` status, 40,000 iterations, and
+objective 850.9199102619584. In a second pair the native run rose to
+174.833 s while Rust remained at 136.786 s, so that pair is too noisy for a
+precise speed ratio. The longer-run check supports the same conclusion but
+does not establish a tight 40,000-pivot distribution or complete every Phase
+8 outlier. Raw live trials: `target/phase8-qap15-borrowed-column-live.json`
+and `target/phase8-qap15-borrowed-column-live40k.json`.
+
 ## Late qap15 localization and fast-96 rerun (13 October 2026)
 
 Paired serial direct solves (one warm-up, three alternating timed trials)
