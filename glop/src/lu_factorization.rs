@@ -10,7 +10,7 @@ use std::fmt;
 use lp_data::lp_types::{
     ColIndex, RowIndex, RowToColMapping, VectorIndex, deterministic_time_for_fp_operations,
 };
-use lp_data::lp_utils::squared_norm_and_reset_to_zero;
+use lp_data::lp_utils::{clear_and_resize_vector_with_non_zeros, squared_norm_and_reset_to_zero};
 use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow, ScatteredVector};
 use lp_data::sparse::{CompactSparseMatrix, SparseMatrix};
 use lp_data::sparse_vector::SparseColumn;
@@ -643,8 +643,12 @@ impl LuFactorization {
         result: &mut ScatteredColumn,
     ) -> Result<(), FactorizationError> {
         let entries = entries.into_iter();
-        result.clear();
+        // GLOP clears the RHS at the BasisFactorization entry point using
+        // ClearAndResizeVectorWithNonZeros: sparse positions below 5% are
+        // cleared individually, otherwise the dense values are zeroed. The
+        // membership mask is Rust-only; clear it before discarding positions.
         result.clear_sparse_mask();
+        clear_and_resize_vector_with_non_zeros(result.len(), result);
         if self.is_identity_factorization {
             let (values, non_zeros) = result.mutable_parts();
             for (row, value) in entries {

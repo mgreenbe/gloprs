@@ -49,6 +49,15 @@ cover insertion, partition, and heap fallback. Six `pilot` iteration caps pin
 ordered bases and reduced-cost bits, and the raw public solve matches native's
 4,427 iterations and recovered numerical solution.
 
+The `lu_factorization` problem-column RHS reset now follows upstream
+`ClearAndResizeVectorWithNonZeros()`: clear listed values below 5% density,
+otherwise zero the dense array. Rust also clears its auxiliary membership
+mask before discarding the listed positions; GLOP has no such mask. The
+strict fast-96 trajectory and public postsolve/KKT gates pass. A serial,
+three-trial fast-96 A/B presolved-solve run measured 9.867 versus 10.001
+seconds (new/old 0.987x); seven-trial focused A/B runs found gains on all
+five sampled outliers, largest on `fit2p` (0.926x) and `stocfor3` (0.963x).
+
 The validated `basis_representation` path now also accepts a shared compact
 matrix view for the advanced entry. Its Markowitz/LU selected-column traversal
 uses the same source entry order and operation accounting as the sparse view;

@@ -2199,6 +2199,25 @@ so paired kernel measurements remain the next performance evidence to collect.
    full-solve ratio should be localized with a matched `stocfor3` BTRAN/
    permutation probe before changing the transpose solve. The two samples
    are ignored `target/phase8-stocfor3-current-{rust,native}.sample.txt`.
+   The 57 `stocfor3` saved basis groups contain 117 BTRAN and 6,924 FTRAN
+   pre-pivot right-hand sides. Five-trial serial LU-only probe timings were
+   1.144x and 1.287x Rust/native respectively, with equal checksums, but
+   their tiny absolute times and absence of rank-one update chains cannot
+   account for the full-solve excess. Inspecting the sampled RHS reset found
+   a real upstream mismatch: Rust cleared each listed value and mask bit,
+   whereas GLOP uses a 5%-density switch between sparse and dense clearing.
+   Rust now uses that policy and clears its auxiliary mask before discarding
+   positions. Seven-trial paired presolved solves measured new/old 0.963x
+   `stocfor3`, 0.985x `dfl001`, 0.992x `fit2d`, 0.926x `fit2p`, and 0.989x
+   `d6cube` (aggregate 0.982x). A separate serial three-trial fast-96 A/B
+   measured 9.867 versus 10.001 seconds (0.987x, median model 0.990x),
+   with matching statuses and iteration counts. Strict fast-96 trajectories,
+   public postsolve/KKT, LU unit tests, formatting, and Clippy pass. The
+   matched serial native/Rust fast-96 stage rerun totals 9.664 versus 9.860
+   seconds (Rust/native 1.020x; median model 1.058x; sqrt-nnz weighted
+   geometric 1.052x), improving on the preceding 1.036x aggregate run.
+   The remaining `stocfor3` and LU solve gaps need updated-chain, matched-input
+   profiling before changing transpose substitution or permutation kernels.
 2. Repeat the serial fast-96 stage and public-pipeline comparisons after a
    measured change; record medians and dispersion, and rank regressions by
    absolute time. Keep `qap15` outside deterministic wall-time gates until
