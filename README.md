@@ -67,15 +67,19 @@ opt-in capped-state regression is
 
 The same native adapters and release Rust examples support the shared
 `../datasets/miplib2017` and `../datasets/mittelmann-lpopt` MPS collections.
-Their manifest-backed `extra` selection contains 163 models with fewer than
-150,000 matrix nonzeros, excluding names already in Netlib. MIPLIB instances
+Their parser-verified `extra` selection contains 166 models with fewer than
+150,000 constraint-matrix nonzeros, excluding names already in Netlib. The
+shared manifests also count objective coefficients, so the pinned selection
+is in `baselines/extra-lp-corpus.json`; regenerate it with
+`python3 tools/generate_extra_lp_corpus.py`. MIPLIB instances
 are solved as LP relaxations; GLOP does not enforce integrality.
 
 ```text
 python3 -m unittest discover -s tools -p test_lp_corpus.py
-python3 tools/test_extra_lp_corpus.py --corpus extra
-python3 tools/benchmark_phase8_stages.py --corpus extra --stage all --output target/phase8-extra-stages.json
-python3 tools/benchmark_phase5_netlib.py --corpus extra --mode default --output target/phase8-extra-public.json
+python3 tools/test_extra_lp_corpus.py --corpus extra --wall-seconds 60
+python3 tools/validate_extra_lp_baseline.py
+python3 tools/benchmark_phase8_stages.py --corpus extra --stage all --wall-seconds 60 --output baselines/phase8-extra-stages.json
+python3 tools/benchmark_phase5_netlib.py --corpus extra --mode default --wall-seconds 60 --output baselines/phase8-extra-public.json
 ```
 
 Use `--corpus miplib2017` or `--corpus mittelmann-lpopt` for one source, and
@@ -83,9 +87,12 @@ Use `--corpus miplib2017` or `--corpus mittelmann-lpopt` for one source, and
 compares native and Rust solution vectors and basis statuses in addition to
 status, objective, and iteration count. A stage solve is skipped when presolve
 already terminates the model; public-solver validation still covers it. Models
-that hit the 20-second wall limit are reported as inconclusive and excluded
+that hit the chosen wall limit are reported as inconclusive and excluded
 from parity/timing aggregates, because their pivot count depends on elapsed
-time.
+time. `validate_extra_lp_baseline.py` is a faster Rust-only regression gate
+against the pinned native status, iteration, and objective outcomes. The
+measured results, dispersion, and build fingerprints are in
+[the extra-corpus performance baseline](baselines/phase8-extra-performance.md).
 
 ## Native GLOP reference
 

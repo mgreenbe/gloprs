@@ -1,0 +1,1668 @@
+{
+  "description": "Non-Netlib MPS instances with fewer than 150000 constraint-matrix entries",
+  "cutoff_exclusive": 150000,
+  "count": 166,
+  "native_adapter": "tools/full_presolve_netlib_reference_adapter.cc",
+  "models": [
+    {
+      "corpus": "miplib2017",
+      "name": "30n20b8",
+      "path": "miplib2017/mps/30n20b8.mps",
+      "sha256": "152b62344fb15ee3e080137ea304d998c351f56c3b3bcea3f2a421cdbb7a55f9",
+      "manifest_nonzeros": 109708,
+      "rows": 576,
+      "columns": 18380,
+      "nonzeros": 109706
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "50v-10",
+      "path": "miplib2017/mps/50v-10.mps",
+      "sha256": "ab32c42d0b916c3b858dae1f160f4367f0dbe17016b0714955765ff4d8471133",
+      "manifest_nonzeros": 4392,
+      "rows": 233,
+      "columns": 2013,
+      "nonzeros": 2745
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "air05",
+      "path": "miplib2017/mps/air05.mps",
+      "sha256": "1dcbb9e423a0235d9d890896756a840d3c0a32a8ec057f2127b807ca5a97f5d7",
+      "manifest_nonzeros": 59316,
+      "rows": 426,
+      "columns": 7195,
+      "nonzeros": 52121
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "app1-1",
+      "path": "miplib2017/mps/app1-1.mps",
+      "sha256": "39d133b738913cee4bc0c5c77ec6f33a74e80e20da722be476513e9b805d195f",
+      "manifest_nonzeros": 18298,
+      "rows": 4926,
+      "columns": 2480,
+      "nonzeros": 18275
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "assign1-5-8",
+      "path": "miplib2017/mps/assign1-5-8.mps",
+      "sha256": "cb63a8b3480eaca33562ab4960b0b795604aa520e4241761eae6aa86df30ca6b",
+      "manifest_nonzeros": 3746,
+      "rows": 161,
+      "columns": 156,
+      "nonzeros": 3720
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "b1c1s1",
+      "path": "miplib2017/mps/b1c1s1.mps",
+      "sha256": "68cbaa66b6ff08114d9c3fb9b5e786cfd7e34dbe718865d35aa9181147872393",
+      "manifest_nonzeros": 12976,
+      "rows": 3904,
+      "columns": 3872,
+      "nonzeros": 11408
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "beasleyC3",
+      "path": "miplib2017/mps/beasleyC3.mps",
+      "sha256": "728c9616ca793393f90d6bf7780b4871e71f33add9f81eacfc12bf05976130c8",
+      "manifest_nonzeros": 6250,
+      "rows": 1750,
+      "columns": 2500,
+      "nonzeros": 5000
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "binkar10_1",
+      "path": "miplib2017/mps/binkar10_1.mps",
+      "sha256": "71dc18a14f1d26f39473eaf64b81c12691a0c0d4ab00dec43679071ed7f3e09c",
+      "manifest_nonzeros": 6238,
+      "rows": 1026,
+      "columns": 2298,
+      "nonzeros": 4496
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "bnatt400",
+      "path": "miplib2017/mps/bnatt400.mps",
+      "sha256": "50565a2a2e80dd9563ce7b5d06e3053d986acf72d57ab787d97d1d10ad519ef8",
+      "manifest_nonzeros": 21699,
+      "rows": 5614,
+      "columns": 3600,
+      "nonzeros": 21698
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "bnatt500",
+      "path": "miplib2017/mps/bnatt500.mps",
+      "sha256": "682c0ade4b2092598bf219b8ac8cabb01884ea21d94efb912581fb35b970280c",
+      "manifest_nonzeros": 27204,
+      "rows": 7029,
+      "columns": 4500,
+      "nonzeros": 27203
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "bppc4-08",
+      "path": "miplib2017/mps/bppc4-08.mps",
+      "sha256": "e596783b23be27e1165bc6080050736d499f163ee1bb184c3846b72e312a7fec",
+      "manifest_nonzeros": 23966,
+      "rows": 111,
+      "columns": 1456,
+      "nonzeros": 23964
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "brazil3",
+      "path": "miplib2017/mps/brazil3.mps",
+      "sha256": "f6bbf00496001a5563a70a4195d5189cc78bdea87113cc3530f01909c8f5d81d",
+      "manifest_nonzeros": 133185,
+      "rows": 14646,
+      "columns": 23968,
+      "nonzeros": 133184
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "cbs-cta",
+      "path": "miplib2017/mps/cbs-cta.mps",
+      "sha256": "c1a57ebb5962b41ad55815e4b3260104bf0bb4bcd6d01f1ebccbb50f2e5f127b",
+      "manifest_nonzeros": 65356,
+      "rows": 10112,
+      "columns": 24793,
+      "nonzeros": 64388
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "chromaticindex512-7",
+      "path": "miplib2017/mps/chromaticindex512-7.mps",
+      "sha256": "5c6d68975ec7e9b6f60251db9cc0dba9683127e0547c3ef8d7b0fda71f9befc9",
+      "manifest_nonzeros": 135160,
+      "rows": 33791,
+      "columns": 36864,
+      "nonzeros": 135156
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "CMS750_4",
+      "path": "miplib2017/mps/CMS750_4.mps",
+      "sha256": "959fbfbc27e4aef8f5206e336aab7d3dd5f238ae2c4f698a2043fbb34fac5cfa",
+      "manifest_nonzeros": 45654,
+      "rows": 16381,
+      "columns": 11697,
+      "nonzeros": 44903
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "cod105",
+      "path": "miplib2017/mps/cod105.mps",
+      "sha256": "243f5816b0d494edca2e0d77b90fd0b119697a89cd116d172cfe773bfd7b2a5d",
+      "manifest_nonzeros": 58368,
+      "rows": 1024,
+      "columns": 1024,
+      "nonzeros": 57344
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "comp07-2idx",
+      "path": "miplib2017/mps/comp07-2idx.mps",
+      "sha256": "5afc8111d53b87002aca089f7676ab8f8d9c1b3632b9541dd5d9eb8c6eb54efa",
+      "manifest_nonzeros": 100633,
+      "rows": 21235,
+      "columns": 17264,
+      "nonzeros": 86577
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "comp21-2idx",
+      "path": "miplib2017/mps/comp21-2idx.mps",
+      "sha256": "8c87dce69951beb38d337173b0d7ea568564d63187c3029d230dd4145f3250c0",
+      "manifest_nonzeros": 65847,
+      "rows": 14038,
+      "columns": 10863,
+      "nonzeros": 57301
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "cost266-UUE",
+      "path": "miplib2017/mps/cost266-UUE.mps",
+      "sha256": "4c278416403bb2a1388eaabaf13061c879ab97c96d73c754c1b4fd76d8570e86",
+      "manifest_nonzeros": 16473,
+      "rows": 1446,
+      "columns": 4161,
+      "nonzeros": 12312
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "csched007",
+      "path": "miplib2017/mps/csched007.mps",
+      "sha256": "9c78014447850a4947f7aebcb504aacdd03940e4f9268547032389ed44b1d0de",
+      "manifest_nonzeros": 6429,
+      "rows": 351,
+      "columns": 1758,
+      "nonzeros": 6379
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "csched008",
+      "path": "miplib2017/mps/csched008.mps",
+      "sha256": "cc1366afd23d38b0cdb63150b7e69913a98a526c4bafd6537989d34837d8fecf",
+      "manifest_nonzeros": 5688,
+      "rows": 351,
+      "columns": 1536,
+      "nonzeros": 5687
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "cvs16r128-89",
+      "path": "miplib2017/mps/cvs16r128-89.mps",
+      "sha256": "9c31a000fb71ac2db6101310194d44f97557cf597f2e68f542725f64f87346ff",
+      "manifest_nonzeros": 14576,
+      "rows": 4633,
+      "columns": 3472,
+      "nonzeros": 12528
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "dano3_3",
+      "path": "miplib2017/mps/dano3_3.mps",
+      "sha256": "50fde62b2d086cf2f15e226bc16f0e4d4444fa14c1686a1812706069c1ba7812",
+      "manifest_nonzeros": 79656,
+      "rows": 3202,
+      "columns": 13873,
+      "nonzeros": 79655
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "dano3_5",
+      "path": "miplib2017/mps/dano3_5.mps",
+      "sha256": "23e50a226c4d335defd440cdbdebf7f91b442be5f77c75fae58586fa405890c7",
+      "manifest_nonzeros": 79656,
+      "rows": 3202,
+      "columns": 13873,
+      "nonzeros": 79655
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "decomp2",
+      "path": "miplib2017/mps/decomp2.mps",
+      "sha256": "a8c6e04ca58e4fdc11a01256d39c96c8b9d3cbd70af635865eb2b47b218d1230",
+      "manifest_nonzeros": 67404,
+      "rows": 10765,
+      "columns": 14387,
+      "nonzeros": 64073
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "drayage-100-23",
+      "path": "miplib2017/mps/drayage-100-23.mps",
+      "sha256": "507cd6f4a345747f1b3a55c62fb156062068e9f9dad045ee37d539e611fd931a",
+      "manifest_nonzeros": 49255,
+      "rows": 4630,
+      "columns": 11090,
+      "nonzeros": 41550
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "drayage-25-23",
+      "path": "miplib2017/mps/drayage-25-23.mps",
+      "sha256": "2d4475840547b7b7253ced6a5e692cd3fc2351799f956cee7bac772015fb201e",
+      "manifest_nonzeros": 49255,
+      "rows": 4630,
+      "columns": 11090,
+      "nonzeros": 41550
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "dws008-01",
+      "path": "miplib2017/mps/dws008-01.mps",
+      "sha256": "be53e2e6d46f8c196b102b3a6cffc85c808e86820c75ccae61be294faeba7648",
+      "manifest_nonzeros": 56596,
+      "rows": 6064,
+      "columns": 11096,
+      "nonzeros": 56400
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "eil33-2",
+      "path": "miplib2017/mps/eil33-2.mps",
+      "sha256": "6e6c3e48fa0df3ec627baab65c0b8da7a5ef1bd920ed52b3e5706cd70edd9966",
+      "manifest_nonzeros": 48759,
+      "rows": 32,
+      "columns": 4516,
+      "nonzeros": 44243
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "enlight_hard",
+      "path": "miplib2017/mps/enlight_hard.mps",
+      "sha256": "572ca23c17d0ad734895e8338af458525a753ee76bdb117d2917e4069c6b65b0",
+      "manifest_nonzeros": 660,
+      "rows": 100,
+      "columns": 200,
+      "nonzeros": 560
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "exp-1-500-5-5",
+      "path": "miplib2017/mps/exp-1-500-5-5.mps",
+      "sha256": "32bcb5e23d511b3ee530e7016765cc724e06bc77225648669c443aa7be0a68f2",
+      "manifest_nonzeros": 2970,
+      "rows": 550,
+      "columns": 990,
+      "nonzeros": 1980
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "fastxgemm-n2r6s0t2",
+      "path": "miplib2017/mps/fastxgemm-n2r6s0t2.mps",
+      "sha256": "38fb9f03c920e05bac3337979ec6bb52a56525f5c932cc6474b6ef9a77be2bce",
+      "manifest_nonzeros": 19584,
+      "rows": 5998,
+      "columns": 784,
+      "nonzeros": 19376
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "fhnw-binpack4-4",
+      "path": "miplib2017/mps/fhnw-binpack4-4.mps",
+      "sha256": "1d2dc402bd3e757581f3059690695ecd3fa7a200a31c4f4c0ec2c6c92691fd33",
+      "manifest_nonzeros": 2332,
+      "rows": 620,
+      "columns": 520,
+      "nonzeros": 2332
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "fhnw-binpack4-48",
+      "path": "miplib2017/mps/fhnw-binpack4-48.mps",
+      "sha256": "fea87c0b08be7e9bf3e8f9bc8bf7740ff1066302bf7ffdefc78cdc7ffca39211",
+      "manifest_nonzeros": 17290,
+      "rows": 4480,
+      "columns": 3710,
+      "nonzeros": 17290
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "fiball",
+      "path": "miplib2017/mps/fiball.mps",
+      "sha256": "4c525e0ccff090039c5cf50a16144f3bf16874e63d7d685cd39dcf88b6524ed4",
+      "manifest_nonzeros": 104793,
+      "rows": 3707,
+      "columns": 34219,
+      "nonzeros": 104792
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "gen-ip002",
+      "path": "miplib2017/mps/gen-ip002.mps",
+      "sha256": "30ed071e531beea561b330dd8e590eb641a5ec6d4e3f41a8d54735ce27db01b6",
+      "manifest_nonzeros": 963,
+      "rows": 24,
+      "columns": 41,
+      "nonzeros": 922
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "gen-ip054",
+      "path": "miplib2017/mps/gen-ip054.mps",
+      "sha256": "8b71b70a6f92ea9bde78b375f4366e7cc021cfb517df87130775f8b8bdf47333",
+      "manifest_nonzeros": 562,
+      "rows": 27,
+      "columns": 30,
+      "nonzeros": 532
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "glass-sc",
+      "path": "miplib2017/mps/glass-sc.mps",
+      "sha256": "51183ff96e9d8ac965eb782e9cb77d0734ed1b716261e75f329b2b1a465caa6d",
+      "manifest_nonzeros": 64132,
+      "rows": 6119,
+      "columns": 214,
+      "nonzeros": 63918
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "glass4",
+      "path": "miplib2017/mps/glass4.mps",
+      "sha256": "5189af38fee754d9e35e6b6b7838fd55d496a447f794fdc8bfd4015bf5f67a1e",
+      "manifest_nonzeros": 1834,
+      "rows": 396,
+      "columns": 322,
+      "nonzeros": 1815
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "gmu-35-40",
+      "path": "miplib2017/mps/gmu-35-40.mps",
+      "sha256": "c0ae69e1cddf62318987abb2f4fdab189b3c84374e168c532ab4d917d0753895",
+      "manifest_nonzeros": 5530,
+      "rows": 424,
+      "columns": 1205,
+      "nonzeros": 4843
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "gmu-35-50",
+      "path": "miplib2017/mps/gmu-35-50.mps",
+      "sha256": "b47c8c89fe140ea3d6c28cab124205ef54782245c4b76e2ac0884ade012b9e8b",
+      "manifest_nonzeros": 9665,
+      "rows": 435,
+      "columns": 1919,
+      "nonzeros": 8643
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "graph20-20-1rand",
+      "path": "miplib2017/mps/graph20-20-1rand.mps",
+      "sha256": "452473ec1588337a04c553033d9a4ed8eb30180989069af12c9cd685151dc4d6",
+      "manifest_nonzeros": 19314,
+      "rows": 5587,
+      "columns": 2183,
+      "nonzeros": 19277
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "graphdraw-domain",
+      "path": "miplib2017/mps/graphdraw-domain.mps",
+      "sha256": "4e24709cf43956e4aba937f9fd8e574266ef7049fa1dc007b427cfed00bfcfd1",
+      "manifest_nonzeros": 2654,
+      "rows": 865,
+      "columns": 254,
+      "nonzeros": 2600
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "h80x6320d",
+      "path": "miplib2017/mps/h80x6320d.mps",
+      "sha256": "468cc10f24029e48c439447b40c4532cb1e4a66fb85a04bcd522b085a54a16b3",
+      "manifest_nonzeros": 44161,
+      "rows": 6558,
+      "columns": 12640,
+      "nonzeros": 31521
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "ic97_potential",
+      "path": "miplib2017/mps/ic97_potential.mps",
+      "sha256": "4260f75027c7712b7bbf2c13b5e903185703a8cbac7353cb8739b97f988b7f37",
+      "manifest_nonzeros": 3418,
+      "rows": 1046,
+      "columns": 728,
+      "nonzeros": 3138
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "icir97_tension",
+      "path": "miplib2017/mps/icir97_tension.mps",
+      "sha256": "9c937b1c796c430b318c8547e73adbf29eadb1d2697e36b1e1306f5a8d2e1741",
+      "manifest_nonzeros": 22741,
+      "rows": 1203,
+      "columns": 2494,
+      "nonzeros": 22333
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "irp",
+      "path": "miplib2017/mps/irp.mps",
+      "sha256": "754905341c843153bd2caa6a73985dcb1b841423b6825370a1293b6d39bfd9da",
+      "manifest_nonzeros": 118569,
+      "rows": 39,
+      "columns": 20315,
+      "nonzeros": 98254
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "istanbul-no-cutoff",
+      "path": "miplib2017/mps/istanbul-no-cutoff.mps",
+      "sha256": "5eb00dd3c6bd06bd3407b37247bc07db68bdfcc7c0547543d06049aa516e0785",
+      "manifest_nonzeros": 71554,
+      "rows": 20346,
+      "columns": 5282,
+      "nonzeros": 71477
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "leo1",
+      "path": "miplib2017/mps/leo1.mps",
+      "sha256": "8d7b36c158eec9e5366b202710081bac07fccaa411967bb3839d1f4c041f6079",
+      "manifest_nonzeros": 131219,
+      "rows": 593,
+      "columns": 6731,
+      "nonzeros": 131218
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "lotsize",
+      "path": "miplib2017/mps/lotsize.mps",
+      "sha256": "9fcea318555b277974f8a6f475afabba33f17e2dc90e215f5ce5f692938ab721",
+      "manifest_nonzeros": 8955,
+      "rows": 1920,
+      "columns": 2985,
+      "nonzeros": 6565
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "mad",
+      "path": "miplib2017/mps/mad.mps",
+      "sha256": "7fb9d385e3358b98df263d85d10d7161927ef153f2dd6b38e3738c8ae97295f3",
+      "manifest_nonzeros": 3027,
+      "rows": 52,
+      "columns": 220,
+      "nonzeros": 3007
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "markshare2",
+      "path": "miplib2017/mps/markshare2.mps",
+      "sha256": "35013a309b073f42e163e01a485909055b52a5d816fdd18345576473f8ed1458",
+      "manifest_nonzeros": 448,
+      "rows": 7,
+      "columns": 74,
+      "nonzeros": 434
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "markshare_4_0",
+      "path": "miplib2017/mps/markshare_4_0.mps",
+      "sha256": "a05d1c8c1a1e0646ea31965fd5e05af7a41801db3cb1820b2ab4cd95c7bc32db",
+      "manifest_nonzeros": 127,
+      "rows": 4,
+      "columns": 34,
+      "nonzeros": 123
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "mas74",
+      "path": "miplib2017/mps/mas74.mps",
+      "sha256": "181f02fd634306ad6431f21d5e8115f3e8112f2e7d2bebed1690475b49acc4af",
+      "manifest_nonzeros": 1857,
+      "rows": 13,
+      "columns": 151,
+      "nonzeros": 1706
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "mas76",
+      "path": "miplib2017/mps/mas76.mps",
+      "sha256": "114b73dbe17c1d1b4d37a09311424571781225e01edfbec1c6acb320214593f6",
+      "manifest_nonzeros": 1791,
+      "rows": 12,
+      "columns": 151,
+      "nonzeros": 1640
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "mc11",
+      "path": "miplib2017/mps/mc11.mps",
+      "sha256": "f134128b38fdc1167a132123c65d6a6ffe95465258f07469daee35e3a59217f7",
+      "manifest_nonzeros": 7600,
+      "rows": 1920,
+      "columns": 3040,
+      "nonzeros": 6080
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "mcsched",
+      "path": "miplib2017/mps/mcsched.mps",
+      "sha256": "39c18a78edecfde12f10f4baf958986d9de827a030c6b25d0d86f46a2ebf4d3a",
+      "manifest_nonzeros": 8089,
+      "rows": 2107,
+      "columns": 1747,
+      "nonzeros": 8088
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "mik-250-20-75-4",
+      "path": "miplib2017/mps/mik-250-20-75-4.mps",
+      "sha256": "b29fe88b56bf3c924894f473cee77e25efb4dbaccb322e95c98b9210fb875e6d",
+      "manifest_nonzeros": 9540,
+      "rows": 195,
+      "columns": 270,
+      "nonzeros": 9270
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "milo-v12-6-r2-40-1",
+      "path": "miplib2017/mps/milo-v12-6-r2-40-1.mps",
+      "sha256": "c15ae3acd258d4dd0991c3f735414f388c42df538d784fe38c68be65ee794493",
+      "manifest_nonzeros": 14814,
+      "rows": 5628,
+      "columns": 2688,
+      "nonzeros": 14604
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "momentum1",
+      "path": "miplib2017/mps/momentum1.mps",
+      "sha256": "764f3b7acf751bdbec69c9c97b85c8ce46bee4ffbb7fd64e76383ff30312fd46",
+      "manifest_nonzeros": 106005,
+      "rows": 42680,
+      "columns": 5174,
+      "nonzeros": 103198
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "mzzv11",
+      "path": "miplib2017/mps/mzzv11.mps",
+      "sha256": "7f14d78667ff20777e963a66815c63a0dc4f12a6ee573eeed107d8a5d9712620",
+      "manifest_nonzeros": 134808,
+      "rows": 9499,
+      "columns": 10240,
+      "nonzeros": 134603
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "n5-3",
+      "path": "miplib2017/mps/n5-3.mps",
+      "sha256": "9369795c7d1f3943e9204b140fc2c77714790d4b4856fe354d48e6abef00f31f",
+      "manifest_nonzeros": 12400,
+      "rows": 1062,
+      "columns": 2550,
+      "nonzeros": 9900
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-1171448",
+      "path": "miplib2017/mps/neos-1171448.mps",
+      "sha256": "3b93dc50a6a0a7431f0b0f0d422aa7cb1cbffab97e91aeb2e8d2e7167d726e8a",
+      "manifest_nonzeros": 134316,
+      "rows": 13206,
+      "columns": 4914,
+      "nonzeros": 131859
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-1171737",
+      "path": "miplib2017/mps/neos-1171737.mps",
+      "sha256": "9c11ef450081fcac8e6ff4dbbaa695656a2f7d2df3e6cfd3db768e49b932b6dc",
+      "manifest_nonzeros": 59790,
+      "rows": 4179,
+      "columns": 2340,
+      "nonzeros": 58620
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-1445765",
+      "path": "miplib2017/mps/neos-1445765.mps",
+      "sha256": "5d2c26aeefd06f99c021ea019b2c0993bb3deaf4426a36c89dff474c0bb20fe5",
+      "manifest_nonzeros": 41230,
+      "rows": 2147,
+      "columns": 20617,
+      "nonzeros": 40230
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-1456979",
+      "path": "miplib2017/mps/neos-1456979.mps",
+      "sha256": "4858bf0d031363f0a61c047b5a8f9368bd079e6f7663b0b9ec1ba885bc0ccb3a",
+      "manifest_nonzeros": 40685,
+      "rows": 6770,
+      "columns": 4605,
+      "nonzeros": 36440
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-1582420",
+      "path": "miplib2017/mps/neos-1582420.mps",
+      "sha256": "29ed8162c6c480dd85e8ee79058f0d647c71858d0815ddc60e069554a8bb40e3",
+      "manifest_nonzeros": 34714,
+      "rows": 10180,
+      "columns": 10100,
+      "nonzeros": 24814
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-2657525-crna",
+      "path": "miplib2017/mps/neos-2657525-crna.mps",
+      "sha256": "31a5a4880f97d3844a273b57221e88a6491bb392b1185290548d9f18b17402eb",
+      "manifest_nonzeros": 1722,
+      "rows": 342,
+      "columns": 524,
+      "nonzeros": 1690
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-2978193-inde",
+      "path": "miplib2017/mps/neos-2978193-inde.mps",
+      "sha256": "d14ddacae3696eb88edaf11321afb018e6f74ca730c67434a8db79f8f376514c",
+      "manifest_nonzeros": 62336,
+      "rows": 396,
+      "columns": 20800,
+      "nonzeros": 41600
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3004026-krka",
+      "path": "miplib2017/mps/neos-3004026-krka.mps",
+      "sha256": "7f8e828628826311201247f9d3038321cb59cd2da1806ec1cb4e6176e377197b",
+      "manifest_nonzeros": 41860,
+      "rows": 12545,
+      "columns": 17030,
+      "nonzeros": 41860
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3024952-loue",
+      "path": "miplib2017/mps/neos-3024952-loue.mps",
+      "sha256": "c35a114cc6e63556ba76182d35cf7ef0d963f137dd8eb3085f305784814581c7",
+      "manifest_nonzeros": 20385,
+      "rows": 3705,
+      "columns": 3255,
+      "nonzeros": 17310
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3046615-murg",
+      "path": "miplib2017/mps/neos-3046615-murg.mps",
+      "sha256": "d8bfe7f051fdf60fdd27c0c5e7e6286729561275f13d87e2f71b1e78b19ccaf5",
+      "manifest_nonzeros": 1268,
+      "rows": 498,
+      "columns": 274,
+      "nonzeros": 1266
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3083819-nubu",
+      "path": "miplib2017/mps/neos-3083819-nubu.mps",
+      "sha256": "3ef375d725612b2b385a22e62a8d4de9eb998c71af7ca0119910ba0bacab27d3",
+      "manifest_nonzeros": 27232,
+      "rows": 4725,
+      "columns": 8644,
+      "nonzeros": 24048
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3216931-puriri",
+      "path": "miplib2017/mps/neos-3216931-puriri.mps",
+      "sha256": "9414ba2e14a0c58229ac6be0b1a4ddc1f5ee6600ebfd63cb957e3f9268e7443a",
+      "manifest_nonzeros": 93377,
+      "rows": 5989,
+      "columns": 3555,
+      "nonzeros": 91691
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3381206-awhea",
+      "path": "miplib2017/mps/neos-3381206-awhea.mps",
+      "sha256": "738f0bf51278e4dd1f0418b149de72ee2614a5a9b805c838705565397cd0514d",
+      "manifest_nonzeros": 4750,
+      "rows": 479,
+      "columns": 2375,
+      "nonzeros": 4275
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3627168-kasai",
+      "path": "miplib2017/mps/neos-3627168-kasai.mps",
+      "sha256": "e0fce9d13f3ec671ad4f7964d1b01a398c9c5d128eca8ba40cf67a4949cca37e",
+      "manifest_nonzeros": 5161,
+      "rows": 1655,
+      "columns": 1462,
+      "nonzeros": 5158
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3656078-kumeu",
+      "path": "miplib2017/mps/neos-3656078-kumeu.mps",
+      "sha256": "d69c24a842132fc8efa3f88b317714d06fddd2d11e5243021f5cd7b6fa0acec6",
+      "manifest_nonzeros": 59294,
+      "rows": 17656,
+      "columns": 14870,
+      "nonzeros": 59292
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3754480-nidda",
+      "path": "miplib2017/mps/neos-3754480-nidda.mps",
+      "sha256": "f9b9bf4718a28ac757b176d4f30476758936ea361dad6733a096f5835ad9dcf3",
+      "manifest_nonzeros": 1741,
+      "rows": 402,
+      "columns": 253,
+      "nonzeros": 1488
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-4338804-snowy",
+      "path": "miplib2017/mps/neos-4338804-snowy.mps",
+      "sha256": "867380141abb94f45a54fcddf8c26316358cf25698ad44ed88d0e0fb721c2988",
+      "manifest_nonzeros": 6363,
+      "rows": 1701,
+      "columns": 1344,
+      "nonzeros": 6342
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-4387871-tavua",
+      "path": "miplib2017/mps/neos-4387871-tavua.mps",
+      "sha256": "3607bd503256e50bace2185e5e9f0fee5c189ba9cae016a310b3c0a0af05a744",
+      "manifest_nonzeros": 25496,
+      "rows": 4554,
+      "columns": 4004,
+      "nonzeros": 23496
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-4738912-atrato",
+      "path": "miplib2017/mps/neos-4738912-atrato.mps",
+      "sha256": "83c51dba0916162c7351df99e66ca8eff52d878a26c13980a0273685d259ff28",
+      "manifest_nonzeros": 20577,
+      "rows": 1947,
+      "columns": 6216,
+      "nonzeros": 19521
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-4954672-berkel",
+      "path": "miplib2017/mps/neos-4954672-berkel.mps",
+      "sha256": "c3d0897fc7b75b0335a43da0fd2919f8d1fa04b0360947d70897ab114b9ca382",
+      "manifest_nonzeros": 8259,
+      "rows": 1848,
+      "columns": 1533,
+      "nonzeros": 8007
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-5107597-kakapo",
+      "path": "miplib2017/mps/neos-5107597-kakapo.mps",
+      "sha256": "f919a7ea8d7d9a82ad55bb84d5921831c638fff9956d1f52a63f09b587318968",
+      "manifest_nonzeros": 19416,
+      "rows": 6498,
+      "columns": 3114,
+      "nonzeros": 19392
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-5188808-nattai",
+      "path": "miplib2017/mps/neos-5188808-nattai.mps",
+      "sha256": "31ded896525173f0f8efb1ea26981a2a9727b7100c2d414ab82714fae12022a7",
+      "manifest_nonzeros": 136062,
+      "rows": 29452,
+      "columns": 14544,
+      "nonzeros": 133686
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-827175",
+      "path": "miplib2017/mps/neos-827175.mps",
+      "sha256": "a2fbb04b34f1baaac64f9e0bd4e36b553f319cb9e447c623b9ea9eca605a3df7",
+      "manifest_nonzeros": 121892,
+      "rows": 14187,
+      "columns": 32504,
+      "nonzeros": 110790
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-911970",
+      "path": "miplib2017/mps/neos-911970.mps",
+      "sha256": "31e8f835a9499de4897eb23838453cb83bee093abb8fab881b44f9937236eaa6",
+      "manifest_nonzeros": 3456,
+      "rows": 107,
+      "columns": 888,
+      "nonzeros": 3408
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-950242",
+      "path": "miplib2017/mps/neos-950242.mps",
+      "sha256": "a9bd9b5c759a0e05458e45311f84ab184d0705e01280eb0310afd99695a1c658",
+      "manifest_nonzeros": 104184,
+      "rows": 34224,
+      "columns": 5760,
+      "nonzeros": 104160
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos17",
+      "path": "miplib2017/mps/neos17.mps",
+      "sha256": "4ea347bc9061a49b4737f2e77b3c15541c031eb8df14881cc9a4bd96a2d65c00",
+      "manifest_nonzeros": 5416,
+      "rows": 486,
+      "columns": 535,
+      "nonzeros": 4931
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos5",
+      "path": "miplib2017/mps/neos5.mps",
+      "sha256": "6004edda3e48c0d2e6b109e88c059bd874875535fa420cd486461e68a7375870",
+      "manifest_nonzeros": 2079,
+      "rows": 63,
+      "columns": 63,
+      "nonzeros": 2016
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos859080",
+      "path": "miplib2017/mps/neos859080.mps",
+      "sha256": "127e8c4b5e67ac665bd5c7ff062375364c8716c2b31bdb38334ab23befa95fc7",
+      "manifest_nonzeros": 1360,
+      "rows": 164,
+      "columns": 160,
+      "nonzeros": 1280
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "net12",
+      "path": "miplib2017/mps/net12.mps",
+      "sha256": "c868d2fbb64bd340b8875501e7183118058989dd0ffe941a86c44c51401ec216",
+      "manifest_nonzeros": 80423,
+      "rows": 14021,
+      "columns": 14115,
+      "nonzeros": 80384
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "nexp-150-20-8-5",
+      "path": "miplib2017/mps/nexp-150-20-8-5.mps",
+      "sha256": "90bd312a5e1ba3e2fbedb8e8c9366626a680034dafe62f43b207768f6706544b",
+      "manifest_nonzeros": 60345,
+      "rows": 4620,
+      "columns": 20115,
+      "nonzeros": 42465
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "ns1208400",
+      "path": "miplib2017/mps/ns1208400.mps",
+      "sha256": "7fb147bfe61f8b028dca80f6b7648a7c82e5dc377885808df18bd3e93704d06d",
+      "manifest_nonzeros": 81749,
+      "rows": 4289,
+      "columns": 2883,
+      "nonzeros": 81746
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "ns1830653",
+      "path": "miplib2017/mps/ns1830653.mps",
+      "sha256": "98b3656ef998c2f666648a52acf1f477f6d008bbe97408d3e618546a41fc8b00",
+      "manifest_nonzeros": 101680,
+      "rows": 2932,
+      "columns": 1629,
+      "nonzeros": 100933
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "nu25-pr12",
+      "path": "miplib2017/mps/nu25-pr12.mps",
+      "sha256": "c05644f79dc7a3b2475a5ebe9046a3954f902f774a9555467567eb72a22b917b",
+      "manifest_nonzeros": 23580,
+      "rows": 2313,
+      "columns": 5868,
+      "nonzeros": 17712
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "p200x1188c",
+      "path": "miplib2017/mps/p200x1188c.mps",
+      "sha256": "52e616e7a1e0dc95b14a8e381bda45bd1618cadcf5f8393609b1b7fe81a5459e",
+      "manifest_nonzeros": 5940,
+      "rows": 1388,
+      "columns": 2376,
+      "nonzeros": 4752
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "peg-solitaire-a3",
+      "path": "miplib2017/mps/peg-solitaire-a3.mps",
+      "sha256": "50ce4460e4a8d11011193f6d07e897e16508cb8c2192acd956b0b1091e381a26",
+      "manifest_nonzeros": 28424,
+      "rows": 4587,
+      "columns": 4552,
+      "nonzeros": 28387
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "pg",
+      "path": "miplib2017/mps/pg.mps",
+      "sha256": "765a365c6d851573ef12a4c6c08b5fec0c3514e195986618c9d37075e84a3a0c",
+      "manifest_nonzeros": 7800,
+      "rows": 125,
+      "columns": 2700,
+      "nonzeros": 5200
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "pg5_34",
+      "path": "miplib2017/mps/pg5_34.mps",
+      "sha256": "308af9b3ba0703bdd29725574ea91da2fc9a84b356481086552135435c852d43",
+      "manifest_nonzeros": 10300,
+      "rows": 225,
+      "columns": 2600,
+      "nonzeros": 7700
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "piperout-08",
+      "path": "miplib2017/mps/piperout-08.mps",
+      "sha256": "4f2393fb47ebda389300cdcc3f787a3f96c9978705cd03e11aa316fe8442a721",
+      "manifest_nonzeros": 44960,
+      "rows": 14589,
+      "columns": 10399,
+      "nonzeros": 44959
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "piperout-27",
+      "path": "miplib2017/mps/piperout-27.mps",
+      "sha256": "27427bef46a5da269c1388c32b33dac4fabd646fec9f6bcaf8f6e3a1d8554268",
+      "manifest_nonzeros": 54663,
+      "rows": 18442,
+      "columns": 11659,
+      "nonzeros": 54662
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "pk1",
+      "path": "miplib2017/mps/pk1.mps",
+      "sha256": "13851ed426a2dfd7c6af7b021236553c391d77a675ab9223dd9135d3351c2e66",
+      "manifest_nonzeros": 916,
+      "rows": 45,
+      "columns": 86,
+      "nonzeros": 915
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "qap10",
+      "path": "miplib2017/mps/qap10.mps",
+      "sha256": "a317ab99d08ad4d4b5cb8286a8a1c4c4f77ad801ff3f8b50d565390219485789",
+      "manifest_nonzeros": 20810,
+      "rows": 1820,
+      "columns": 4150,
+      "nonzeros": 18200
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "radiationm18-12-05",
+      "path": "miplib2017/mps/radiationm18-12-05.mps",
+      "sha256": "1a3aba6cb8a07eda46d1851ba726d67a3cdd5f0acc2d811b2a52d5151107657e",
+      "manifest_nonzeros": 96150,
+      "rows": 40935,
+      "columns": 40623,
+      "nonzeros": 96149
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "ran14x18-disj-8",
+      "path": "miplib2017/mps/ran14x18-disj-8.mps",
+      "sha256": "42c8804fa44742cf94b09238f1f03781ae89b25f6c31902c15ce25c2ba22f1cd",
+      "manifest_nonzeros": 10781,
+      "rows": 447,
+      "columns": 504,
+      "nonzeros": 10277
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "reblock115",
+      "path": "miplib2017/mps/reblock115.mps",
+      "sha256": "83fac9bfcbeb1934fa03a30bac1372f540afcdc5681e4532a8f459184e6a6005",
+      "manifest_nonzeros": 14874,
+      "rows": 4735,
+      "columns": 1150,
+      "nonzeros": 13724
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "rmatr100-p10",
+      "path": "miplib2017/mps/rmatr100-p10.mps",
+      "sha256": "4b946d51d55001c125945774699790ac15daa6c4be2602264ab588c737119fc9",
+      "manifest_nonzeros": 29236,
+      "rows": 7260,
+      "columns": 7359,
+      "nonzeros": 21877
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "rmatr200-p5",
+      "path": "miplib2017/mps/rmatr200-p5.mps",
+      "sha256": "de0946af79c5b38c09874e753018d2a1986b12a61741454afe8a29dba843a481",
+      "manifest_nonzeros": 150864,
+      "rows": 37617,
+      "columns": 37816,
+      "nonzeros": 113048
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "rocI-4-11",
+      "path": "miplib2017/mps/rocI-4-11.mps",
+      "sha256": "c166b13804e83e2e086646bd6888f8fb24bffeb5baed9f976ccd789e7f14d4d1",
+      "manifest_nonzeros": 27387,
+      "rows": 10883,
+      "columns": 6839,
+      "nonzeros": 27383
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "rococoB10-011000",
+      "path": "miplib2017/mps/rococoB10-011000.mps",
+      "sha256": "9060d70e880117d6b95b5d8ced7a7c94242baa471407335818a8a30ea68cd0f8",
+      "manifest_nonzeros": 16518,
+      "rows": 1667,
+      "columns": 4456,
+      "nonzeros": 16517
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "rococoC10-001000",
+      "path": "miplib2017/mps/rococoC10-001000.mps",
+      "sha256": "028c9e0c356be3b23cf597ccd8b74e3fb910070dee5543fe1c502fedf246eb7b",
+      "manifest_nonzeros": 11752,
+      "rows": 1293,
+      "columns": 3117,
+      "nonzeros": 11751
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "roll3000",
+      "path": "miplib2017/mps/roll3000.mps",
+      "sha256": "b28b51a69945d6a4c16366582bab87638b6c66f81eb4efef817aba76f6425117",
+      "manifest_nonzeros": 29387,
+      "rows": 2295,
+      "columns": 1166,
+      "nonzeros": 29386
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "satellites2-60-fs",
+      "path": "miplib2017/mps/satellites2-60-fs.mps",
+      "sha256": "704f4ed3e861a1665958b576c96b9e9dd33de847e711932da76a36fd4a86d7ae",
+      "manifest_nonzeros": 125789,
+      "rows": 16516,
+      "columns": 35378,
+      "nonzeros": 125048
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "sct2",
+      "path": "miplib2017/mps/sct2.mps",
+      "sha256": "ec532dc5c51e11345d546eaddecb53ba4e48593a3003f3315fe6c6d303a19e8e",
+      "manifest_nonzeros": 23648,
+      "rows": 2151,
+      "columns": 5885,
+      "nonzeros": 23643
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "seymour",
+      "path": "miplib2017/mps/seymour.mps",
+      "sha256": "0b5cac17833e32f94ab267a6ca34029e30d2c55122701a1f44aafe0de74746d3",
+      "manifest_nonzeros": 34921,
+      "rows": 4944,
+      "columns": 1372,
+      "nonzeros": 33549
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "seymour1",
+      "path": "miplib2017/mps/seymour1.mps",
+      "sha256": "d5150ce3c86eb3e89cb3689261cc7c26459d735991acd0e0b362b711584b7548",
+      "manifest_nonzeros": 34921,
+      "rows": 4944,
+      "columns": 1372,
+      "nonzeros": 33549
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "sp150x300d",
+      "path": "miplib2017/mps/sp150x300d.mps",
+      "sha256": "339aa4411ef126df72dc66718090fc6915debdc44d732a0f0be903310e52cf4a",
+      "manifest_nonzeros": 1500,
+      "rows": 450,
+      "columns": 600,
+      "nonzeros": 1200
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "supportcase18",
+      "path": "miplib2017/mps/supportcase18.mps",
+      "sha256": "d9f9372512bcaaf3fd5e2e2edc8b6875cb22e505dce09d0590fc3068218615ce",
+      "manifest_nonzeros": 29040,
+      "rows": 240,
+      "columns": 13410,
+      "nonzeros": 28920
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "supportcase26",
+      "path": "miplib2017/mps/supportcase26.mps",
+      "sha256": "1973ccac4667abab6eb274f4017b72d33d35dbfddfe72eb4c893e1e2611def67",
+      "manifest_nonzeros": 2532,
+      "rows": 870,
+      "columns": 436,
+      "nonzeros": 2492
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "supportcase40",
+      "path": "miplib2017/mps/supportcase40.mps",
+      "sha256": "3be18bec4ee4a3c82abb6234d8eb609f19f78d27f3381016fe8432aed8ed93fb",
+      "manifest_nonzeros": 119900,
+      "rows": 38192,
+      "columns": 16440,
+      "nonzeros": 104420
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "swath1",
+      "path": "miplib2017/mps/swath1.mps",
+      "sha256": "610a6a396beb446617858d7dbf0a491bc5dd63718a541994f4c63e657650a58f",
+      "manifest_nonzeros": 34966,
+      "rows": 884,
+      "columns": 6805,
+      "nonzeros": 34965
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "swath3",
+      "path": "miplib2017/mps/swath3.mps",
+      "sha256": "4ba1bdb4a1fb665f37dbd3d0f80259744eccfc61a17968007df26f4c2e0eaf6c",
+      "manifest_nonzeros": 34966,
+      "rows": 884,
+      "columns": 6805,
+      "nonzeros": 34965
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "timtab1",
+      "path": "miplib2017/mps/timtab1.mps",
+      "sha256": "bc196d8cba1f846a3de1cdbed4463f6444186105ef3d3545935091b8403b0435",
+      "manifest_nonzeros": 957,
+      "rows": 171,
+      "columns": 397,
+      "nonzeros": 829
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "tr12-30",
+      "path": "miplib2017/mps/tr12-30.mps",
+      "sha256": "6b972047b7e9cf9a6c081d54528c857b7006985981f34aa46c6c6f499f1884f3",
+      "manifest_nonzeros": 3228,
+      "rows": 750,
+      "columns": 1080,
+      "nonzeros": 2508
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "traininstance2",
+      "path": "miplib2017/mps/traininstance2.mps",
+      "sha256": "cc0722b3ebf4eb9ec3c128f26fe9b8e86ad3f4cf08813c86eb6e9d1a7e546212",
+      "manifest_nonzeros": 41532,
+      "rows": 15603,
+      "columns": 12890,
+      "nonzeros": 41531
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "traininstance6",
+      "path": "miplib2017/mps/traininstance6.mps",
+      "sha256": "8decae28026b14103a7a0799158fb487d679082015220efb743d7605f7d8232e",
+      "manifest_nonzeros": 32786,
+      "rows": 12309,
+      "columns": 10218,
+      "nonzeros": 32785
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "trento1",
+      "path": "miplib2017/mps/trento1.mps",
+      "sha256": "9540f011efd2c51173fd26145378c4319be33abe885f49cc85365e0eee236e9e",
+      "manifest_nonzeros": 101258,
+      "rows": 1265,
+      "columns": 7687,
+      "nonzeros": 93571
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "uct-subprob",
+      "path": "miplib2017/mps/uct-subprob.mps",
+      "sha256": "64eacf24f120207d88f6c4420495bd625f043f268587097a8433c34339091248",
+      "manifest_nonzeros": 11492,
+      "rows": 1973,
+      "columns": 2256,
+      "nonzeros": 10147
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "unitcal_7",
+      "path": "miplib2017/mps/unitcal_7.mps",
+      "sha256": "c376735825096041e176b0513445e545396ea60bd62c20c1f1b50872aa64be4c",
+      "manifest_nonzeros": 137003,
+      "rows": 48939,
+      "columns": 25755,
+      "nonzeros": 127595
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "wachplan",
+      "path": "miplib2017/mps/wachplan.mps",
+      "sha256": "f6c205519a6015617483766617d80b87794b9fbf65eb931efc4cb91735783881",
+      "manifest_nonzeros": 89362,
+      "rows": 1553,
+      "columns": 3361,
+      "nonzeros": 89361
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "bal8x12",
+      "path": "mittelmann-lpopt/mps/fctp/bal8x12.mps",
+      "sha256": "8bfad08cf31f7e2b9561b95c93504fbde877092dc169c36228ac73afacb04e03",
+      "manifest_nonzeros": 576,
+      "rows": 116,
+      "columns": 192,
+      "nonzeros": 384
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "bk4x3",
+      "path": "mittelmann-lpopt/mps/fctp/bk4x3.mps",
+      "sha256": "7c441b4a4df3c30d792004f1db59748ad9c2bb32dd4427866be575b6504b56c0",
+      "manifest_nonzeros": 72,
+      "rows": 19,
+      "columns": 24,
+      "nonzeros": 48
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "brazil3",
+      "path": "mittelmann-lpopt/mps/brazil3.mps",
+      "sha256": "28cfec922c8c239645c823b7746ae221e38a6208e827a9f040ddf50d9203d125",
+      "manifest_nonzeros": 133185,
+      "rows": 14646,
+      "columns": 23968,
+      "nonzeros": 133184
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "fome11",
+      "path": "mittelmann-lpopt/mps/fome/fome11.mps",
+      "sha256": "99a745d9b65e4da1777e32479c53fca33968871c48117582456e732c4231b576",
+      "manifest_nonzeros": 83746,
+      "rows": 12142,
+      "columns": 24460,
+      "nonzeros": 71264
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "fome12",
+      "path": "mittelmann-lpopt/mps/fome/fome12.mps",
+      "sha256": "f4fce1046a53a3e22834372a231b04e49ed02b454cee25f6842f45edf8950120",
+      "manifest_nonzeros": 167492,
+      "rows": 24284,
+      "columns": 48920,
+      "nonzeros": 142528
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "gr4x6",
+      "path": "mittelmann-lpopt/mps/fctp/gr4x6.mps",
+      "sha256": "ea62a683db5b9fc03e705aa468e9bb1248ddf1e230718027145273ffffc2a6ed",
+      "manifest_nonzeros": 144,
+      "rows": 34,
+      "columns": 48,
+      "nonzeros": 96
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3700",
+      "path": "mittelmann-lpopt/mps/fctp/n3700.mps",
+      "sha256": "e267e9e7d7f0c26982b082f2956bf74eff6d506f249e99188a5f0437a5c72dfa",
+      "manifest_nonzeros": 30000,
+      "rows": 5150,
+      "columns": 10000,
+      "nonzeros": 20000
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3701",
+      "path": "mittelmann-lpopt/mps/fctp/n3701.mps",
+      "sha256": "e9cc2a2dc9006736a2a9b7016c381501e605bcfd755240bdabefac079574a75c",
+      "manifest_nonzeros": 30000,
+      "rows": 5150,
+      "columns": 10000,
+      "nonzeros": 20000
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3702",
+      "path": "mittelmann-lpopt/mps/fctp/n3702.mps",
+      "sha256": "af3df193a69d1a14bf5e7e94cbe68f604270c215e0d7488c16d2e3f90e54f1e6",
+      "manifest_nonzeros": 30000,
+      "rows": 5150,
+      "columns": 10000,
+      "nonzeros": 20000
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3703",
+      "path": "mittelmann-lpopt/mps/fctp/n3703.mps",
+      "sha256": "3a57eb3a03df2cc229be0569be97bd6c31c023e422b36e4e3b84d51784c6dc9c",
+      "manifest_nonzeros": 29999,
+      "rows": 5150,
+      "columns": 10000,
+      "nonzeros": 20000
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3704",
+      "path": "mittelmann-lpopt/mps/fctp/n3704.mps",
+      "sha256": "841d350c7c72793b1e7327c42ed00bcb1040eabeb73b970d5826fee5ac08584a",
+      "manifest_nonzeros": 30000,
+      "rows": 5150,
+      "columns": 10000,
+      "nonzeros": 20000
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3705",
+      "path": "mittelmann-lpopt/mps/fctp/n3705.mps",
+      "sha256": "4ce5b46a026eefe066b40dba6de599bab77c25cd9a2875820063613eccf6d903",
+      "manifest_nonzeros": 30000,
+      "rows": 5150,
+      "columns": 10000,
+      "nonzeros": 20000
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3706",
+      "path": "mittelmann-lpopt/mps/fctp/n3706.mps",
+      "sha256": "0fd7af5dd97d94effe55d45ba544f98504f731150784f4d240994f382fc3b876",
+      "manifest_nonzeros": 30000,
+      "rows": 5150,
+      "columns": 10000,
+      "nonzeros": 20000
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3707",
+      "path": "mittelmann-lpopt/mps/fctp/n3707.mps",
+      "sha256": "a2eb690a3feb06f69acffd1fed5ca92c0d70b9a8fc75eed8c95fd6cc5e91400a",
+      "manifest_nonzeros": 30000,
+      "rows": 5150,
+      "columns": 10000,
+      "nonzeros": 20000
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3708",
+      "path": "mittelmann-lpopt/mps/fctp/n3708.mps",
+      "sha256": "61013200c6629ffbdb62fb364d9ec09268143525423806e6fe51a4362b08c99a",
+      "manifest_nonzeros": 30000,
+      "rows": 5150,
+      "columns": 10000,
+      "nonzeros": 20000
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3709",
+      "path": "mittelmann-lpopt/mps/fctp/n3709.mps",
+      "sha256": "6f039574d8ab056653c43c8291c064acb040b9f7ebae7168cd95ba3cdb20f7fb",
+      "manifest_nonzeros": 30000,
+      "rows": 5150,
+      "columns": 10000,
+      "nonzeros": 20000
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n370a",
+      "path": "mittelmann-lpopt/mps/fctp/n370a.mps",
+      "sha256": "efc6bafcf66ed547fe116894913a22643bf27ef57dca4d37a3f42dcf3afbf378",
+      "manifest_nonzeros": 30000,
+      "rows": 5150,
+      "columns": 10000,
+      "nonzeros": 20000
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n370b",
+      "path": "mittelmann-lpopt/mps/fctp/n370b.mps",
+      "sha256": "805ce706e0cdf1038393f406f0cdf6e0af0a69a1c8eae9acdbd35c6b81097fe5",
+      "manifest_nonzeros": 30000,
+      "rows": 5150,
+      "columns": 10000,
+      "nonzeros": 20000
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n370c",
+      "path": "mittelmann-lpopt/mps/fctp/n370c.mps",
+      "sha256": "6cd0b2947b25dfcb9777f4d6f69009c9b5338b9b01fd5c8e35b6d0518963ca61",
+      "manifest_nonzeros": 30000,
+      "rows": 5150,
+      "columns": 10000,
+      "nonzeros": 20000
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n370d",
+      "path": "mittelmann-lpopt/mps/fctp/n370d.mps",
+      "sha256": "6cd0b2947b25dfcb9777f4d6f69009c9b5338b9b01fd5c8e35b6d0518963ca61",
+      "manifest_nonzeros": 30000,
+      "rows": 5150,
+      "columns": 10000,
+      "nonzeros": 20000
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n370e",
+      "path": "mittelmann-lpopt/mps/fctp/n370e.mps",
+      "sha256": "1b6b378a6e717d101e473aa8c41dfccb78853f0a5605c5b41242c55cb6335b77",
+      "manifest_nonzeros": 30000,
+      "rows": 5150,
+      "columns": 10000,
+      "nonzeros": 20000
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "nug08-3rd",
+      "path": "mittelmann-lpopt/mps/nug/nug08-3rd.mps",
+      "sha256": "34b480ed729f6a4230381e9b3a5ddd94f7007c9f6e0c6fb57f3334165504a905",
+      "manifest_nonzeros": 158496,
+      "rows": 19728,
+      "columns": 20448,
+      "nonzeros": 139008
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran10x10a",
+      "path": "mittelmann-lpopt/mps/fctp/ran10x10a.mps",
+      "sha256": "8b0c4390da23ea3e31c5f57c16b3bf8cf39faa968ac13dcd422633afd82c64f6",
+      "manifest_nonzeros": 600,
+      "rows": 120,
+      "columns": 200,
+      "nonzeros": 400
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran10x10b",
+      "path": "mittelmann-lpopt/mps/fctp/ran10x10b.mps",
+      "sha256": "13f8c45f67e571d19870518dabe48a0c2e5427334af418293e78a8bbcebac0e4",
+      "manifest_nonzeros": 600,
+      "rows": 120,
+      "columns": 200,
+      "nonzeros": 400
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran10x10c",
+      "path": "mittelmann-lpopt/mps/fctp/ran10x10c.mps",
+      "sha256": "101e22bc67e8b6343b301e08d550c5006676f70840e8b05b80a096d70d46d2ab",
+      "manifest_nonzeros": 600,
+      "rows": 120,
+      "columns": 200,
+      "nonzeros": 400
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran10x12",
+      "path": "mittelmann-lpopt/mps/fctp/ran10x12.mps",
+      "sha256": "657bd647c1285be2b8fc7962f0fd3e7af8f998152cfb92c1d2fde58df01a1546",
+      "manifest_nonzeros": 720,
+      "rows": 142,
+      "columns": 240,
+      "nonzeros": 480
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran10x26",
+      "path": "mittelmann-lpopt/mps/fctp/ran10x26.mps",
+      "sha256": "59cbc28bdf6ec13304dd95fcb592c9ff5abbcf66ab4c2a39ca940f9b0d446f1e",
+      "manifest_nonzeros": 1560,
+      "rows": 296,
+      "columns": 520,
+      "nonzeros": 1040
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran12x12",
+      "path": "mittelmann-lpopt/mps/fctp/ran12x12.mps",
+      "sha256": "02e2e97beb6848a88440c163727b3dfc6c4ac4fb589b623d464879da80a32b63",
+      "manifest_nonzeros": 864,
+      "rows": 168,
+      "columns": 288,
+      "nonzeros": 576
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran12x21",
+      "path": "mittelmann-lpopt/mps/fctp/ran12x21.mps",
+      "sha256": "de37ae745a26e84a71bbfcc2be36a5f640ffae33672a38f2f9b09f1bf378ef0f",
+      "manifest_nonzeros": 1512,
+      "rows": 285,
+      "columns": 504,
+      "nonzeros": 1008
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran13x13",
+      "path": "mittelmann-lpopt/mps/fctp/ran13x13.mps",
+      "sha256": "141e81fec33106d82cfe58e4ba2eb66db864a001c53709b05be5dc6a7e330490",
+      "manifest_nonzeros": 1014,
+      "rows": 195,
+      "columns": 338,
+      "nonzeros": 676
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran14x18",
+      "path": "mittelmann-lpopt/mps/fctp/ran14x18.mps",
+      "sha256": "b7aa6c87d9b39780899b713d839529bc89d553a7e260a75c6d9cbbdf615ba387",
+      "manifest_nonzeros": 1512,
+      "rows": 284,
+      "columns": 504,
+      "nonzeros": 1008
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran16x16",
+      "path": "mittelmann-lpopt/mps/fctp/ran16x16.mps",
+      "sha256": "00275880553bf3c2feb8d622370f674608fbfece7352471319e806144eaedcf4",
+      "manifest_nonzeros": 1536,
+      "rows": 288,
+      "columns": 512,
+      "nonzeros": 1024
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran17x17",
+      "path": "mittelmann-lpopt/mps/fctp/ran17x17.mps",
+      "sha256": "efc6cb4f6c5612aea93372bce980e1bacefb28039eb7c27e1a0ed3238bf68931",
+      "manifest_nonzeros": 1734,
+      "rows": 323,
+      "columns": 578,
+      "nonzeros": 1156
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran4x64",
+      "path": "mittelmann-lpopt/mps/fctp/ran4x64.mps",
+      "sha256": "34a2fd8784f6cc02b9cbfaf8fee1f257ecf4d6e55de9b09a9938e6a64705fbca",
+      "manifest_nonzeros": 1536,
+      "rows": 324,
+      "columns": 512,
+      "nonzeros": 1024
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran6x43",
+      "path": "mittelmann-lpopt/mps/fctp/ran6x43.mps",
+      "sha256": "6d94e29a95a2be76473190b3462e44097bceb83a053c7906569db22d04bd62d8",
+      "manifest_nonzeros": 1548,
+      "rows": 307,
+      "columns": 516,
+      "nonzeros": 1032
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran8x32",
+      "path": "mittelmann-lpopt/mps/fctp/ran8x32.mps",
+      "sha256": "f701067104b332b68951928c5e989a99fef308117f69c819d6ce76a00ed05b35",
+      "manifest_nonzeros": 1536,
+      "rows": 296,
+      "columns": 512,
+      "nonzeros": 1024
+    }
+  ]
+}

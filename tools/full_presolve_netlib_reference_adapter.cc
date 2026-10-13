@@ -414,7 +414,9 @@ int main(int argc, char** argv) {
   preprocessor.Run(&presolved);
   if (argc >= 3 && std::strcmp(argv[2], "presolved_solve_timing") == 0) {
     const int repetitions = argc >= 4 ? std::atoi(argv[3]) : 1;
-    if (repetitions <= 0 || preprocessor.status() != glop::ProblemStatus::INIT)
+    const double wall_seconds = argc >= 5 ? std::atof(argv[4]) : 20.0;
+    if (repetitions <= 0 || !(wall_seconds > 0.0) ||
+        preprocessor.status() != glop::ProblemStatus::INIT)
       return EXIT_FAILURE;
     glop::ProblemStatus status = glop::ProblemStatus::INIT;
     int iterations = 0;
@@ -423,7 +425,7 @@ int main(int argc, char** argv) {
     for (int repetition = 0; repetition < repetitions; ++repetition) {
       glop::RevisedSimplex simplex;
       simplex.SetParameters(parameters);
-      operations_research::TimeLimit limit(20.0);
+      operations_research::TimeLimit limit(wall_seconds);
       if (!simplex.Solve(presolved, &limit).ok()) return EXIT_FAILURE;
       status = simplex.GetProblemStatus();
       iterations = simplex.GetNumberOfIterations();

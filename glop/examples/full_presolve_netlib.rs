@@ -70,12 +70,16 @@ fn main() {
             .map_or(1, |value| value.parse().expect("positive repetitions"));
         assert!(repetitions > 0);
         assert_eq!(preprocessor.status().to_string(), "INIT");
+        let wall_seconds = env::args().nth(4).map_or(20.0, |value| {
+            value.parse::<f64>().expect("numeric solve wall limit")
+        });
+        assert!(wall_seconds > 0.0 && wall_seconds.is_finite());
         let start = Instant::now();
         let mut result = (String::new(), 0, 0);
         for _ in 0..repetitions {
             let mut simplex = RevisedSimplex::new();
             simplex.set_parameters(&parameters);
-            let mut limit = TimeLimit::new(20.0, f64::INFINITY);
+            let mut limit = TimeLimit::new(wall_seconds, f64::INFINITY);
             simplex.solve(&presolved, &mut limit).expect("direct solve");
             result = (
                 simplex.problem_status().to_string(),

@@ -2362,15 +2362,31 @@ so paired kernel measurements remain the next performance evidence to collect.
    and whole-model native-equilibration output are already covered; a search of
    11,000 finite sparse cases found no natural failure.
 
-The Phase-8 differential and timing harnesses now also select manifest-backed
-MIPLIB 2017 and Mittelmann LPopt MPS models with fewer than 150,000 matrix
-nonzeros, excluding all Netlib names. The new 163-model corpus is distinct
+The Phase-8 differential and timing harnesses now also select parser-verified
+MIPLIB 2017 and Mittelmann LPopt MPS models with fewer than 150,000 constraint-
+matrix nonzeros, excluding all Netlib names. The corrected 166-model corpus is distinct
 from the pinned fast-96 gate; its MIPLIB members are LP relaxations. Parse and
 presolve smoke comparisons pass across the full selection. The public-solver
 status, iterations, objective, vectors, and basis statuses match native on
-162 completed models; `satellites2-60-fs` hits the 20-second wall limit and
-is inconclusive. The matched-presolved-solve stage agrees on 161 models;
+162 completed models in the initial 163-model pilot; `satellites2-60-fs` hit
+the 20-second wall limit there. At a 60-second limit it completes identically
+on both solvers. The matched-presolved-solve stage agreed on 161 pilot models;
 `enlight_hard` is fully solved in presolve. A strict trajectory fixture and
-reproducible multi-trial
-timing gate remain to be established on this corpus; record any native/Rust
-divergences as fixtures before treating it as a completion criterion.
+reproducible multi-trial timing gate were the next steps; record any
+native/Rust divergences as fixtures before treating this corpus as a
+completion criterion.
+
+A corrected parser-verified 166-model baseline now has one warmup and three
+alternating native/Rust trials per model/stage at a 60-second solve limit.
+All 166 parse/presolve comparisons match; 163 matched-presolved solves and
+164 public solves have comparable outcomes. `enlight_hard` ends in
+presolve, while `rmatr200-p5` and `nug08-3rd` remain wall-limited even in
+separate 180-second public probes. Do not infer parity from their capped
+elapsed times. The sum-of-medians Rust/native ratios are 1.034x parse,
+1.038x presolve, 1.035x matched-presolved solve, and 1.030x public pipeline. The three
+public trial-total ratios span only 1.0297–1.0338x. The largest credible
+absolute gaps are `satellites2-60-fs`, `neos-827175`, both `brazil3` copies,
+`unitcal_7`, and `comp07-2idx`; investigate these using paired profiles.
+Pinned selection, trial data, build fingerprints, and caveats are in
+`baselines/phase8-extra-performance.md`. A strict pivot-by-pivot fixture
+for this corpus remains future validation work.

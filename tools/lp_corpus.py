@@ -13,6 +13,7 @@ DATASETS = ROOT.parent / "datasets"
 FAST = ROOT / "baselines/netlib-dual-trajectories.json.gz"
 MAX_NONZEROS = 150_000
 EXTRA_CORPORA = ("miplib2017", "mittelmann-lpopt")
+EXTRA_FIXTURE = ROOT / "baselines/extra-lp-corpus.json"
 
 
 @dataclass(frozen=True)
@@ -28,7 +29,7 @@ class Model:
 
 
 def models(corpus: str = "netlib-fast96") -> list[Model]:
-    """Select available MPS files; the cutoff is strict and based on source manifests."""
+    """Select MPS files using parser-verified matrix nnz, not objective entries."""
     netlib_manifest = json.loads((DATASETS / "netlib/manifest.json").read_text())
     netlib = {case["name"].casefold() for case in netlib_manifest["problems"]}
     if corpus == "netlib-fast96":
@@ -42,10 +43,20 @@ def models(corpus: str = "netlib-fast96") -> list[Model]:
     if corpus not in EXTRA_CORPORA:
         raise ValueError(f"unknown corpus: {corpus}")
     manifest = json.loads((DATASETS / corpus / "mps_manifest.json").read_text())
+    manifest_by_path = {entry["path"]: entry for entry in manifest["files"]}
+    fixture = json.loads(EXTRA_FIXTURE.read_text())
+    if fixture["cutoff_exclusive"] != MAX_NONZEROS:
+        raise ValueError("extra LP corpus cutoff differs from pinned fixture")
     selected = []
-    for entry in manifest["files"]:
+    for entry in fixture["models"]:
+        if entry["corpus"] != corpus:
+            continue
+        source = manifest_by_path[entry["path"]]
+        if source["sha256"] != entry["sha256"]:
+            raise ValueError(f"dataset manifest changed: {entry['path']}")
         path = DATASETS / entry["path"]
         name = path.stem
-        if entry["nonzeros"] < MAX_NONZEROS and name.casefold() not in netlib:
-            selected.append(Model(corpus, name, path, entry["nonzeros"]))
+        if entry["nonzeros"] >= MAX_NONZEROS or name.casefold() in netlib:
+            raise ValueError(f"invalid pinned extra LP model: {entry['path']}")
+        selected.append(Model(corpus, name, path, entry["nonzeros"]))
     return sorted(selected, key=lambda model: model.name.casefold())

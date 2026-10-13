@@ -9,6 +9,17 @@ optimization variable.
 
 ## Additional LP corpora harness (13 October 2026)
 
+The original 163-model pilot below used the shared-manifest `nonzeros` field,
+which includes objective coefficients. This was conservative but not the
+requested constraint-matrix cutoff. Parser-verified counts add
+`miplib2017/rmatr200-p5`, `mittelmann-lpopt/fome12`, and
+`mittelmann-lpopt/nug08-3rd`; the current pinned selection is 166 models
+(130 MIPLIB, 36 Mittelmann) in `baselines/extra-lp-corpus.json`. All new
+baseline measurements use this corrected selection.
+The final 60-second, three-trial comparison is documented separately in
+[`phase8-extra-performance.md`](phase8-extra-performance.md); the 163-model
+figures later in this section are historical one-trial pilot measurements.
+
 The stage and public-solver timing scripts now accept `--corpus miplib2017`,
 `--corpus mittelmann-lpopt`, or `--corpus extra` (both). Selection is generated
 from the shared dataset MPS manifests, with a strict `< 150000` matrix-nonzero

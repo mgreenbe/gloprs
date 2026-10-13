@@ -31,13 +31,17 @@ def version(command: list[str]) -> str:
     return subprocess.run(command, check=True, capture_output=True, text=True).stdout.strip()
 
 
-def run(executable: Path, model: Path, stage: str, repetitions: int) -> dict:
+def run(executable: Path, model: Path, stage: str, repetitions: int,
+        wall_seconds: float = 20.0) -> dict:
     mode = "presolved_solve_timing" if stage == "solve" else f"{stage}_timing"
     command = [executable, model, mode]
     if stage != "parse":
         command.append(str(repetitions))
+    if stage == "solve":
+        command.append(str(wall_seconds))
     process = subprocess.run(
-        command, check=True, capture_output=True, text=True, timeout=60
+        command, check=True, capture_output=True, text=True,
+        timeout=max(60, wall_seconds * repetitions + 30)
     )
     fields = process.stdout.split()
     result = dict(zip(fields[::2], fields[1::2], strict=True))
@@ -65,6 +69,8 @@ def main() -> None:
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--presolve-repetitions", type=int, default=3)
     parser.add_argument("--solve-repetitions", type=int, default=1)
+    parser.add_argument("--wall-seconds", type=float, default=20.0,
+                        help="per-solve wall limit for matched-presolved solves")
     parser.add_argument("--models", nargs="+")
     parser.add_argument("--corpus", choices=("netlib-fast96", "miplib2017",
                                       "mittelmann-lpopt", "extra"),
@@ -74,7 +80,8 @@ def main() -> None:
     parser.add_argument("--output", type=Path)
     options = parser.parse_args()
     if (options.trials < 1 or options.warmups < 0
-            or options.presolve_repetitions < 1 or options.solve_repetitions < 1):
+            or options.presolve_repetitions < 1 or options.solve_repetitions < 1
+            or not 0 < options.wall_seconds <= 3600):
         parser.error("invalid trial, warmup, or repetition count")
     selected = corpus_models(options.corpus)
     by_key = {model.key: model for model in selected}
@@ -109,8 +116,8 @@ def main() -> None:
             repetitions = (options.presolve_repetitions if stage == "presolve"
                            else options.solve_repetitions)
             for _ in range(options.warmups):
-                run(NATIVE, model, stage, repetitions)
-                run(options.rust, model, stage, repetitions)
+                run(NATIVE, model, stage, repetitions, options.wall_seconds)
+                run(options.rust, model, stage, repetitions, options.wall_seconds)
             times: dict[str, list[float]] = {"native": [], "rust": []}
             for trial in range(options.trials):
                 order = (("native", NATIVE), ("rust", options.rust))
@@ -118,11 +125,13 @@ def main() -> None:
                     order = tuple(reversed(order))
                 outcomes = {}
                 for label, executable in order:
-                    measured = run(executable, model, stage, repetitions)
+                    measured = run(executable, model, stage, repetitions,
+                                   options.wall_seconds)
                     times[label].append(measured.pop("seconds"))
                     outcomes[label] = measured
                 if (stage == "solve" and options.corpus != "netlib-fast96"
-                        and max(times["native"][-1], times["rust"][-1]) >= 19.0
+                        and max(times["native"][-1], times["rust"][-1])
+                        >= 0.95 * options.wall_seconds
                         and (outcomes["native"]["status"] != "OPTIMAL"
                              or outcomes["rust"]["status"] != "OPTIMAL")):
                     result[stage] = {"skipped": "wall-limited, inconclusive",
@@ -184,6 +193,7 @@ def main() -> None:
         "warmups": options.warmups,
         "presolve_repetitions": options.presolve_repetitions,
         "solve_repetitions": options.solve_repetitions,
+        "wall_seconds": options.wall_seconds,
         "corpus": options.corpus,
         "summary": summary,
         "results": report,

@@ -11,13 +11,19 @@ class CorpusTests(unittest.TestCase):
         netlib = {case.name.casefold() for case in models()}
         miplib = models("miplib2017")
         mittelmann = models("mittelmann-lpopt")
-        self.assertEqual((len(miplib), len(mittelmann)), (129, 34))
+        self.assertEqual((len(miplib), len(mittelmann)), (130, 36))
         for case in miplib + mittelmann:
             self.assertLess(case.nonzeros, MAX_NONZEROS)
             self.assertNotIn(case.name.casefold(), netlib)
             self.assertTrue(case.path.is_file(), case.path)
         self.assertEqual(models("extra"), miplib + mittelmann)
-        self.assertEqual(len({case.key for case in models("extra")}), 163)
+        self.assertEqual(len({case.key for case in models("extra")}), 166)
+        self.assertEqual(
+            {case.key for case in models("extra") if case.name in
+             ("rmatr200-p5", "fome12", "nug08-3rd")},
+            {"miplib2017/rmatr200-p5", "mittelmann-lpopt/fome12",
+             "mittelmann-lpopt/nug08-3rd"},
+        )
 
     def test_trace_comparison_rejects_path_and_value_divergence(self):
         base = ["OPTIMAL 2 4607182418800017408 0 0", "1 1", "primal 0",

@@ -21,15 +21,19 @@ RUST = ROOT / "target/release/examples/phase5_netlib_solution_trace"
 PHASE7 = ROOT / "baselines/phase7-netlib-report.json"
 
 
-def run(executable: Path, model: Path, mode: str) -> tuple[str, int, int, float]:
+def run(executable: Path, model: Path, mode: str,
+        wall_seconds: float = 20.0) -> tuple[str, int, int, float]:
     command = [str(executable), str(model)]
     if mode == "raw":
         command.append("raw")
+    elif wall_seconds != 20.0:
+        command.extend(("phase7", str(wall_seconds)))
     output = subprocess.run(
-        command, check=True, capture_output=True, text=True, timeout=25
+        command, check=True, capture_output=True, text=True,
+        timeout=wall_seconds + 30
     ).stdout.splitlines()
     status, iterations, objective_bits = output[0].split()[:3]
-    elapsed = float(output[-1].split()[1])
+    elapsed = float(next(line.split()[1] for line in output if line.startswith("elapsed ")))
     return status, int(iterations), int(objective_bits), elapsed
 
 
@@ -50,10 +54,15 @@ def main() -> None:
                                       "mittelmann-lpopt", "extra"),
                         default="netlib-fast96")
     parser.add_argument("--mode", choices=("default", "raw", "both"), default="default")
+    parser.add_argument("--wall-seconds", type=float, default=20.0)
     parser.add_argument("--output", type=Path)
     options = parser.parse_args()
     if options.trials < 1 or options.warmups < 0:
         parser.error("trials must be positive and warmups nonnegative")
+    if not 0 < options.wall_seconds <= 3600:
+        parser.error("wall-seconds must be positive and at most 3600")
+    if options.wall_seconds != 20.0 and options.mode != "default":
+        parser.error("nondefault wall limit is only supported for default pipeline")
     phase7 = json.loads(PHASE7.read_text(encoding="utf-8"))
     expected = {case["name"]: case for case in phase7["results"]}
     selected = corpus_models(options.corpus)
@@ -74,28 +83,39 @@ def main() -> None:
         results = {}
         for mode in modes:
             times: dict[str, list[float]] = {"native": [], "rust": []}
-            outcomes: dict[str, tuple[str, int, int]] = {}
+            trial_outcomes: list[dict[str, tuple[str, int, int]]] = []
+            limited_trials: list[bool] = []
             for _ in range(options.warmups):
-                run(NATIVE, model, mode)
-                run(RUST, model, mode)
+                run(NATIVE, model, mode, options.wall_seconds)
+                run(RUST, model, mode, options.wall_seconds)
             for trial in range(options.trials):
                 order = (("native", NATIVE), ("rust", RUST))
                 if trial % 2:
                     order = tuple(reversed(order))
+                outcomes: dict[str, tuple[str, int, int]] = {}
+                trial_times = {}
                 for label, executable in order:
-                    status, iterations, objective_bits, elapsed = run(executable, model, mode)
+                    status, iterations, objective_bits, elapsed = run(
+                        executable, model, mode, options.wall_seconds)
                     outcomes[label] = (status, iterations, objective_bits)
                     times[label].append(elapsed)
-            wall_limited = (options.corpus != "netlib-fast96"
-                            and max(times["native"] + times["rust"]) >= 19.0
-                            and (outcomes["native"][0] != "OPTIMAL"
-                                 or outcomes["rust"][0] != "OPTIMAL"))
-            if mode == "default":
-                native, rust = outcomes["native"], outcomes["rust"]
-                if not wall_limited and (native[:2] != rust[:2] or not math.isclose(
-                    from_bits(native[2]), from_bits(rust[2]), rel_tol=1e-8, abs_tol=1e-8
-                )):
-                    raise AssertionError(f"{name} {mode}: {outcomes}")
+                    trial_times[label] = elapsed
+                limited = (options.corpus != "netlib-fast96"
+                           and max(trial_times.values()) >= 0.95 * options.wall_seconds
+                           and (outcomes["native"][0] != "OPTIMAL"
+                                or outcomes["rust"][0] != "OPTIMAL"))
+                if mode == "default" and not limited:
+                    native, rust = outcomes["native"], outcomes["rust"]
+                    if native[:2] != rust[:2] or not math.isclose(
+                        from_bits(native[2]), from_bits(rust[2]), rel_tol=1e-8, abs_tol=1e-8
+                    ):
+                        raise AssertionError(f"{name} {mode} trial {trial}: {outcomes}")
+                trial_outcomes.append(outcomes)
+                limited_trials.append(limited)
+                if limited:
+                    break
+            outcomes = trial_outcomes[-1]
+            wall_limited = any(limited_trials)
             if mode == "default" and case.corpus == "netlib":
                 reference = expected[case.name]
                 assert outcomes["native"][:2] == (
@@ -110,6 +130,10 @@ def main() -> None:
                 "rust_status": outcomes["rust"][0],
                 "native_iterations": outcomes["native"][1],
                 "rust_iterations": outcomes["rust"][1],
+                "native_objective_bits": outcomes["native"][2],
+                "rust_objective_bits": outcomes["rust"][2],
+                "trial_outcomes": trial_outcomes,
+                "wall_limited_trials": limited_trials,
                 "same_path_length": outcomes["native"][:2] == outcomes["rust"][:2],
                 "wall_limited": wall_limited,
             }
@@ -120,7 +144,8 @@ def main() -> None:
                   "nonzeros": case.nonzeros, **results}
         report.append(result)
         print(f"[{number:02d}/{len(cases)}] {name:<10} " + " ".join(
-            f"{mode}={results[mode]['ratio']:.3f}x" for mode in modes
+            f"{mode}=" + ("wall-limited" if results[mode]["wall_limited"]
+                        else f"{results[mode]['ratio']:.3f}x") for mode in modes
         ), flush=True)
 
     summary = {}
@@ -154,6 +179,7 @@ def main() -> None:
         "timing_scope": "serial public LPSolver solve; MPS parsing and output excluded",
         "trials": options.trials,
         "warmups": options.warmups,
+        "wall_seconds": options.wall_seconds,
         "modes": modes,
         "corpus": options.corpus,
         "summary": summary,
