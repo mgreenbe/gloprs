@@ -696,12 +696,15 @@ impl PrimalPrices {
         reduced_costs: &mut ReducedCosts<'_>,
     ) -> Result<Option<ColIndex>, FactorizationError> {
         if self.recompute {
-            let reduced = reduced_costs.reduced_costs()?.to_vec();
-            let norms = primal_edge_norms.squared_norms(basis, variables_info.relevance())?;
             let tolerance = reduced_costs.dual_feasibility_tolerance();
+            // GLOP's pricing reads the retained reduced-cost row directly.
+            // The norm calculation is independent of that row, so there is
+            // no need to clone it at each price recomputation.
+            let reduced = reduced_costs.reduced_costs()?;
+            let norms = primal_edge_norms.squared_norms(basis, variables_info.relevance())?;
             return Ok(self.best_entering_column_from_values(
                 variables_info,
-                &reduced,
+                reduced,
                 norms,
                 tolerance,
             ));

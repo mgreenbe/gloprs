@@ -150,7 +150,9 @@ impl UpdateRow {
         self.non_zero_positions
             .resize(matrix.num_cols().to_usize(), 0);
         self.num_non_zeros = 0;
-        self.non_zero_position_set = ColBitVec::new(matrix.num_cols());
+        // GLOP retains this bitset and ClearAndResize() reuses its buckets.
+        self.non_zero_position_set
+            .clear_and_resize(matrix.num_cols());
         self.coefficients.resize(matrix.num_cols().to_usize(), 0.0);
         self.first_slack = None;
         self.invalidate();

@@ -8,6 +8,20 @@ when timing-neutral; do not trade trajectory or KKT agreement for speed.
 
 ## Current baseline
 
+- A broader constructor/copy-site scan found that basis permutation on
+  refactorization cloned the basis, dual Phase-I prices, and permutation.
+  It now uses GLOP-style retained temporary vectors and a borrowed permutation
+  for edge norms. See the allocation audit for scope and validation.
+
+- The allocation audit found and repaired three hot-path lifetime gaps:
+  GLOP's retained dual Phase-I scattered RHS, its borrowed update-row
+  positions on dual pivots, and direct reduced-cost views during primal
+  price recomputation. Update-row rebinding also retains its bitset buckets.
+  Paired Rust A/B runs show neutral `milo`/`graph`, small noisy gains on
+  `cvs`, and an inconsistent `neos-1445765` effect (0.981–1.009x). Strict
+  trajectories and presolved checkpoints pass. Remaining bitset-view copies
+  are catalogued in
+  `baselines/phase8-allocation-audit.md`.
 - A pivot-loop clock-fidelity repair replaces Rust's 100-element scan per
   limit check with GLOP's `RunningMax` ring and reuses the same clock sample
   for the deadline check. Paired Rust A/B solves improve `graph` about

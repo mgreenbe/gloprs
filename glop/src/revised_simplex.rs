@@ -27,7 +27,6 @@ use lp_data::lp_types::{
     RowToColMapping, VariableStatus, VariableType, VectorIndex,
 };
 use lp_data::lp_utils::precise_scalar_product;
-use lp_data::permutation::ColumnPermutation;
 use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow};
 use lp_data::sparse::{CompactSparseMatrix, SparseMatrix, ValidatedCompactRows};
 
@@ -493,6 +492,8 @@ pub struct RevisedSimplex {
     dual_objective_limit: f64,
     objective_limit_reached: bool,
     basis: RowToColMapping,
+    // GLOP's tmp_basis_ is retained across refactorizations.
+    tmp_basis: RowToColMapping,
     basis_factorization: Option<BasisRepresentation>,
     variables_info: Option<VariablesInfo>,
     variable_values: DenseRow,
@@ -519,6 +520,10 @@ pub struct RevisedSimplex {
     bound_flip_candidates: Vec<ColIndex>,
     dual_phase_one_improvement_direction: DenseRow,
     dual_phase_one_pricing_vector: DenseColumn,
+    // GLOP's tmp_dual_pricing_vector_ is retained across refactorizations.
+    tmp_dual_pricing_vector: DenseColumn,
+    // GLOP's initially_all_zero_scratchpad_ survives dual Phase-I price updates.
+    initially_all_zero_scratchpad: ScatteredColumn,
     num_dual_infeasible_positions: usize,
     update_row: Option<UpdateRow>,
     primal_ray: DenseRow,
@@ -623,6 +628,7 @@ impl RevisedSimplex {
             dual_objective_limit: f64::INFINITY,
             objective_limit_reached: false,
             basis: RowToColMapping::new(),
+            tmp_basis: RowToColMapping::new(),
             basis_factorization: None,
             variables_info: None,
             variable_values: DenseRow::new(),
@@ -646,6 +652,8 @@ impl RevisedSimplex {
             bound_flip_candidates: Vec::new(),
             dual_phase_one_improvement_direction: DenseRow::new(),
             dual_phase_one_pricing_vector: DenseColumn::new(),
+            tmp_dual_pricing_vector: DenseColumn::new(),
+            initially_all_zero_scratchpad: ScatteredColumn::new(RowIndex::new(0)),
             num_dual_infeasible_positions: 0,
             update_row: None,
             primal_ray: DenseRow::new(),
@@ -2137,17 +2145,27 @@ impl RevisedSimplex {
     ) -> Result<(), FactorizationError> {
         if from_scratch {
             self.num_dual_infeasible_positions = 0;
-            self.dual_phase_one_pricing_vector = DenseColumn::filled(self.num_rows, 0.0);
-            self.dual_phase_one_improvement_direction = DenseRow::filled(self.num_cols, 0.0);
+            self.dual_phase_one_pricing_vector
+                .assign_to_zero(self.num_rows);
+            self.dual_phase_one_improvement_direction
+                .assign_to_zero(self.num_cols);
             self.dual_prices.clear_and_resize(self.num_rows.to_usize());
         }
-        let mut rhs = ScatteredColumn::new(self.num_rows);
+        let mut something_to_do = false;
         for &position in columns {
             let column = ColIndex::from_usize(position);
             let sign = self.dual_phase_one_sign(column);
             let old_sign = self.dual_phase_one_improvement_direction[column];
             if sign == old_sign {
                 continue;
+            }
+            if !something_to_do {
+                let rhs = &mut self.initially_all_zero_scratchpad;
+                debug_assert!(rhs.values().as_slice().iter().all(|&value| value == 0.0));
+                rhs.values_mut().resize(self.num_rows, 0.0);
+                rhs.clear_sparse_mask();
+                rhs.non_zeros_mut().clear();
+                something_to_do = true;
             }
             self.num_update_price_operations +=
                 10 * self.compact_matrix.column_num_entries(column).value();
@@ -2159,22 +2177,35 @@ impl RevisedSimplex {
             self.compact_matrix.column_add_multiple_to_scattered_column(
                 column,
                 sign - old_sign,
-                &mut rhs,
+                &mut self.initially_all_zero_scratchpad,
             );
             self.dual_phase_one_improvement_direction[column] = sign;
         }
-        if rhs.non_zeros().is_empty() {
+        if !something_to_do {
             return Ok(());
         }
+        let rhs = &mut self.initially_all_zero_scratchpad;
         rhs.clear_sparse_mask();
         rhs.clear_non_zeros_if_too_dense(0.8);
-        self.basis_factorization
+        let solve_result = self
+            .basis_factorization
             .as_ref()
             .unwrap()
-            .solve_with_nonzeros(&mut rhs)?;
-        let norms = self
+            .solve_with_nonzeros(rhs);
+        if let Err(error) = solve_result {
+            rhs.clear();
+            return Err(error);
+        }
+        let norms = match self
             .dual_edge_norms
-            .edge_squared_norms(self.basis_factorization.as_ref().unwrap())?;
+            .edge_squared_norms(self.basis_factorization.as_ref().unwrap())
+        {
+            Ok(norms) => norms,
+            Err(error) => {
+                rhs.clear();
+                return Err(error);
+            }
+        };
         let types = self.variables_info.as_ref().unwrap().variable_types();
         let threshold = self.parameters.ratio_test_zero_threshold;
         if rhs.non_zeros().is_empty() {
@@ -2209,6 +2240,18 @@ impl RevisedSimplex {
                     false,
                 );
             }
+        }
+        // GLOP resets the dense values (or only the solved sparse positions)
+        // and clears the position list. Its temporary mask is deliberately
+        // left alone until the next changed-price update clears it once.
+        if rhs.non_zeros().is_empty() {
+            rhs.values_mut().assign_to_zero(self.num_rows);
+        } else {
+            let (values, non_zeros) = rhs.mutable_parts();
+            for &row in non_zeros.iter() {
+                values[row.to_usize()] = 0.0;
+            }
+            non_zeros.clear();
         }
         Ok(())
     }
@@ -4393,13 +4436,6 @@ impl RevisedSimplex {
                 &direction,
                 reduced_costs_recomputed,
             )?;
-            let changed_columns = self
-                .update_row
-                .as_ref()
-                .unwrap()
-                .non_zero_positions()
-                .to_vec();
-
             let leaving_status = self.status_at_bound(leaving_column, target_bound);
             {
                 let info = self.variables_info.as_mut().unwrap();
@@ -4443,7 +4479,17 @@ impl RevisedSimplex {
             {
                 prices_initialized = false;
             } else {
-                self.update_dual_phase_one_prices_for_columns(&changed_columns, false)?;
+                // GLOP passes GetNonZeroPositions() as a borrowed span. Move
+                // the self-contained update-row cache out temporarily so
+                // the price update can borrow its positions without copying
+                // them on every dual Phase-I pivot.
+                let update_row = self.update_row.take().unwrap();
+                let result = self.update_dual_phase_one_prices_for_columns(
+                    update_row.non_zero_positions(),
+                    false,
+                );
+                self.update_row = Some(update_row);
+                result?;
             }
             self.num_iterations += 1;
             self.update_probe_pivot();
@@ -4934,34 +4980,31 @@ impl RevisedSimplex {
             .basis_factorization
             .as_ref()
             .unwrap()
-            .column_permutation()
-            .to_vec();
+            .column_permutation();
         if permutation.is_empty() {
             return;
         }
-        let mut permuted = self.basis.clone();
+        self.tmp_basis.resize(self.basis.len(), ColIndex::new(0));
         for (source, &destination) in permutation.iter().enumerate() {
-            permuted[RowIndex::from_usize(destination)] = self.basis[RowIndex::from_usize(source)];
+            self.tmp_basis[RowIndex::from_usize(destination)] =
+                self.basis[RowIndex::from_usize(source)];
         }
-        self.basis = permuted;
+        std::mem::swap(&mut self.basis, &mut self.tmp_basis);
         self.basic_objective_dirty = true;
 
         if !self.dual_phase_one_pricing_vector.is_empty() {
-            let mut permuted = self.dual_phase_one_pricing_vector.clone();
+            self.tmp_dual_pricing_vector.resize(self.num_rows, 0.0);
             for (source, &destination) in permutation.iter().enumerate() {
-                permuted[RowIndex::from_usize(destination)] =
+                self.tmp_dual_pricing_vector[RowIndex::from_usize(destination)] =
                     self.dual_phase_one_pricing_vector[RowIndex::from_usize(source)];
             }
-            self.dual_phase_one_pricing_vector = permuted;
+            std::mem::swap(
+                &mut self.dual_phase_one_pricing_vector,
+                &mut self.tmp_dual_pricing_vector,
+            );
         }
         self.dual_edge_norms
-            .update_data_on_basis_permutation(&ColumnPermutation::from_vec(
-                permutation
-                    .iter()
-                    .copied()
-                    .map(ColIndex::from_usize)
-                    .collect(),
-            ));
+            .update_data_on_basis_permutation(permutation);
         self.basis_factorization
             .as_mut()
             .unwrap()

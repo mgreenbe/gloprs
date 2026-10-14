@@ -57,6 +57,11 @@ For the same three presolved performance targets (`milo`, `graph`, and `cvs`),
 native/Rust capped-state fingerprints, including basis, values, reduced costs,
 deterministic clocks, and refactorization count.
 
+The [Phase 8 allocation audit](phase8-allocation-audit.md) compares Rust
+constructor and copy sites on solver hot paths with their pinned GLOP
+workspaces, records fixes and remaining view-copy opportunities, and links
+the associated differential and timing evidence.
+
 The fixture generator requires a temporary diagnostic native build as described
 in `tools/generate_netlib_trajectory_fixture.py`. Validate gloprs against it
 with a fresh 20-second wall-clock limit for every model:

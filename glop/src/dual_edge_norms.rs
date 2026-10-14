@@ -4,9 +4,8 @@
 //! `ortools/glop/dual_edge_norms.{h,cc}`. Rust's borrowing rules make the
 //! current basis an explicit method argument instead of a stored reference.
 
-use lp_data::lp_types::{ColIndex, VectorIndex};
+use lp_data::lp_types::VectorIndex;
 use lp_data::lp_utils::scattered_squared_norm;
-use lp_data::permutation::ColumnPermutation;
 use lp_data::scattered_vector::ScatteredRow;
 
 use crate::basis_representation::BasisRepresentation;
@@ -87,14 +86,13 @@ impl DualEdgeNorms {
     }
 
     /// Applies GLOP's row-indexed-vector permutation after a basis permutation.
-    pub fn update_data_on_basis_permutation(&mut self, permutation: &ColumnPermutation) {
+    pub fn update_data_on_basis_permutation(&mut self, permutation: &[usize]) {
         if self.recompute_edge_squared_norms {
             return;
         }
         let n = self.edge_squared_norms.len();
         self.temporary_edge_squared_norms.resize(n, 0.0);
-        for old_index in 0..n {
-            let new_index = permutation[ColIndex::from_usize(old_index)].to_usize();
+        for (old_index, &new_index) in permutation.iter().enumerate().take(n) {
             self.temporary_edge_squared_norms[new_index] = self.edge_squared_norms[old_index];
         }
         self.edge_squared_norms
