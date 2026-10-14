@@ -1,4 +1,4 @@
-//! Direct dual-simplex pivot paths for two extra-corpus performance targets.
+//! Direct dual-simplex pivot paths for extra-corpus performance targets.
 //!
 //! Run with `cargo test --release -p gloprs-glop --test phase8_extra_trajectories -- --ignored`.
 
@@ -51,7 +51,7 @@ fn selected_extra_models_match_native_pivot_paths() {
     assert_eq!(fixture.upstream_commit, UPSTREAM_COMMIT);
     assert!(!fixture.parameters.use_scaling);
     assert!(fixture.parameters.use_dual_simplex);
-    assert_eq!(fixture.results.len(), 2);
+    assert_eq!(fixture.results.len(), 4);
 
     let dataset_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../datasets");
     let parameters = GlopParameters {

@@ -837,55 +837,105 @@ impl TriangularMatrix {
     ///
     /// Returns an error for a dimension mismatch.
     pub fn solve(&self, rhs: &mut [f64]) -> Result<(), TriangularError> {
-        if rhs.len() != self.dimension() {
+        if rhs.len() != self.dimension() || self.num_rows != self.dimension() {
             return Err(TriangularError::DimensionMismatch);
         }
         match self.triangle {
             Triangle::Lower => {
-                for column in self.first_non_identity_column..self.dimension() {
-                    let value = rhs[column];
-                    if value == 0.0 {
-                        continue;
-                    }
-                    let coefficient = if self.unit_diagonal {
-                        value
-                    } else {
-                        let coefficient = value / self.diagonal[column];
-                        rhs[column] = coefficient;
-                        coefficient
-                    };
-                    for (row, entry_coefficient) in self.column(column) {
-                        // SAFETY: builders validate every stored row < dimension;
-                        // the entry check above established rhs.len() == dimension.
-                        #[allow(unsafe_code)]
-                        let slot = unsafe { rhs.get_unchecked_mut(row) };
-                        *slot = (-coefficient).mul_add(entry_coefficient, *slot);
-                    }
+                if self.unit_diagonal {
+                    self.lower_solve_starting_at_internal::<true>(
+                        self.first_non_identity_column,
+                        rhs,
+                    );
+                } else {
+                    self.lower_solve_starting_at_internal::<false>(
+                        self.first_non_identity_column,
+                        rhs,
+                    );
                 }
             }
             Triangle::Upper => {
-                for column in (self.first_non_identity_column..self.dimension()).rev() {
-                    let value = rhs[column];
-                    if value == 0.0 {
-                        continue;
-                    }
-                    let pivot = if self.unit_diagonal {
-                        value
-                    } else {
-                        let pivot = value / self.diagonal[column];
-                        rhs[column] = pivot;
-                        pivot
-                    };
-                    for (row, entry_coefficient) in self.column(column).rev() {
-                        // SAFETY: stored rows and rhs have the validated dimension.
-                        #[allow(unsafe_code)]
-                        let slot = unsafe { rhs.get_unchecked_mut(row) };
-                        *slot = (-entry_coefficient).mul_add(pivot, *slot);
-                    }
+                if self.unit_diagonal {
+                    self.upper_solve_internal::<true>(rhs);
+                } else {
+                    self.upper_solve_internal::<false>(rhs);
                 }
             }
         }
         Ok(())
+    }
+
+    // Mirror GLOP's diagonal_of_ones template instantiations: dispatch once,
+    // rather than testing the diagonal mode for each column of a dense solve.
+    fn lower_solve_starting_at_internal<const UNIT_DIAGONAL: bool>(
+        &self,
+        start: usize,
+        rhs: &mut [f64],
+    ) {
+        for column in start.max(self.first_non_identity_column)..self.dimension() {
+            // SAFETY: solve() and lower_solve_starting_at() check that the
+            // RHS has one slot per row and that this factor is square.
+            let value = unsafe { *rhs.get_unchecked(column) };
+            if value == 0.0 {
+                continue;
+            }
+            let coefficient = if UNIT_DIAGONAL {
+                value
+            } else {
+                // SAFETY: completed factor columns have diagonal entries.
+                let coefficient = value / unsafe { *self.diagonal.get_unchecked(column) };
+                unsafe { *rhs.get_unchecked_mut(column) = coefficient };
+                coefficient
+            };
+            // Match GLOP's indexed traversal of parallel contiguous arrays.
+            for position in self.starts[column]..self.starts[column + 1] {
+                // SAFETY: matrix builders maintain starts within both entry
+                // arrays and validate every stored row < num_rows; callers
+                // checked that rhs.len() equals the square dimension.
+                let (row, entry_coefficient) = unsafe {
+                    (
+                        *self.rows.get_unchecked(position) as usize,
+                        *self.coefficients.get_unchecked(position),
+                    )
+                };
+                let slot = unsafe { rhs.get_unchecked_mut(row) };
+                *slot = (-coefficient).mul_add(entry_coefficient, *slot);
+            }
+        }
+    }
+
+    fn upper_solve_internal<const UNIT_DIAGONAL: bool>(&self, rhs: &mut [f64]) {
+        for column in (self.first_non_identity_column..self.dimension()).rev() {
+            // SAFETY: solve() checked a square factor and matching RHS.
+            let value = unsafe { *rhs.get_unchecked(column) };
+            if value == 0.0 {
+                continue;
+            }
+            let pivot = if UNIT_DIAGONAL {
+                value
+            } else {
+                // SAFETY: completed factor columns have diagonal entries.
+                let pivot = value / unsafe { *self.diagonal.get_unchecked(column) };
+                unsafe { *rhs.get_unchecked_mut(column) = pivot };
+                pivot
+            };
+            // GLOP traverses each upper column backward for cache locality.
+            let start = self.starts[column];
+            let mut position = self.starts[column + 1];
+            while position > start {
+                position -= 1;
+                // SAFETY: matrix builders maintain starts within both entry
+                // arrays and validate rows; solve() checked rhs dimension.
+                let (row, entry_coefficient) = unsafe {
+                    (
+                        *self.rows.get_unchecked(position) as usize,
+                        *self.coefficients.get_unchecked(position),
+                    )
+                };
+                let slot = unsafe { rhs.get_unchecked_mut(row) };
+                *slot = (-entry_coefficient).mul_add(pivot, *slot);
+            }
+        }
     }
 
     /// Solves a lower-triangular system when entries before `start` are zero.
@@ -898,28 +948,14 @@ impl TriangularMatrix {
         start: usize,
         rhs: &mut [f64],
     ) -> Result<(), TriangularError> {
-        if rhs.len() != self.dimension() {
+        if rhs.len() != self.dimension() || self.num_rows != self.dimension() {
             return Err(TriangularError::DimensionMismatch);
         }
         debug_assert_eq!(self.triangle, Triangle::Lower);
-        for column in start.max(self.first_non_identity_column)..self.dimension() {
-            let value = rhs[column];
-            if value == 0.0 {
-                continue;
-            }
-            let pivot = if self.unit_diagonal {
-                value
-            } else {
-                let pivot = value / self.diagonal[column];
-                rhs[column] = pivot;
-                pivot
-            };
-            for (row, coefficient) in self.column(column) {
-                // SAFETY: builders validate rows; rhs length was checked above.
-                #[allow(unsafe_code)]
-                let slot = unsafe { rhs.get_unchecked_mut(row) };
-                *slot = (-pivot).mul_add(coefficient, *slot);
-            }
+        if self.unit_diagonal {
+            self.lower_solve_starting_at_internal::<true>(start, rhs);
+        } else {
+            self.lower_solve_starting_at_internal::<false>(start, rhs);
         }
         Ok(())
     }

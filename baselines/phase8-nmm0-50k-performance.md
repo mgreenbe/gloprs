@@ -1,5 +1,41 @@
 # NMM 0–50k: M2 performance triage
 
+## Focused follow-up after the fresh rerun
+
+GLOP dispatches unit/nonunit triangular solves to separate template kernels
+and traverses contiguous factor entries by index. The Rust dense solve now
+does the same, with row and storage invariants documented at its unchecked
+reads. Two alternating Rust A/B runs show `milo-v12-6-r2-40-1` at 0.985x
+and 0.984x its prior solve time; `graph20-20-1rand` is neutral. A second,
+direct-index RHS edit is neutral on `milo` and `graph` but places
+`cvs16r128-89` at 0.993x and 0.994x in independent Rust A/B runs. The
+native-relative matched-presolved-solve medians after these edits are:
+
+| Model | Trials | Native | Rust | Rust/native |
+|---|---:|---:|---:|---:|
+| `milo-v12-6-r2-40-1` | 15 | 0.097 s | 0.104 s | 1.066x |
+| `graph20-20-1rand` | 21 | 0.145 s | 0.159 s | 1.097x |
+| `cvs16r128-89` | 7 | 1.694 s | 1.781 s | 1.052x |
+
+Selected-view LU on the *presolved* basis sequence uses the original compact
+matrix and retained factorization objects on both sides. Across 63 `milo`
+bases, Rust/native is 1.084x, accounting for only about 1 ms of the full
+solve excess. Across 49 `graph` bases it is 1.021x; across 286 `cvs` bases
+it is 0.957x. Thus repeated simplex-pivot work, not isolated LU, remains the
+primary target for `graph` and `cvs`. Sampling identifies a distributed mix
+of transpose solves, update-row work, ratio tests, and pricing; no single
+kernel yet explains the full gap. Bounds-check experiments in Harris ratios
+and sparse permutation were timing-neutral and were reverted.
+
+The native direct-dual pivot fixture now covers all four selected models,
+including 2,111 `milo` and 8,793 `cvs` pivots. It and the fast-96 trajectory
+gate pass. A single-trial public run over all 213 NMM 0–50k models still
+matches every native status and iteration count, with no wall limits; its
+aggregate ratio is 0.9943x (not a substitute for the paired timing runs
+above). The local raw A/B, stage, and selected-view LU measurements are under
+`target/phase8-*`; commands use `benchmark_phase8_stages.py` and
+`benchmark_netlib_factorizations.py` with `--selected-source`.
+
 ## Fresh paired rerun at `8d51e03` (14 October 2026)
 
 Two independent serial passes covered all 213 deduplicated models. Each pass

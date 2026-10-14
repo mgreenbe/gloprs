@@ -43,8 +43,8 @@ cargo test --release -p gloprs-glop --test qap12_primal -- --ignored
 ```
 
 `phase8-extra-trajectories.json.gz` pins the complete direct dual-simplex
-pivot sequences and terminal bases for `neos-1445765` and
-`graph20-20-1rand`, two remaining Phase 8 performance targets. Regenerate it
+pivot sequences and terminal bases for `neos-1445765`,
+`graph20-20-1rand`, `milo-v12-6-r2-40-1`, and `cvs16r128-89`. Regenerate it
 with an instrumented pinned-native adapter and check it with:
 
 ```text

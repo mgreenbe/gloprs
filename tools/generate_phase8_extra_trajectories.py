@@ -19,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DATASETS = ROOT.parent / "datasets"
 UPSTREAM = ROOT.parent / "or-tools"
 PINNED_COMMIT = "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5"
-MODELS = ("neos-1445765", "graph20-20-1rand")
+MODELS = ("neos-1445765", "graph20-20-1rand", "milo-v12-6-r2-40-1",
+          "cvs16r128-89")
 
 
 def main() -> None:

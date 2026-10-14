@@ -8,6 +8,15 @@ when timing-neutral; do not trade trajectory or KKT agreement for speed.
 
 ## Current baseline
 
+- The newest triangular-solve alignment mirrors GLOP's compile-time
+  unit-diagonal dispatch and contiguous indexed traversal. `milo` matched
+  solve improved about 2% but remains 1.066x native; `graph` remains 1.097x
+  and `cvs` 1.052x. Presolved selected-view LU is 1.084x on `milo` but only
+  about 1 ms of its excess, 1.021x on `graph`, and 0.957x on `cvs`; next
+  investigate their pivot-time solves, update row, ratio test, and pricing
+  with matched native/Rust inputs. The four-model native pivot fixture,
+  fast-96 trajectories, and 213-model status/iteration recheck pass. Details
+  are in `baselines/phase8-nmm0-50k-performance.md`.
 - Two fresh serial, alternating M2-targeted `nmm0-50k` public runs at
   `8d51e03` cover all 213 models with identical native/Rust statuses and
   iteration counts and no timeouts. Aggregate Rust/native ratios are 0.9937x
