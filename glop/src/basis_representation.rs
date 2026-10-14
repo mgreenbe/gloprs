@@ -1372,9 +1372,10 @@ impl BasisRepresentation {
             LeftUpdateSource::Stored(index) => {
                 // GLOP accumulates -U[:, p] directly and records every row,
                 // including duplicates, for a clearing compact-column pass.
-                for (row, value) in self.factorization.column_of_upper(leaving_column) {
-                    let row = lp_data::lp_types::RowIndex::from_usize(row);
-                    right_update.values_mut()[row] -= value;
+                let column_of_upper = self.factorization.column_of_upper(leaving_column);
+                for entry in &*column_of_upper {
+                    let row = entry.index();
+                    right_update.values_mut()[row] -= entry.coefficient();
                     right_update.non_zeros_mut().push(row);
                 }
                 // GLOP computes this product from its stored left column, then
@@ -1395,8 +1396,9 @@ impl BasisRepresentation {
                 if !right_update_is_dense {
                     right_update.repopulate_sparse_mask();
                 }
-                for (row, value) in self.factorization.column_of_upper(leaving_column) {
-                    right_update.add(lp_data::lp_types::RowIndex::from_usize(row), -value);
+                let column_of_upper = self.factorization.column_of_upper(leaving_column);
+                for entry in &*column_of_upper {
+                    right_update.add(entry.index(), -entry.coefficient());
                 }
                 let u: Vec<_> = if right_update_is_dense {
                     right_update

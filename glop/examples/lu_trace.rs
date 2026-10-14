@@ -51,17 +51,20 @@ fn main() {
         factorization.deterministic_time_of_last_factorization()
     );
     println!("entries {}", factorization.number_of_entries());
-    let upper_columns: Vec<_> = (0..n)
-        .map(|column| factorization.column_of_upper(column))
-        .collect();
     print!("upper");
-    for (column, entries) in upper_columns.iter().enumerate() {
-        for &(row, value) in entries {
-            print!(" {column}:{row}:{value:.17}");
+    let mut upper_entries = 0;
+    for column in 0..n {
+        let entries = factorization.column_of_upper(column);
+        upper_entries += entries.num_entries();
+        for entry in &*entries {
+            print!(
+                " {column}:{}:{:.17}",
+                entry.index().to_usize(),
+                entry.coefficient()
+            );
         }
     }
     println!();
-    let upper_entries: usize = upper_columns.iter().map(Vec::len).sum();
     println!("upper_entries {upper_entries}");
     let rhs: Vec<f64> = (1..=n).map(|value| value as f64).collect();
     print!("right");

@@ -22,6 +22,12 @@ when timing-neutral; do not trade trajectory or KKT agreement for speed.
   sparse-mask rebuild. Paired matched solves are now about 1.057x native for
   `milo`, 1.086x for `graph`, and 1.042x for `cvs`; the remaining pivot-time
   gaps still need localization.
+- `GetColumnOfU()` now reuses an LU-owned `SparseColumn`, as upstream does,
+  instead of allocating a new tuple vector at each basis update. Its cleanup
+  and entry order match the native path; direct pivot and presolved-state
+  fixtures pass. Two matched Rust A/B runs show no material whole-solve gain
+  on `milo` or `graph`, and about 0.5–0.6% slower `cvs`; retain the change
+  for ownership/workspace fidelity while investigating the remaining gap.
 - The newest triangular-solve alignment mirrors GLOP's compile-time
   unit-diagonal dispatch and contiguous indexed traversal. `milo` matched
   solve improved about 2% but remains 1.066x native; `graph` remains 1.097x

@@ -74,6 +74,22 @@ Rust/native time ratio. `capri` alone differed by one objective bit, as in
 the preexisting numerical tolerance checks. This one-pass aggregate is not a
 substitute for the repeated matched timings above.
 
+## Reusable upper-column follow-up
+
+GLOP's `GetColumnOfU()` returns a reference to an LU-owned reusable
+`SparseColumn`. Rust had been allocating a tuple vector on each basis update.
+It now uses the same retained sparse-column buffer and `CleanUp()` path;
+the buffer-reuse unit, direct extra-model pivot, 14 presolved-state, and
+fast-96 trajectory gates pass. In two seven-trial Rust A/B runs against the
+previous binary, `milo` was 1.000x and 0.996x, `graph` 1.002x and 1.001x,
+and `cvs` 1.006x and 1.005x. Thus the ownership correction is not a timing
+repair; the small `cvs` cost is retained for fidelity and remains open for
+profiling.
+The subsequent one-pass 213-model public check again matched every status
+and iteration count, had no timeouts, and produced a 0.988x aggregate ratio.
+Only `capri` differed by one objective bit, as before. This aggregate is
+not evidence that the three focused presolved solves have reached parity.
+
 ## Fresh paired rerun at `8d51e03` (14 October 2026)
 
 Two independent serial passes covered all 213 deduplicated models. Each pass

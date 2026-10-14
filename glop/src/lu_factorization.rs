@@ -4,7 +4,7 @@
 //! `markowitz`: permutations satisfy `A[row_permutation, column_permutation] =
 //! L U`, `L` has an implicit unit diagonal, and pivot ties are deterministic.
 
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::fmt;
 
 use lp_data::lp_types::{
@@ -71,6 +71,8 @@ pub struct LuFactorization {
     deterministic_time_of_last_factorization: f64,
     dense_zero_scratchpad: RefCell<Vec<f64>>,
     non_zero_rows: RefCell<Vec<RowIndex>>,
+    // GLOP's mutable column_of_upper_ is reused by GetColumnOfU().
+    column_of_upper: RefCell<SparseColumn>,
     markowitz_stats: StatsGroup,
     markowitz_workspace: markowitz::MarkowitzWorkspace,
 }
@@ -100,6 +102,7 @@ impl LuFactorization {
             deterministic_time_of_last_factorization: 0.0,
             dense_zero_scratchpad: RefCell::new(Vec::new()),
             non_zero_rows: RefCell::new(Vec::new()),
+            column_of_upper: RefCell::new(SparseColumn::new()),
             markowitz_stats: StatsGroup::new("Markowitz"),
             markowitz_workspace: markowitz::MarkowitzWorkspace::default(),
         }
@@ -1114,28 +1117,33 @@ impl LuFactorization {
         product
     }
 
-    /// Returns a column of U using the input matrix's column numbering.
+    /// Returns a reused column of U using the input matrix's column numbering.
+    /// The borrow is valid until the caller releases it, just as GLOP's
+    /// `GetColumnOfU()` result is valid until the next such call.
     #[must_use]
-    pub fn column_of_upper(&self, input_column: usize) -> Vec<(usize, f64)> {
+    pub fn column_of_upper(&self, input_column: usize) -> Ref<'_, SparseColumn> {
+        let mut result = self.column_of_upper.borrow_mut();
         if self.is_identity_factorization {
-            return vec![(input_column, 1.0)];
+            result.clear();
+            result.set_coefficient(RowIndex::from_usize(input_column), 1.0);
+            drop(result);
+            return self.column_of_upper.borrow();
         }
         let column = if self.column_permutation.is_empty() {
             input_column
         } else {
             let Some(&column) = self.column_permutation.get(input_column) else {
-                return Vec::new();
+                result.clear();
+                drop(result);
+                return self.column_of_upper.borrow();
             };
             column
         };
-        let mut result: Vec<_> = self.upper.column(column).collect();
-        result.push((column, self.upper.diagonal(column)));
-        // GLOP's GetColumnOfU() materializes through
-        // TriangularMatrix::CopyColumnToSparseColumn(), whose CleanUp() sorts
-        // the copied entries. This order is distinct from U's physical column
-        // order, which triangular solves deliberately preserve.
-        result.sort_unstable_by_key(|entry| entry.0);
-        result
+        // CopyColumnToSparseColumn() retains the destination buffers and
+        // performs the same CleanUp() sort as upstream.
+        self.upper.copy_column_to_sparse_column(column, &mut result);
+        drop(result);
+        self.column_of_upper.borrow()
     }
 
     /// Computes `||A^-1 a||_2^2` for a sparse input column.
@@ -1688,9 +1696,16 @@ mod tests {
             columns[3]
         );
         assert_eq!(
-            factorization.column_of_upper(3),
+            factorization
+                .column_of_upper(3)
+                .iter()
+                .map(|entry| (entry.index().to_usize(), entry.coefficient()))
+                .collect::<Vec<_>>(),
             vec![(0, 3.0), (1, 4.0), (2, 2.0), (3, 1.0)]
         );
+        let first_storage = factorization.column_of_upper(3).entry_slices().0.as_ptr();
+        let second_storage = factorization.column_of_upper(3).entry_slices().0.as_ptr();
+        assert_eq!(first_storage, second_storage);
         assert_eq!(
             factorization.upper.column(3).collect::<Vec<_>>(),
             columns[3]
