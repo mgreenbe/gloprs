@@ -2403,3 +2403,19 @@ exceed 1.2x. Profile their dominant BTRAN, primal-edge-norm, and refactorization
 kernels with isolated paired timings before declaring the outliers resolved;
 the measurements and model-by-model ratios are in
 `baselines/phase8-extra-performance.md`.
+
+The next outlier pass restored upstream's conditional-XOR bitset test in
+primal pricing, with a focused boundary test and unchanged strict Netlib and
+164-model extra-corpus outcomes. Six-model paired solve timings show only a
+small `bnatt400/500` improvement; the other ratios remain effectively
+unchanged. Unchecked sparse-merge reads did not improve `neos-1445765` and
+were removed. A paired sample shows `fhnw-binpack4-48` refactorization is
+costly on both sides, so its full 1.5x solve ratio still needs live-basis
+kernel timing before a Markowitz change. See the follow-up section in the
+extra-corpus performance report.
+Captured `fhnw` basis matrices isolate a roughly 2.2x LU ratio, though their
+tiny absolute timings and lack of a selected compact view limit attribution.
+The residual-singleton copy and initial-singleton scratch setup now follow
+upstream's one-pass/reusable-workspace implementation. This improves fidelity
+but only slightly changes the isolated ratio. Next, profile the live selected
+Markowitz path and reconcile the remaining LU gap without changing pivot ties.

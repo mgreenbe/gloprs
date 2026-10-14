@@ -527,6 +527,26 @@ impl<I: VectorIndex> Iterator for BitOnesIter<'_, I> {
 }
 
 impl<I: VectorIndex> BitVec<I> {
+    /// GLOP's branchless dual-infeasibility membership test: the conditions
+    /// are mutually exclusive, so at most one selected bit can be nonzero.
+    #[must_use]
+    #[inline]
+    pub fn conditional_xor_of_two_bits(
+        index: I,
+        use_first: bool,
+        first: &Self,
+        use_second: bool,
+        second: &Self,
+    ) -> bool {
+        let position = index.to_usize();
+        debug_assert!(position < first.len && position < second.len);
+        let word = position / 64;
+        let bit = position % 64;
+        ((u64::from(use_first) << bit) & first.words[word])
+            ^ ((u64::from(use_second) << bit) & second.words[word])
+            != 0
+    }
+
     #[must_use]
     pub fn new(size: I) -> Self {
         let len = size.to_usize();
@@ -976,6 +996,29 @@ mod tests {
             assert!(!bits.contains(RowIndex::from_usize(position)));
         }
         assert!(bits.is_all_false());
+    }
+
+    #[test]
+    fn conditional_xor_matches_upstream_two_mask_selection() {
+        let mut first = ColBitVec::new(ColIndex::new(130));
+        let mut second = ColBitVec::new(ColIndex::new(130));
+        first.set(ColIndex::new(63));
+        second.set(ColIndex::new(64));
+        for position in [0, 63, 64, 129] {
+            let index = ColIndex::new(position);
+            for use_first in [false, true] {
+                for use_second in [false, true] {
+                    let expected = (use_first && first.contains(index))
+                        ^ (use_second && second.contains(index));
+                    assert_eq!(
+                        ColBitVec::conditional_xor_of_two_bits(
+                            index, use_first, &first, use_second, &second,
+                        ),
+                        expected,
+                    );
+                }
+            }
+        }
     }
 
     #[test]

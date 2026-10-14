@@ -121,6 +121,47 @@ still spends substantial Rust time in basis refactorization, while `bnatt500`
 and `piperout-27` emphasize BTRAN/edge-norm work. These need isolated paired
 kernel timing before a claim of parity.
 
+## Pricing and bounds-check follow-up
+
+A further 500-solve paired sample of `fhnw-binpack4-48` confirmed that
+refactorization is a significant cost in **both** solvers. It accounted for
+about 798 of 4,878 Rust main-thread samples and 662 of 5,122 native samples;
+this alone cannot explain the full solve ratio. Other sampled work includes
+primal edge norms, pricing, and ratio tests. Isolated live-basis timings are
+needed before changing Markowitz.
+
+Upstream `PrimalPrices` uses a branchless conditional XOR of two bitset
+memberships to test dual infeasibility. Rust now uses the same operation for
+full and incremental primal price updates, with a word-boundary unit test.
+In a fresh six-model, five-solve-per-trial comparison, matched-solve ratios
+were `fhnw-binpack4-48` 1.633x, `pg` 1.507x, `bnatt500` 1.721x,
+`bnatt400` 1.683x, `piperout-27` 1.300x, and `unitcal_7` 1.218x.
+The previous comparable run measured 1.645x, 1.502x, 1.745x, 1.719x,
+1.298x, and 1.219x respectively. The small improvement is mostly confined
+to the `bnatt` pair; this is a fidelity fix, not parity. Raw results are
+ignored at `target/phase8-extra-pricing-xor.json`.
+
+An unchecked-index variant of the sparse common-index merge did **not**
+improve `neos-1445765` presolve (1.491x versus about 1.486x with checked
+reads) and was removed. Workspace tests, strict fast-96 Netlib trajectories,
+and the 164-model pinned-native extra-corpus outcome gate pass with the
+pricing edit.
+
+For `fhnw-binpack4-48`, 28 captured refactorization basis matrices give an
+isolated LU sum-of-times ratio of 2.208x Rust/native (three paired trials,
+10 repetitions per matrix after warmup). These very short square-matrix
+probes total only about 2 ms native per trial and do not capture the live
+selected compact-matrix view, so they are a localization signal, not a
+full-solve attribution. GLOP's residual singleton-column path copies its
+source column in one pass. Removing Rust's redundant pivot lookup and
+per-entry pivot-state filtering brings that path into alignment; the isolated
+ratio after the change is 2.181x, a small difference. GLOP also reuses its
+initial singleton entry buffer and marks claimed rows in the row permutation;
+Rust now does the same instead of allocating a fresh entry list and bitmap
+per refactorization. The one-pass path passed 1,000 native LU differential
+traces, strict fast-96 Netlib trajectories, and the 164-model extra-corpus
+outcome gate. The residual LU gap remains unresolved.
+
 `miplib2017/enlight_hard` was solved completely by presolve, so it is
 inapplicable to matched-presolved simplex timing but included in the public
 result. `miplib2017/rmatr200-p5` and

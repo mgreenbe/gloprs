@@ -343,15 +343,15 @@ fn store_pivot_column<M: InputMatrix>(
 ) {
     let step = pivot_rows.len();
     let source = matrix.column(column);
-    let pivot = source.look_up_coefficient(RowIndex::from_usize(row));
     lower_factor.add_diagonal_only_column(1.0);
-    upper_factor.add_column_with_diagonal(
-        source.iter().filter_map(|entry| {
-            let entry_row = entry.index().to_usize();
-            (entry_row != row && row_permutation[entry_row] != INVALID)
-                .then_some((entry_row, entry.coefficient()))
-        }),
-        pivot,
+    // Every caller has established that this source column has exactly one
+    // row not yet pivoted. GLOP copies the whole column (apart from its
+    // diagonal) in one pass; filtering by row permutation here was redundant.
+    upper_factor.add_triangular_column_entries(
+        source
+            .iter()
+            .map(|entry| (entry.index().to_usize(), entry.coefficient())),
+        row,
     );
     pivot_rows.push(row);
     pivot_columns.push(column);
@@ -519,6 +519,7 @@ pub(crate) struct MarkowitzWorkspace {
     permuted_upper: ReusableColumnMemory,
     singleton_columns: Vec<usize>,
     singleton_rows: Vec<usize>,
+    initial_singletons: Vec<(usize, usize)>,
     queue: ColumnPriorityQueue,
     examined: Vec<usize>,
 }
@@ -532,6 +533,7 @@ impl Default for MarkowitzWorkspace {
             permuted_upper: ReusableColumnMemory::new(0),
             singleton_columns: Vec::new(),
             singleton_rows: Vec::new(),
+            initial_singletons: Vec::new(),
             queue: ColumnPriorityQueue::default(),
             examined: Vec::new(),
         }
@@ -862,8 +864,8 @@ fn compute<M: InputMatrix>(
     // Upstream first extracts true singleton columns. For competing singleton
     // columns on one row, the lowest input column wins; selected entries are
     // then ordered by row to keep the row permutation close to identity.
-    let mut claimed_rows = vec![false; num_rows];
-    let mut initial_singletons = Vec::new();
+    let initial_singletons = &mut workspace.initial_singletons;
+    initial_singletons.clear();
     for column in 0..num_columns {
         let source = matrix.column(column);
         if source.num_entries() == 1 {
@@ -872,14 +874,16 @@ fn compute<M: InputMatrix>(
                 .expect("singleton has one entry")
                 .index()
                 .to_usize();
-            if !claimed_rows[row] {
-                claimed_rows[row] = true;
+            if row_perm[row] == INVALID {
+                // Match GLOP's temporary row-permutation mark. The sorted
+                // singleton pass below replaces it with the actual pivot.
+                row_perm[row] = 0;
                 initial_singletons.push((row, column));
             }
         }
     }
     initial_singletons.sort_unstable_by_key(|entry| entry.0);
-    for (row, column) in initial_singletons {
+    for &(row, column) in initial_singletons.iter() {
         store_pivot_column(
             matrix,
             row,

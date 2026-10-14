@@ -1015,6 +1015,19 @@ upstream traversal and reusable zero scratchpad. These edits passed the
 complete 164-model extra-corpus outcome gate and strict 96-model Netlib pivot
 fixture. They do not explain the remaining short-model BTRAN and
 refactorization timing gaps; see `baselines/phase8-extra-performance.md`.
+The `reduced_costs.{h,cc}` / `PrimalPrices` port now uses GLOP's conditional
+XOR of two bitset memberships for full and incremental primal price updates.
+Focused bit-boundary tests, strict Netlib trajectories, and the 164-model
+extra-corpus outcome gate agree; the `bnatt` matched-solve gains are small.
+An unchecked-read experiment in the sparse-vector merge gave no measurable
+benefit and was removed, so there is no new unsafe exception in this path.
+The `markowitz.{h,cc}` singleton setup now uses a retained entry buffer and
+temporary row-permutation marks, matching `ExtractSingletonColumns()`, and
+the residual-singleton upper-factor insertion copies source entries in one
+pass as `ExtractResidualSingletonColumns()` does. The latter passed 1,000
+native LU traces, strict fast-96 Netlib trajectories, and the 164-model
+extra-corpus outcome gate. Its isolated `fhnw-binpack4-48` LU speedup was
+small; the remaining factorization cost needs selected-view profiling.
 
 ## Test inventory caveat
 

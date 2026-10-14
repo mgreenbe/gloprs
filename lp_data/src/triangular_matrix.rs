@@ -304,6 +304,28 @@ impl TriangularMatrix {
         self.close_current_column(diagonal_value);
     }
 
+    /// Adds a borrowed compact column without materializing a sparse-column
+    /// copy. The diagonal is found during the same pass as GLOP's
+    /// `AddTriangularColumn()`.
+    pub fn add_triangular_column_entries(
+        &mut self,
+        entries: impl IntoIterator<Item = (usize, f64)>,
+        diagonal_row: usize,
+    ) {
+        let mut diagonal_value = 0.0;
+        for (row, coefficient) in entries {
+            if row == diagonal_row {
+                diagonal_value = coefficient;
+            } else {
+                assert!(row < self.num_rows);
+                debug_assert_ne!(coefficient, 0.0);
+                self.rows.push(u32::try_from(row).unwrap());
+                self.coefficients.push(coefficient);
+            }
+        }
+        self.close_current_column(diagonal_value);
+    }
+
     pub fn add_triangular_column_with_given_diagonal(
         &mut self,
         column: &SparseColumn,

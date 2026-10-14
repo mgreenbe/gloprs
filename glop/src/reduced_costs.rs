@@ -12,7 +12,9 @@
     clippy::struct_field_names
 )]
 
-use lp_data::lp_types::{ColIndex, DenseRow, RowIndex, RowToColMapping, VariableType, VectorIndex};
+use lp_data::lp_types::{
+    ColBitVec, ColIndex, DenseRow, RowIndex, RowToColMapping, VariableType, VectorIndex,
+};
 use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow};
 use lp_data::sparse::CompactSparseMatrix;
 
@@ -584,10 +586,13 @@ impl PrimalPrices {
             for column in variables_info.relevance().iter_ones() {
                 let position = column.to_usize();
                 let value = reduced_costs[position];
-                let infeasible = (variables_info.can_decrease().contains(column)
-                    && value > dual_feasibility_tolerance)
-                    || (variables_info.can_increase().contains(column)
-                        && value < -dual_feasibility_tolerance);
+                let infeasible = ColBitVec::conditional_xor_of_two_bits(
+                    column,
+                    value > dual_feasibility_tolerance,
+                    variables_info.can_decrease(),
+                    value < -dual_feasibility_tolerance,
+                    variables_info.can_increase(),
+                );
                 if infeasible {
                     self.prices
                         .add_or_update(position, value * value / squared_norms[position]);
@@ -614,10 +619,13 @@ impl PrimalPrices {
         for &position in update_row.non_zero_positions() {
             let column = ColIndex::from_usize(position);
             let value = reduced_costs[position];
-            let infeasible = (variables_info.can_decrease().contains(column)
-                && value > dual_feasibility_tolerance)
-                || (variables_info.can_increase().contains(column)
-                    && value < -dual_feasibility_tolerance);
+            let infeasible = ColBitVec::conditional_xor_of_two_bits(
+                column,
+                value > dual_feasibility_tolerance,
+                variables_info.can_decrease(),
+                value < -dual_feasibility_tolerance,
+                variables_info.can_increase(),
+            );
             if infeasible {
                 self.prices
                     .add_or_update(position, value * value / squared_norms[position]);
@@ -642,10 +650,13 @@ impl PrimalPrices {
         }
         let position = column.to_usize();
         let value = reduced_costs[position];
-        let infeasible = (variables_info.can_decrease().contains(column)
-            && value > dual_feasibility_tolerance)
-            || (variables_info.can_increase().contains(column)
-                && value < -dual_feasibility_tolerance);
+        let infeasible = ColBitVec::conditional_xor_of_two_bits(
+            column,
+            value > dual_feasibility_tolerance,
+            variables_info.can_decrease(),
+            value < -dual_feasibility_tolerance,
+            variables_info.can_increase(),
+        );
         if infeasible {
             self.prices
                 .add_or_update(position, value * value / squared_norms[position]);
