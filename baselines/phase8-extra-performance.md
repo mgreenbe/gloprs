@@ -162,6 +162,60 @@ per refactorization. The one-pass path passed 1,000 native LU differential
 traces, strict fast-96 Netlib trajectories, and the 164-model extra-corpus
 outcome gate. The residual LU gap remains unresolved.
 
+The presolved selected-view probe mode now records the actual compact source
+and basis selections for this model. Five serial paired trials, with 100
+factorizations per selection and retained LU objects, measured 1.968–2.059x
+Rust/native on the 28 views before the latest changes. Matching GLOP's
+libc++ singleton-entry sort lowered that range to 1.912–1.939x. Reusing
+Markowitz's temporary row/column permutations and LU's output permutations
+instead of allocating them for each refactorization retained a 1.913–1.990x
+range. These are small improvements, not a resolution. A five-trial,
+20-solve-per-trial paired presolved-solve run measured 1.631x after the edits,
+versus 1.658x in the pinned stage baseline. The 28 LU calls account for only
+roughly 2 ms of the roughly 11 ms per-solve gap, so further investigation
+must include the per-pivot numerical paths, not just Markowitz.
+The first per-pivot mismatch found was the Phase-I leaving-row ratio test:
+native heapifies breakpoints in O(k) and pops only until the improvement is
+exhausted, while Rust sorted every breakpoint in O(k log k). A reusable
+binary heap with GLOP's ratio/magnitude/row comparison lowers the five-trial
+presolved-solve ratio from 1.625x (after a separate sparse direction-norm
+traversal fix) to 1.575x. The latter also removes an unnecessary full-row
+norm scan after the direction support is known. The end-to-end gap is still
+material and remains open.
+Recycling the pivot permutation buffers through the retained LU object gives
+a clean selected-view LU range of 1.897–1.908x and a final five-trial
+presolved-solve ratio of 1.572x. The 164-model corpus outcome gate passed
+before this final storage-only change; strict fast-96 Netlib trajectories and
+the pinned `fhnw` outcome also passed after it.
+
+A subsequent five-trial paired check found that clearing the unit-row inverse
+both in `UpdateRow` and in `LeftSolveForUnitRow` was redundant; likewise the
+retained right-update scratchpad was cleared both after one replacement and
+before the next. Removing those extra clears matches upstream's lifecycle but
+does not explain the slowdown: ratios remained 1.572x and 1.574x in successive
+20-solve-per-trial comparisons. Saved initial-basis FTRAN probes show a 1.694x
+relative ratio on 3,739 right-hand sides, but only about 0.15 ms absolute
+difference for the entire batch. An unchecked-read trial in the packed
+rank-one dot product measured 1.570x and was reverted because the difference
+was noise. The remaining `fhnw` gap is not yet at parity.
+
+An isolated LU sample identified a larger upstream-fidelity difference:
+`TriangularMatrix::Reset()` pre-sizes the diagonal, starts, and pruning vectors
+in GLOP, whereas Rust previously appended to all three on every completed
+column. After adopting indexed writes with a separate completed-column count,
+five serial selected-view LU trials measured about 1.70x Rust/native, versus
+1.90x before. A matched five-trial presolved-solve run with the ordinary
+release build measured 0.017695 s native and 0.021492 s Rust per solve
+(**1.215x**), down from roughly 1.57x. A machine-target Rust build measured
+1.218x; after this storage change it does not meaningfully outperform the
+portable release build. The remaining approximately 3.8 ms per solve is
+unresolved, including about 1.4 ms attributable to the 28 selected-view LU
+calls at their isolated median timings.
+An independent nine-trial, 50-solve-per-trial serial confirmation measured
+0.017662 s native and 0.021454 s Rust per solve (1.215x); the status,
+3,774 iterations, and objective bits agreed in every trial. Strict fast-96
+trajectories and the full 164-model extra-corpus outcome gate also passed.
+
 `miplib2017/enlight_hard` was solved completely by presolve, so it is
 inapplicable to matched-presolved simplex timing but included in the public
 result. `miplib2017/rmatr200-p5` and

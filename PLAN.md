@@ -2419,3 +2419,30 @@ The residual-singleton copy and initial-singleton scratch setup now follow
 upstream's one-pass/reusable-workspace implementation. This improves fidelity
 but only slightly changes the isolated ratio. Next, profile the live selected
 Markowitz path and reconcile the remaining LU gap without changing pivot ties.
+The presolved selected-view benchmark reproduces a 1.97–2.06x LU ratio.
+Using the existing libc++-compatible singleton sort and reusing row/column
+permutation storage reduce it only to roughly 1.92x; the paired presolved
+solve is 1.63x. Captured LU calls account for only about 2 ms of the roughly
+11 ms full-solve gap. Continue with matched per-pivot stage timing to isolate
+edge-norm, update-row, ratio-test, and solve work before more LU tuning.
+The first per-pivot repair restores GLOP's Phase-I breakpoint heap (instead
+of sorting all breakpoints) and traverses the known sparse direction support
+for its infinity norm. The measured `fhnw` presolved-solve ratio drops from
+about 1.63x to 1.575x; further per-pivot localization is still required.
+After recycling LU pivot permutation buffers, a clean five-trial `fhnw`
+selected-view LU run is 1.897–1.908x and the presolved-solve ratio is
+1.572x. The major regression is not yet fixed; use matched per-pivot stage
+timers or equivalent profiles to localize the remaining roughly 10 ms per
+solve before changing further kernels.
+An isolated LU profile then exposed a storage-lifecycle mismatch: native
+`TriangularMatrix::Reset()` pre-sizes its diagonal, starts, and pruning arrays
+and closes columns by indexed writes, whereas Rust grew all three arrays at
+each pivot. The Rust factor now mirrors upstream, tracking completed columns
+separately from capacity. Five paired selected-view LU trials improve from
+about 1.90x to 1.70x, and the ordinary release presolved solve improves from
+about 1.57x to 1.21x (about 17.7 ms native, 21.5 ms Rust per solve). This is
+a substantial improvement but **not parity**; continue investigating the
+remaining roughly 3.8 ms per-solve gap. A machine-target build is now only
+about the same speed as the ordinary release build after this correction, so
+the earlier apparent target-CPU win was code-generation sensitivity to the
+old grow-on-close representation, not a reason to change portable build flags.

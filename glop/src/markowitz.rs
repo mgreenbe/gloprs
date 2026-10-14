@@ -42,7 +42,6 @@ pub(crate) struct MarkowitzStats {
 struct MarkowitzResult {
     pivot_rows: Vec<usize>,
     pivot_columns: Vec<usize>,
-    row_permutation: Vec<usize>,
     num_fp_operations: i64,
     stats: Option<MarkowitzStats>,
 }
@@ -520,6 +519,10 @@ pub(crate) struct MarkowitzWorkspace {
     singleton_columns: Vec<usize>,
     singleton_rows: Vec<usize>,
     initial_singletons: Vec<(usize, usize)>,
+    row_permutation: Vec<usize>,
+    column_permutation: Vec<usize>,
+    recycled_pivot_rows: Vec<usize>,
+    recycled_pivot_columns: Vec<usize>,
     queue: ColumnPriorityQueue,
     examined: Vec<usize>,
 }
@@ -534,9 +537,20 @@ impl Default for MarkowitzWorkspace {
             singleton_columns: Vec::new(),
             singleton_rows: Vec::new(),
             initial_singletons: Vec::new(),
+            row_permutation: Vec::new(),
+            column_permutation: Vec::new(),
+            recycled_pivot_rows: Vec::new(),
+            recycled_pivot_columns: Vec::new(),
             queue: ColumnPriorityQueue::default(),
             examined: Vec::new(),
         }
+    }
+}
+
+impl MarkowitzWorkspace {
+    pub(crate) fn recycle_pivot_permutations(&mut self, rows: Vec<usize>, columns: Vec<usize>) {
+        self.recycled_pivot_rows = rows;
+        self.recycled_pivot_columns = columns;
     }
 }
 
@@ -840,10 +854,18 @@ fn compute<M: InputMatrix>(
     let num_rows = matrix.num_rows();
     let num_columns = matrix.num_columns();
     let maximum_pivots = num_rows.min(num_columns);
-    let mut row_perm = vec![INVALID; num_rows];
-    let mut col_perm = vec![INVALID; num_columns];
-    let mut pivot_rows = Vec::with_capacity(maximum_pivots);
-    let mut pivot_columns = Vec::with_capacity(maximum_pivots);
+    let row_perm = &mut workspace.row_permutation;
+    row_perm.resize(num_rows, INVALID);
+    row_perm.fill(INVALID);
+    let col_perm = &mut workspace.column_permutation;
+    col_perm.resize(num_columns, INVALID);
+    col_perm.fill(INVALID);
+    let mut pivot_rows = std::mem::take(&mut workspace.recycled_pivot_rows);
+    pivot_rows.clear();
+    pivot_rows.reserve(maximum_pivots);
+    let mut pivot_columns = std::mem::take(&mut workspace.recycled_pivot_columns);
+    pivot_columns.clear();
+    pivot_columns.reserve(maximum_pivots);
     lower_factor.reset(num_rows, maximum_pivots);
     upper_factor.reset(num_rows, maximum_pivots);
     let pattern = &mut workspace.pattern;
@@ -882,14 +904,15 @@ fn compute<M: InputMatrix>(
             }
         }
     }
-    initial_singletons.sort_unstable_by_key(|entry| entry.0);
+    // GLOP uses libc++ std::sort on MatrixEntry, comparing only the row.
+    crate::libcpp_sort::sort_by(initial_singletons, |left, right| left.0.cmp(&right.0));
     for &(row, column) in initial_singletons.iter() {
         store_pivot_column(
             matrix,
             row,
             column,
-            &mut row_perm,
-            &mut col_perm,
+            row_perm,
+            col_perm,
             &mut pivot_rows,
             &mut pivot_columns,
             lower_factor,
@@ -922,8 +945,8 @@ fn compute<M: InputMatrix>(
                 matrix,
                 residual_row,
                 column,
-                &mut row_perm,
-                &mut col_perm,
+                row_perm,
+                col_perm,
                 &mut pivot_rows,
                 &mut pivot_columns,
                 lower_factor,
@@ -936,8 +959,8 @@ fn compute<M: InputMatrix>(
 
     pattern.reset_from_matrix_subset(
         matrix,
-        &row_perm,
-        &col_perm,
+        row_perm,
+        col_perm,
         singleton_columns,
         singleton_rows,
     );
@@ -953,8 +976,8 @@ fn compute<M: InputMatrix>(
             matrix,
             parameters,
             pattern,
-            &row_perm,
-            &col_perm,
+            row_perm,
+            col_perm,
             lower_factor,
             candidates,
             permuted_lower,
@@ -1037,8 +1060,8 @@ fn compute<M: InputMatrix>(
                 matrix,
                 pivot.row,
                 pivot.column,
-                &mut row_perm,
-                &mut col_perm,
+                row_perm,
+                col_perm,
                 &mut pivot_rows,
                 &mut pivot_columns,
                 lower_factor,
@@ -1087,7 +1110,6 @@ fn compute<M: InputMatrix>(
     MarkowitzResult {
         pivot_rows,
         pivot_columns,
-        row_permutation: row_perm,
         num_fp_operations,
         stats,
     }
@@ -1108,7 +1130,7 @@ pub(crate) fn factorize(
         lower,
         upper,
     );
-    factors_from_result(result, n, lower, upper)
+    factors_from_result(result, n, workspace, lower, upper)
 }
 
 #[cfg(test)]
@@ -1128,7 +1150,7 @@ pub(crate) fn factorize_selected(
         lower,
         upper,
     );
-    factors_from_result(result, n, lower, upper)
+    factors_from_result(result, n, workspace, lower, upper)
 }
 
 /// Factorizes selected columns directly from GLOP's compact numerical matrix.
@@ -1148,12 +1170,13 @@ pub(crate) fn factorize_selected_compact(
         lower,
         upper,
     );
-    factors_from_result(result, n, lower, upper)
+    factors_from_result(result, n, workspace, lower, upper)
 }
 
 fn factors_from_result(
     result: MarkowitzResult,
     n: usize,
+    workspace: &MarkowitzWorkspace,
     lower: &mut TriangularMatrix,
     upper: &mut TriangularMatrix,
 ) -> Result<SparseLu, usize> {
@@ -1162,8 +1185,8 @@ fn factors_from_result(
     }
     // Match Markowitz::ComputeLU(): permute stored off-diagonal row indices
     // in place, without changing their order or rebuilding either factor.
-    lower.apply_row_permutation_to_non_diagonal_entries(&result.row_permutation);
-    upper.apply_row_permutation_to_non_diagonal_entries(&result.row_permutation);
+    lower.apply_row_permutation_to_non_diagonal_entries(&workspace.row_permutation);
+    upper.apply_row_permutation_to_non_diagonal_entries(&workspace.row_permutation);
     debug_assert!((0..n).all(|column| lower.column(column).all(|(row, _)| row > column)));
     debug_assert!((0..n).all(|column| upper.column(column).all(|(row, _)| row < column)));
     Ok(SparseLu {

@@ -1316,7 +1316,8 @@ impl BasisRepresentation {
             .right_update_scratch
             .take()
             .expect("reusable right update workspace is available");
-        right_update.clear();
+        // The previous replacement clears this retained scratchpad before
+        // returning it; a second clear here would zero the dense vector again.
         for (row, value) in self.right_storage.get_mut().column(right_index).iter() {
             right_update.scatter_entry_without_mask(row, value);
         }

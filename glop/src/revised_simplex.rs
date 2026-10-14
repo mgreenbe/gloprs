@@ -16,6 +16,8 @@
 
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::cmp::Ordering;
+use std::collections::BinaryHeap;
 use std::io;
 use std::path::Path;
 use std::rc::Rc;
@@ -308,6 +310,67 @@ struct PhaseOneBreakPoint {
     ratio: f64,
     magnitude: f64,
     target: f64,
+}
+
+impl PartialEq for PhaseOneBreakPoint {
+    fn eq(&self, other: &Self) -> bool {
+        self.row == other.row && self.ratio == other.ratio && self.magnitude == other.magnitude
+    }
+}
+
+impl Eq for PhaseOneBreakPoint {}
+
+impl Ord for PhaseOneBreakPoint {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // GLOP's BreakPoint::operator< puts the smallest ratio, then the
+        // largest coefficient and smallest row, at the heap root. Ordinary
+        // float comparisons preserve its treatment of signed zero.
+        if self.ratio == other.ratio {
+            if self.magnitude == other.magnitude {
+                other.row.cmp(&self.row)
+            } else if self.magnitude > other.magnitude {
+                Ordering::Greater
+            } else {
+                Ordering::Less
+            }
+        } else if self.ratio < other.ratio {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        }
+    }
+}
+
+impl PartialOrd for PhaseOneBreakPoint {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[cfg(test)]
+mod phase_one_breakpoint_tests {
+    use super::{BinaryHeap, PhaseOneBreakPoint, RowIndex, VectorIndex};
+
+    #[test]
+    fn heap_orders_ratio_magnitude_and_row_like_glop() {
+        let point = |row, ratio, magnitude| PhaseOneBreakPoint {
+            row: RowIndex::from_usize(row),
+            ratio,
+            magnitude,
+            target: 0.0,
+        };
+        let mut heap = BinaryHeap::from(vec![
+            point(5, 2.0, 1.0),
+            point(4, 1.0, 1.0),
+            point(3, 1.0, 2.0),
+            point(2, 1.0, 2.0),
+            point(1, -0.0, 1.0),
+            point(0, 0.0, 2.0),
+        ]);
+        let rows: Vec<_> =
+            std::iter::from_fn(|| heap.pop().map(|entry| entry.row.to_usize())).collect();
+        assert_eq!(rows, [0, 1, 2, 3, 4, 5]);
+    }
 }
 
 #[derive(Debug)]
@@ -1380,11 +1443,12 @@ impl RevisedSimplex {
                 -1.0
             };
             self.direction(entering, &mut direction)?;
-            let direction_norm = direction
-                .values()
-                .as_slice()
-                .iter()
-                .fold(0.0_f64, |maximum, value| maximum.max(value.abs()));
+            // GLOP obtains this norm while traversing the direction's
+            // structural support. `direction()` has materialized that support
+            // for the dense-sentinel case, so a full row scan here is redundant.
+            let direction_norm = direction.non_zeros().iter().fold(0.0_f64, |maximum, &row| {
+                maximum.max(direction.value(row).abs())
+            });
             let choice = choose_leaving_variable_row_with_workspace(
                 entering,
                 fake_reduced_cost,
@@ -3645,11 +3709,12 @@ impl RevisedSimplex {
                 };
                 return Ok(());
             }
-            let direction_norm = direction
-                .values()
-                .as_slice()
-                .iter()
-                .fold(0.0_f64, |maximum, value| maximum.max(value.abs()));
+            // `direction()` materializes support even after a dense-sentinel
+            // solve. GLOP obtains this norm while traversing that support;
+            // scanning every row once more is unnecessary on every pivot.
+            let direction_norm = direction.non_zeros().iter().fold(0.0_f64, |maximum, &row| {
+                maximum.max(direction.value(row).abs())
+            });
             let reduced = precise_reduced;
             let choice = if phase == SimplexPhase::Feasibility {
                 self.phase_one_ratio_test(
@@ -4659,16 +4724,13 @@ impl RevisedSimplex {
                 });
             }
         }
-        points.sort_by(|left, right| {
-            left.ratio
-                .total_cmp(&right.ratio)
-                .then_with(|| right.magnitude.total_cmp(&left.magnitude))
-                .then_with(|| left.row.value().cmp(&right.row.value()))
-        });
+        // GLOP uses make_heap() and stops popping when the reduced-cost
+        // improvement is exhausted. Keep the allocation across pivots.
+        let mut heap = BinaryHeap::from(std::mem::take(points));
         let mut improvement = reduced_cost.abs();
         let mut best = None;
         let mut best_magnitude = 0.0;
-        for &point in points.iter() {
+        while let Some(&point) = heap.peek() {
             if point.magnitude > best_magnitude {
                 current_ratio = point.ratio;
                 best_magnitude = point.magnitude;
@@ -4678,7 +4740,9 @@ impl RevisedSimplex {
             if improvement <= 0.0 {
                 break;
             }
+            heap.pop();
         }
+        *points = heap.into_vec();
         if let Some(point) = best {
             if best_magnitude < self.parameters.small_pivot_threshold * direction_norm
                 && !self.basis_factorization.as_ref().unwrap().is_refactorized()

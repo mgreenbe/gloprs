@@ -261,13 +261,14 @@ impl LuFactorization {
         self.upper.transpose_into(&mut self.transpose_upper);
         let inverse_row_permutation = factors.row_permutation;
         let inverse_column_permutation = factors.column_permutation;
-        let mut row_permutation = vec![0; rows];
-        let mut column_permutation = vec![0; columns];
+        // GLOP reassigns retained permutation storage on every refactorization.
+        self.row_permutation.resize(rows, 0);
+        self.column_permutation.resize(columns, 0);
         for (position, &row) in inverse_row_permutation.iter().enumerate() {
-            row_permutation[row] = position;
+            self.row_permutation[row] = position;
         }
         for (position, &column) in inverse_column_permutation.iter().enumerate() {
-            column_permutation[column] = position;
+            self.column_permutation[column] = position;
         }
         if let Some(stats) = factors.stats {
             self.markowitz_stats.add(
@@ -292,10 +293,17 @@ impl LuFactorization {
             );
         }
         self.is_identity_factorization = false;
-        self.row_permutation = row_permutation;
-        self.column_permutation = column_permutation;
-        self.inverse_row_permutation = inverse_row_permutation;
-        self.inverse_column_permutation = inverse_column_permutation;
+        let old_inverse_rows =
+            std::mem::replace(&mut self.inverse_row_permutation, inverse_row_permutation);
+        let old_inverse_columns = std::mem::replace(
+            &mut self.inverse_column_permutation,
+            inverse_column_permutation,
+        );
+        // Return the previous permutation buffers to Markowitz. Its next
+        // refactorization fills them in place, as GLOP does with row_perm and
+        // col_perm owned by the retained LU object.
+        self.markowitz_workspace
+            .recycle_pivot_permutations(old_inverse_rows, old_inverse_columns);
         self.parameters = parameters.clone();
         self.deterministic_time_of_last_factorization = deterministic_time_of_last_factorization;
         let scratchpad = self.dense_zero_scratchpad.get_mut();

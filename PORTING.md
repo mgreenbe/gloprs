@@ -1028,6 +1028,34 @@ pass as `ExtractResidualSingletonColumns()` does. The latter passed 1,000
 native LU traces, strict fast-96 Netlib trajectories, and the 164-model
 extra-corpus outcome gate. Its isolated `fhnw-binpack4-48` LU speedup was
 small; the remaining factorization cost needs selected-view profiling.
+The initial-singleton sort now follows libc++ `std::sort` through the existing
+compatibility routine, and Markowitz's temporary permutations and LU's output
+permutations retain their storage across refactorizations as upstream does.
+Presolved selected-view `fhnw-binpack4-48` LU remains about 1.92x native;
+the port is behaviorally validated, but performance reconciliation continues.
+The `revised_simplex.{h,cc}` Phase-I leaving-row path now mirrors upstream's
+linear-time breakpoint heap construction and early pop termination instead of
+sorting every breakpoint. Its direction infinity norm traverses the known
+support instead of rescanning every row. A focused heap-order test and paired
+`fhnw-binpack4-48` solve timings support the change; strict trajectory and
+extra-corpus validation must still guard the broader numerical path.
+The retained LU object now gives its previous pivot-order buffers back to
+Markowitz for the next refactorization. Clean selected-view `fhnw` LU is
+still 1.897–1.908x native; its remaining gap is not attributed to allocation
+alone. The final storage change passed strict fast-96 trajectories and the
+pinned `fhnw` outcome gate; the earlier heap/norm edits passed the full
+164-model outcome gate.
+
+`lp_data/src/triangular_matrix.rs` now also follows upstream
+`TriangularMatrix::Reset()` and `CloseCurrentColumn()` storage semantics:
+diagonal, column starts, and pruning ends are sized once for the expected
+columns, while an independent count tracks columns actually completed. This
+removes three per-column vector growth operations without changing sparse
+entry order or numerical arithmetic. A repeated-reset/partial-build test and
+the workspace suite, strict fast-96 trajectories, and the 164-model
+extra-corpus outcome gate pass; five paired selected-view `fhnw` LU trials improved
+from about 1.90x to 1.70x native, and the ordinary release presolved-solve
+ratio improved from about 1.57x to 1.21x. The remaining gap is open.
 
 ## Test inventory caveat
 

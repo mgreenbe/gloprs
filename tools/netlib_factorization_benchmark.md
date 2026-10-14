@@ -26,6 +26,15 @@ python3 tools/benchmark_netlib_factorizations.py \
   --output target/phase8-qap15-selected-view-timings.csv
 ```
 
+For a model that normally uses presolve, `netlib_simplex_probe` can capture
+the selected compact views under the ordinary presolved solve parameters:
+
+```sh
+target/release/examples/netlib_simplex_probe \
+  ../datasets/miplib2017/mps/fhnw-binpack4-48.mps 120 \
+  target/phase8-fhnw-selected --presolved-factorizations
+```
+
 Build both release executables against the pinned upstream checkout:
 
 ```sh

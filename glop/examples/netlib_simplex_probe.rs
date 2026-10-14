@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let model_path = PathBuf::from(
         arguments
             .next()
-            .ok_or("usage: netlib_simplex_probe MODEL.mps [WALL_SECONDS] [OUTPUT_ROOT] [--direct-factorizations [ITERATION_LIMIT]]")?,
+            .ok_or("usage: netlib_simplex_probe MODEL.mps [WALL_SECONDS] [OUTPUT_ROOT] [--direct-factorizations [ITERATION_LIMIT] | --presolved-factorizations]")?,
     );
     let wall_seconds = arguments
         .next()
@@ -27,6 +27,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let direct = mode
         .as_ref()
         .is_some_and(|value| value == "--direct-factorizations");
+    let presolved_factorizations = mode
+        .as_ref()
+        .is_some_and(|value| value == "--presolved-factorizations");
     let iteration_limit = if direct {
         arguments
             .next()
@@ -34,7 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         1_000_000
     };
-    if (mode.is_some() && !direct)
+    if (mode.is_some() && !direct && !presolved_factorizations)
         || arguments.next().is_some()
         || !wall_seconds.is_finite()
         || wall_seconds <= 0.0
@@ -69,7 +72,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let mut simplex = RevisedSimplex::new();
     simplex.set_parameters(&parameters);
-    if direct {
+    if direct || presolved_factorizations {
         simplex.enable_factorization_probes(&root, instance)?;
     } else {
         simplex.enable_simplex_probes(&root, instance)?;

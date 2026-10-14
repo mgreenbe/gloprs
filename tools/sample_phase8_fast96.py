@@ -26,6 +26,8 @@ def main() -> None:
     parser.add_argument("--delay", type=float, default=1.0)
     parser.add_argument("--duration", type=int, default=8)
     parser.add_argument("--interval-ms", type=int, default=1)
+    parser.add_argument("--rust", type=Path, default=BINARIES["rust"],
+                        help="Rust executable to sample (for controlled compiler builds)")
     parser.add_argument("--output-prefix", type=Path, required=True)
     args = parser.parse_args()
     if args.repetitions < 1 or args.delay < 0 or args.duration < 1 or args.interval_ms < 1:
@@ -35,7 +37,7 @@ def main() -> None:
         parser.error(f"missing model: {model}")
 
     results = []
-    for label, binary in BINARIES.items():
+    for label, binary in (("native", BINARIES["native"]), ("rust", args.rust)):
         print(f"sampling {args.model} {label}", flush=True)
         process = subprocess.Popen(
             [binary, model,

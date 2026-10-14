@@ -179,7 +179,8 @@ impl UpdateRow {
         if leaving_row >= basis.dimension() {
             return Err(FactorizationError::DimensionMismatch);
         }
-        self.unit_row_left_inverse.clear();
+        // LeftSolveForUnitRow clears the scattered result itself, as in GLOP.
+        // Clearing here repeats a dense zero-fill on the common dense path.
         basis.left_solve_for_unit_row(leaving_row, &mut self.unit_row_left_inverse)?;
         self.left_inverse_computed_for = Some(leaving_row);
         Ok(())

@@ -40,6 +40,9 @@ impl std::error::Error for TriangularError {}
 #[derive(Clone, Debug)]
 pub struct TriangularMatrix {
     num_rows: usize,
+    /// Columns completed so far; diagonal/starts/pruning storage is pre-sized
+    /// to the expected final count, matching GLOP's factor builders.
+    column_count: usize,
     starts: Vec<usize>,
     rows: Vec<u32>,
     coefficients: Vec<f64>,
@@ -88,6 +91,7 @@ impl TriangularMatrix {
     pub fn empty(triangle: Triangle, unit_diagonal: bool) -> Self {
         Self {
             num_rows: 0,
+            column_count: 0,
             starts: vec![0],
             rows: Vec::new(),
             coefficients: Vec::new(),
@@ -148,6 +152,7 @@ impl TriangularMatrix {
         let pruned_ends = starts.iter().copied().skip(1).collect();
         Ok(Self {
             num_rows: n,
+            column_count: n,
             starts,
             rows,
             coefficients,
@@ -198,7 +203,7 @@ impl TriangularMatrix {
         self.reset(columns.len(), columns.len());
         self.triangle = triangle;
         self.unit_diagonal = unit_diagonal;
-        self.diagonal.extend_from_slice(diagonal);
+        self.diagonal.copy_from_slice(diagonal);
         for (column, entries) in columns.iter().enumerate() {
             if diagonal[column] == 0.0 || !diagonal[column].is_finite() {
                 return Err(TriangularError::Singular { column });
@@ -215,19 +220,20 @@ impl TriangularMatrix {
                     .push(u32::try_from(row).expect("triangular row fits in 32 bits"));
                 self.coefficients.push(coefficient);
             }
-            self.starts.push(self.rows.len());
+            self.starts[column + 1] = self.rows.len();
         }
+        self.column_count = columns.len();
         self.first_non_identity_column = Self::first_non_identity(&self.diagonal, &self.starts);
         self.permuted_workspace
             .pruned_ends
-            .extend(self.starts.iter().copied().skip(1));
+            .copy_from_slice(&self.starts[1..]);
         Ok(())
     }
 
     #[must_use]
     #[inline]
     pub fn dimension(&self) -> usize {
-        self.diagonal.len()
+        self.column_count
     }
 
     #[must_use]
@@ -239,13 +245,13 @@ impl TriangularMatrix {
     #[must_use]
     #[inline]
     pub fn num_cols(&self) -> usize {
-        self.diagonal.len()
+        self.column_count
     }
 
     #[must_use]
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.diagonal.is_empty()
+        self.column_count == 0
     }
 
     #[must_use]
@@ -261,13 +267,12 @@ impl TriangularMatrix {
 
     pub fn reset(&mut self, num_rows: usize, column_capacity: usize) {
         self.num_rows = num_rows;
-        self.starts.clear();
-        self.starts.reserve(column_capacity.saturating_add(1));
-        self.starts.push(0);
+        self.column_count = 0;
+        self.starts.resize(column_capacity.saturating_add(1), 0);
+        self.starts[0] = 0;
         self.rows.clear();
         self.coefficients.clear();
-        self.diagonal.clear();
-        self.diagonal.reserve(column_capacity);
+        self.diagonal.resize(column_capacity, 0.0);
         self.first_non_identity_column = 0;
         let symbolic = self.symbolic_workspace.get_mut();
         symbolic.stored.clear();
@@ -280,7 +285,7 @@ impl TriangularMatrix {
         permuted.upper_rows.clear();
         permuted.nodes_to_explore.clear();
         permuted.scratchpad.clear();
-        permuted.pruned_ends.clear();
+        permuted.pruned_ends.resize(column_capacity, 0);
         permuted.num_fp_operations = 0;
     }
 
@@ -414,10 +419,11 @@ impl TriangularMatrix {
 
     fn close_current_column(&mut self, diagonal_value: f64) {
         debug_assert_ne!(diagonal_value, 0.0);
-        let column = self.diagonal.len();
-        self.diagonal.push(diagonal_value);
-        self.starts.push(self.rows.len());
-        self.permuted_workspace.pruned_ends.push(self.rows.len());
+        let column = self.column_count;
+        self.diagonal[column] = diagonal_value;
+        self.starts[column + 1] = self.rows.len();
+        self.permuted_workspace.pruned_ends[column] = self.rows.len();
+        self.column_count += 1;
         if self.first_non_identity_column == column
             && diagonal_value == 1.0
             && self.starts[column] == self.starts[column + 1]
@@ -763,13 +769,15 @@ impl TriangularMatrix {
     #[must_use]
     #[inline]
     pub fn num_entries(&self) -> usize {
-        self.rows.len() + self.diagonal.len()
+        self.rows.len() + self.column_count
     }
 
     /// Returns whether the stored entries form a nonsingular lower triangle.
     #[must_use]
     pub fn is_lower_triangular(&self) -> bool {
-        self.diagonal.iter().all(|&value| value != 0.0)
+        self.diagonal[..self.column_count]
+            .iter()
+            .all(|&value| value != 0.0)
             && (0..self.dimension())
                 .all(|column| self.column(column).all(|(row, _coefficient)| row > column))
     }
@@ -777,7 +785,9 @@ impl TriangularMatrix {
     /// Returns whether the stored entries form a nonsingular upper triangle.
     #[must_use]
     pub fn is_upper_triangular(&self) -> bool {
-        self.diagonal.iter().all(|&value| value != 0.0)
+        self.diagonal[..self.column_count]
+            .iter()
+            .all(|&value| value != 0.0)
             && (0..self.dimension())
                 .all(|column| self.column(column).all(|(row, _coefficient)| row < column))
     }
@@ -1342,12 +1352,13 @@ impl TriangularMatrix {
                 coefficients[destination] = self.coefficients[index];
             }
         }
-        output.diagonal.extend_from_slice(&self.diagonal);
+        output.diagonal.copy_from_slice(&self.diagonal[..n]);
+        output.column_count = n;
         output.first_non_identity_column = Self::first_non_identity(&output.diagonal, starts);
         output
             .permuted_workspace
             .pruned_ends
-            .extend(starts.iter().copied().skip(1));
+            .copy_from_slice(&starts[1..]);
     }
 
     pub fn compute_rows_to_consider_with_dfs<I: VectorIndex>(&self, non_zeros: &mut Vec<I>) {
@@ -1615,6 +1626,28 @@ mod tests {
             sparse.look_up_value(RowIndex::new(2), ColIndex::new(2)),
             5.0
         );
+    }
+
+    #[test]
+    fn presized_builder_counts_only_completed_columns_and_reuses_storage() {
+        let mut factor = TriangularMatrix::empty(Triangle::Lower, true);
+        factor.reset(4, 4);
+        assert_eq!(factor.num_cols(), 0);
+        assert_eq!(factor.num_entries(), 0);
+        factor.add_column_with_diagonal([(1, 2.0)], 1.0);
+        assert_eq!(factor.num_cols(), 1);
+        assert_eq!(factor.num_entries(), 2);
+        assert_eq!(factor.column(0).collect::<Vec<_>>(), vec![(1, 2.0)]);
+
+        factor.reset(2, 2);
+        factor.add_diagonal_only_column(1.0);
+        factor.add_diagonal_only_column(1.0);
+        assert_eq!(factor.num_cols(), 2);
+        assert_eq!(factor.num_entries(), 2);
+        let transposed = factor.transpose();
+        assert_eq!(transposed.num_cols(), 2);
+        assert_eq!(transposed.diagonal(0), 1.0);
+        assert_eq!(transposed.diagonal(1), 1.0);
     }
 
     #[test]
