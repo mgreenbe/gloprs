@@ -111,8 +111,10 @@ rewrite C++-specific comments when their Rust equivalent differs.
 - Keep floating-point comparisons, tolerances, sentinels, and infinity
   semantics aligned with upstream. Never replace a numerical safeguard with a
   more elegant formula without differential evidence.
-- Use `unsafe` only when a safe implementation has been measured and shown to
-  miss an important target. Isolate it, state its invariants, and test it.
+- Use `unsafe` where justified by upstream fidelity or measured performance.
+  Keep unsafe operations narrowly scoped, and put a `// SAFETY:` comment at
+  each unsafe block explaining the invariant that makes it sound. Test those
+  invariants and any affected behavior.
 - Protobuf parameter definitions should become ordinary Rust enums and structs
   with the same defaults and semantics. Serialization is secondary to solver
   behavior.

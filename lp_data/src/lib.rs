@@ -1,7 +1,5 @@
 //! Linear-program models and sparse data structures used by GLOP.
 
-#![deny(unsafe_code)]
-
 pub mod lp_data;
 pub mod lp_data_utils;
 pub mod lp_decomposer;
