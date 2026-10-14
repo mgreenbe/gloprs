@@ -30,6 +30,43 @@ seven-pair public-pipeline ratio is 1.078x (0.027730 s native, 0.029899 s
 Rust); raw stage and public timings are in `target/neos1445765-*`. The
 remaining solve-stage gap is open.
 
+The next outlier investigation used seven alternating pairs of repeated
+matched solves or presolves. `pg` measured 0.999x parse, 1.019x presolve,
+and 1.281x solve before a validated compact-column add aligned its residual
+check with GLOP's indexed-write kernel; matched solve then measured 1.090x.
+`bnatt500`'s single-row update cleared a full retained coefficient row that
+GLOP leaves intact; removing that clear moved matched solve from 1.285x to
+1.176x. `h80x6320d` presolve measured 1.260x initially. In-place sparse
+row compaction reduced it to 1.224x, then retaining sparse-column allocations
+in `PopulateFromZero`, as GLOP does, brought it to 0.928x. A subsequent
+seven-pair public-pipeline run measured `pg` 1.051x, `h80x6320d` 0.921x,
+`bnatt500` 1.048x, `pg5_34` 0.996x, and `neos-950242` 1.066x. Raw paired
+trials and samples are in `target/pg-*`, `target/h80-*`, `target/bnatt500-*`,
+and `target/top10-reuse-public.json`.
+The subsequent full serial 164-model rerun (three timed pairs, one warmup,
+60-second wall limit, with the two previously nonterminal cases omitted) is
+`target/phase8-extra-public-top10-repairs.json`. Native and Rust median-time
+totals are 136.438 s and 135.395 s, respectively: 0.992x aggregate, 1.013x
+median per-model ratio, and 1.011x sqrt(nnz)-weighted geometric ratio. All
+164 agree on status and iteration count. The original ratio leader `pg` is
+now 1.060x, `h80x6320d` is below parity, and `bnatt500` is 1.070x. The
+remaining largest meaningful absolute excesses are `cvs16r128-89` 0.141 s,
+`neos-3216931-puriri` 0.125 s, `neos-1171737` 0.026 s, and
+`graph20-20-1rand` 0.015 s; smaller high-ratio cases require repeated-stage
+timings before they are treated as kernel evidence.
+Further seven-pair stage probes found matched-solve ratios of 1.171x for
+`neos-950242`, 1.106x for `graph20-20-1rand`, 1.106x for `neos-1171737`, and
+1.074x for `cvs16r128-89`; parse and presolve were not the common cause.
+Samples for `graph20` and `neos-950242` distribute time across triangular
+solves, update rows, ratio tests, pricing, and edge norms rather than exposing
+one Rust-only full pass. GLOP retains the compact transpose's column-start
+buffer with `assign`; Rust now does so as well. Retesting the four matched
+solves showed essentially unchanged ratios, so this is a representation
+fidelity repair, not a credited performance gain. Raw data are in
+`target/remaining-stages-after-repairs.json`,
+`target/remaining-solves-reused-transpose.json`, and
+`target/{graph20,neos950242}-solve-after-repairs-*.sample.txt`.
+
 This is the first repeatable serial comparison of pinned upstream GLOP and
 `gloprs` on the shared MIPLIB 2017 and Mittelmann LPopt datasets. Selection is
 in [`extra-lp-corpus.json`](extra-lp-corpus.json): 166 non-Netlib MPS models

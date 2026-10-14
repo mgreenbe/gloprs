@@ -43,6 +43,37 @@ pub struct ValidatedCompactDot<'a> {
     vector: &'a [Fractional],
 }
 
+/// A mutable dense column bound to a compact matrix whose row indices have
+/// already been checked against its length.
+pub struct ValidatedCompactAdd<'a> {
+    matrix: &'a CompactSparseMatrix,
+    vector: &'a mut [Fractional],
+}
+
+impl ValidatedCompactAdd<'_> {
+    /// Adds a multiple of one compact column in upstream entry order.
+    #[allow(unsafe_code, clippy::cast_sign_loss)]
+    #[inline]
+    pub fn add_column(&mut self, column: ColIndex, multiplier: Fractional) {
+        if multiplier == 0.0 {
+            return;
+        }
+        let start = self.matrix.starts[column.to_usize()];
+        let end = self.matrix.starts[column.to_usize() + 1];
+        let entries = self.matrix.rows[start..end]
+            .iter()
+            .zip(self.matrix.coefficients[start..end].iter());
+        for (&row, &coefficient) in entries {
+            // SAFETY: bind_add checked the dense length against dimension,
+            // and ValidatedCompactRows checked every matrix row against that
+            // dimension while the Rc-owned matrix was immutable. The loop
+            // preserves GLOP's indexed column-add arithmetic and entry order.
+            let slot = unsafe { self.vector.get_unchecked_mut(row.value() as usize) };
+            *slot = multiplier.mul_add(coefficient, *slot);
+        }
+    }
+}
+
 impl ValidatedCompactDot<'_> {
     /// Computes a compact-column product using the validated gather path.
     #[must_use]
@@ -69,6 +100,27 @@ impl ValidatedCompactRows {
         assert!(std::ptr::eq(Rc::as_ptr(&self.matrix), matrix));
         assert!(vector.len() >= self.dimension);
         ValidatedCompactDot { matrix, vector }
+    }
+
+    /// Binds a dense accumulator once for a sequence of compact-column adds.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this token belongs to another matrix or the accumulator is
+    /// shorter than the dimension checked when the token was created.
+    #[must_use]
+    #[inline]
+    pub fn bind_add<'a>(
+        &self,
+        matrix: &'a CompactSparseMatrix,
+        vector: &'a mut DenseColumn,
+    ) -> ValidatedCompactAdd<'a> {
+        assert!(std::ptr::eq(Rc::as_ptr(&self.matrix), matrix));
+        assert!(vector.len().to_usize() >= self.dimension);
+        ValidatedCompactAdd {
+            matrix,
+            vector: vector.as_mut_slice(),
+        }
     }
 }
 
@@ -141,7 +193,10 @@ impl CompactSparseMatrix {
         self.num_rows = RowIndex::new(input.num_cols().value());
         self.num_cols = ColIndex::new(input.num_rows().value());
         let output_columns = self.num_cols.to_usize();
-        self.starts = vec![0; output_columns + 2];
+        // GLOP's starts_.assign() zeroes the retained buffer without
+        // discarding its allocation at every basis refactorization.
+        self.starts.resize(output_columns + 2, 0);
+        self.starts.fill(0);
         for &row in &input.rows {
             self.starts[row.to_usize() + 2] += 1;
         }
@@ -773,7 +828,13 @@ impl SparseMatrix {
 
     pub fn populate_from_zero(&mut self, num_rows: RowIndex, num_cols: ColIndex) {
         self.num_rows = num_rows;
-        self.columns = vec![SparseColumn::new(); num_cols.to_usize()];
+        // GLOP resizes and clears the existing column vector, retaining both
+        // its allocation and the capacities of surviving sparse columns.
+        self.columns
+            .resize_with(num_cols.to_usize(), SparseColumn::new);
+        for column in &mut self.columns {
+            column.clear();
+        }
     }
 
     pub fn populate_from_identity(&mut self, size: ColIndex) {
@@ -1056,6 +1117,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn populate_from_zero_reuses_existing_sparse_columns() {
+        let mut matrix = SparseMatrix::new();
+        matrix.populate_from_zero(RowIndex::new(3), ColIndex::new(2));
+        matrix.columns[0].reserve(16);
+        matrix.columns[0].add_entry(RowIndex::new(1), 2.0);
+        let outer = matrix.columns.as_ptr();
+        let inner = matrix.columns[0].entry_slices().0.as_ptr();
+        matrix.populate_from_zero(RowIndex::new(4), ColIndex::new(2));
+        assert_eq!(matrix.columns.as_ptr(), outer);
+        assert_eq!(matrix.columns[0].entry_slices().0.as_ptr(), inner);
+        assert!(matrix.columns.iter().all(SparseColumn::is_empty));
+        assert_eq!(matrix.num_rows(), RowIndex::new(4));
+    }
+
+    #[test]
     fn compact_nonfinite_metadata_tracks_build_reset_and_transpose() {
         let mut matrix = CompactSparseMatrix::default();
         matrix.reset(RowIndex::new(2));
@@ -1071,6 +1147,25 @@ mod tests {
         assert!(!matrix.contains_nonfinite());
         transpose.populate_from_transpose(&matrix);
         assert!(!transpose.contains_nonfinite());
+    }
+
+    #[test]
+    fn compact_transpose_reuses_column_start_storage() {
+        let mut input = CompactSparseMatrix::default();
+        input.reset(RowIndex::new(3));
+        input.add_entry_to_current_column(RowIndex::new(2), 4.0);
+        input.close_current_column();
+        let mut output = CompactSparseMatrix::default();
+        output.populate_from_transpose(&input);
+        let starts = output.starts.as_ptr();
+        output.populate_from_transpose(&input);
+        assert_eq!(output.starts.as_ptr(), starts);
+        assert_eq!(output.num_rows(), RowIndex::new(1));
+        assert_eq!(output.num_cols(), ColIndex::new(3));
+        assert_eq!(
+            output.column(ColIndex::new(2)).iter().collect::<Vec<_>>(),
+            vec![(RowIndex::new(0), 4.0)]
+        );
     }
 
     #[test]
@@ -1234,5 +1329,35 @@ mod tests {
             })
             .is_err()
         );
+    }
+
+    #[test]
+    fn validated_compact_add_matches_checked_columns_and_rejects_bad_rows() {
+        let mut matrix = CompactSparseMatrix::default();
+        matrix.reset(RowIndex::new(3));
+        matrix.add_entry_to_current_column(RowIndex::new(2), -3.0);
+        matrix.add_entry_to_current_column(RowIndex::new(0), 2.0);
+        matrix.close_current_column();
+        matrix.add_entry_to_current_column(RowIndex::new(2), 4.0);
+        matrix.close_current_column();
+        let matrix = Rc::new(matrix);
+        let validated = CompactSparseMatrix::validated_rows(Rc::clone(&matrix), 3).unwrap();
+        let mut fast = DenseColumn::from_vec(vec![1.0, 0.0, 5.0]);
+        let mut checked = fast.clone();
+        {
+            let mut add = validated.bind_add(&matrix, &mut fast);
+            add.add_column(ColIndex::new(0), 0.5);
+            add.add_column(ColIndex::new(1), -2.0);
+            add.add_column(ColIndex::new(0), 0.0);
+        }
+        matrix.column_add_multiple_to_dense_column(ColIndex::new(0), 0.5, &mut checked);
+        matrix.column_add_multiple_to_dense_column(ColIndex::new(1), -2.0, &mut checked);
+        assert_eq!(fast.as_slice(), checked.as_slice());
+
+        let mut invalid = CompactSparseMatrix::default();
+        invalid.reset(RowIndex::new(3));
+        invalid.add_entry_to_current_column(RowIndex::new(3), 1.0);
+        invalid.close_current_column();
+        assert!(CompactSparseMatrix::validated_rows(Rc::new(invalid), 3).is_none());
     }
 }

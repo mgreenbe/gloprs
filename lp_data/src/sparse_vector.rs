@@ -706,15 +706,27 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
         accumulator.may_contain_duplicates.set(false);
     }
 
+    #[allow(unsafe_code)]
     pub fn apply_partial_index_permutation(&mut self, permutation: &Permutation<I>) {
         // Match GLOP's ApplyPartialIndexPermutation(): compact surviving
         // entries in place, preserving order and the column's capacity.
+        let len = self.indices.len();
+        debug_assert_eq!(len, self.coefficients.len());
+        let indices = self.indices.as_mut_ptr();
+        let coefficients = self.coefficients.as_mut_ptr();
         let mut write = 0;
-        for read in 0..self.indices.len() {
-            let index = permutation[self.indices[read]];
+        for read in 0..len {
+            // SAFETY: read < len, the private parallel arrays have equal
+            // lengths, and write never exceeds read. Reading a coefficient
+            // before overwriting its slot retains GLOP's stable traversal.
+            let original = unsafe { *indices.add(read) };
+            let index = permutation[original];
             if index.value_i64() >= 0 {
-                self.indices[write] = index;
-                self.coefficients[write] = self.coefficients[read];
+                let coefficient = unsafe { *coefficients.add(read) };
+                unsafe {
+                    *indices.add(write) = index;
+                    *coefficients.add(write) = coefficient;
+                }
                 write += 1;
             }
         }

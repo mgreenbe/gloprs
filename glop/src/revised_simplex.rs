@@ -30,7 +30,7 @@ use lp_data::lp_types::{
 use lp_data::lp_utils::precise_scalar_product;
 use lp_data::permutation::ColumnPermutation;
 use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow};
-use lp_data::sparse::{CompactSparseMatrix, SparseMatrix};
+use lp_data::sparse::{CompactSparseMatrix, SparseMatrix, ValidatedCompactRows};
 
 use crate::basis_representation::{BasisRepresentation, DiagnosticSolveStage};
 use crate::dual_edge_norms::DualEdgeNorms;
@@ -381,6 +381,7 @@ pub struct RevisedSimplex {
     num_cols: ColIndex,
     first_slack_col: ColIndex,
     compact_matrix: Rc<CompactSparseMatrix>,
+    validated_compact_rows: Option<ValidatedCompactRows>,
     transposed_matrix_with_slack: Rc<CompactSparseMatrix>,
     transpose_was_changed: bool,
     advanced_lower_bounds: Vec<f64>,
@@ -510,6 +511,7 @@ impl RevisedSimplex {
             num_cols: ColIndex::new(0),
             first_slack_col: ColIndex::new(0),
             compact_matrix: Rc::new(CompactSparseMatrix::default()),
+            validated_compact_rows: None,
             transposed_matrix_with_slack: Rc::new(CompactSparseMatrix::default()),
             transpose_was_changed: false,
             advanced_lower_bounds: Vec::new(),
@@ -2265,6 +2267,10 @@ impl RevisedSimplex {
         // numerical source instead of reconstructing it from the temporary
         // equation-form model.
         self.compact_matrix = equation_lp.matrix.to_compact_shared();
+        self.validated_compact_rows = CompactSparseMatrix::validated_rows(
+            Rc::clone(&self.compact_matrix),
+            self.num_rows.to_usize(),
+        );
         self.objective = DenseRow::from_vec(
             (0..self.num_cols.to_usize())
                 .map(|column| {
@@ -2664,6 +2670,10 @@ impl RevisedSimplex {
         self.num_cols = equation_lp.num_variables();
         self.first_slack_col = ColIndex::from_usize(new_first_slack);
         self.compact_matrix = equation_lp.matrix.to_compact_shared();
+        self.validated_compact_rows = CompactSparseMatrix::validated_rows(
+            Rc::clone(&self.compact_matrix),
+            self.num_rows.to_usize(),
+        );
         self.objective = DenseRow::from_vec(
             (0..self.num_cols.to_usize())
                 .map(|col| {
@@ -2785,6 +2795,10 @@ impl RevisedSimplex {
         self.num_rows = equation_lp.num_constraints();
         self.num_cols = equation_lp.num_variables();
         self.compact_matrix = equation_lp.matrix.to_compact_shared();
+        self.validated_compact_rows = CompactSparseMatrix::validated_rows(
+            Rc::clone(&self.compact_matrix),
+            self.num_rows.to_usize(),
+        );
         self.objective = DenseRow::from_vec(
             (0..self.num_cols.to_usize())
                 .map(|col| {
@@ -4872,14 +4886,24 @@ impl RevisedSimplex {
     fn correct_errors_on_variable_values(&mut self) -> Result<(), FactorizationError> {
         self.primal_residual_scratchpad.resize(self.num_rows, 0.0);
         self.primal_residual_scratchpad.as_mut_slice().fill(0.0);
-        for column in 0..self.num_cols.to_usize() {
-            let column = ColIndex::from_usize(column);
-            let value = self.variable_values[column];
-            self.compact_matrix.column_add_multiple_to_dense_column(
-                column,
-                value,
-                &mut self.primal_residual_scratchpad,
-            );
+        if let Some(rows) = &self.validated_compact_rows {
+            let mut accumulator =
+                rows.bind_add(&self.compact_matrix, &mut self.primal_residual_scratchpad);
+            for column in 0..self.num_cols.to_usize() {
+                let column = ColIndex::from_usize(column);
+                accumulator.add_column(column, self.variable_values[column]);
+            }
+        } else {
+            // Public advanced matrices can contain rows outside their declared
+            // dimension; retain the checked path for those malformed inputs.
+            for column in 0..self.num_cols.to_usize() {
+                let column = ColIndex::from_usize(column);
+                self.compact_matrix.column_add_multiple_to_dense_column(
+                    column,
+                    self.variable_values[column],
+                    &mut self.primal_residual_scratchpad,
+                );
+            }
         }
         let maximum = self
             .primal_residual_scratchpad

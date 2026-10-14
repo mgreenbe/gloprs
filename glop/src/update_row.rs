@@ -568,7 +568,9 @@ impl UpdateRow {
     }
 
     fn compute_single_row(&mut self, relevant: &ColBitVec) {
-        self.coefficients.fill(0.0);
+        // GLOP resizes the retained coefficient row but does not clear it.
+        // Only positions appended below are read by update-row consumers;
+        // clearing every column here was a Rust-only O(num_cols) cost.
         self.num_non_zeros = 0;
         let row = self.filtered_non_zeros[0];
         let multiplier = self.left_inverse_value(row);
@@ -872,6 +874,25 @@ mod tests {
         update_row.rebuild_non_zeros(&relevant);
         assert_eq!(update_row.non_zero_positions(), &[1, 3]);
         assert_eq!(update_row.non_zero_positions.as_ptr(), storage);
+    }
+
+    #[test]
+    fn single_row_update_overwrites_only_reported_columns() {
+        let mut matrix = CompactSparseMatrix::default();
+        matrix.reset(RowIndex::new(1));
+        matrix.add_entry_to_current_column(RowIndex::new(0), 2.0);
+        matrix.close_current_column();
+        matrix.close_current_column();
+        let mut update_row = UpdateRow::new_from_compact(&matrix);
+        update_row.coefficients.copy_from_slice(&[0.0, 7.0]);
+        update_row.filtered_non_zeros.push(0);
+        update_row.unit_row_left_inverse.values_mut()[ColIndex::new(0)] = 3.0;
+        let mut relevant = ColBitVec::new(ColIndex::new(2));
+        relevant.set(ColIndex::new(0));
+        relevant.set(ColIndex::new(1));
+        update_row.compute_single_row(&relevant);
+        assert_eq!(update_row.non_zero_positions(), &[0]);
+        assert_eq!(update_row.coefficients, [6.0, 7.0]);
     }
 
     #[test]

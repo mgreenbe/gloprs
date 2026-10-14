@@ -1120,6 +1120,28 @@ uses a packed candidate bitset and single-pass set-bit iteration, matching the
 native representation and traversal, with negligible timing change. Strict
 fast-96 trajectories, the native presolve fixture, and all 164 completed
 extra-corpus outcome checks pass after these edits.
+The subsequent extra-corpus outlier pass found three further upstream
+correspondence gaps. `SparseMatrix::PopulateFromZero` now resizes and clears
+retained sparse columns instead of reconstructing their vector, preserving
+capacity across repeated transposes; an allocation-identity test guards this
+lifecycle. `UpdateRow::ComputeUpdatesForSingleRow` now writes only reported
+nonzeros and does not clear its retained coefficient row, as upstream does.
+The simplex residual check binds a one-time row-validated compact matrix to
+its dense accumulator and adds columns through direct paired-array traversal;
+unchecked result writes are confined to that validated immutable-matrix view,
+while the ordinary public kernel retains checked indexing. Sparse partial
+row permutation keeps upstream's stable in-place compaction but avoids
+redundant bounds checks on its private, equal-length index and coefficient
+arrays; the permutation lookup remains checked. Seven-pair timings show `pg`
+matched solve moving from 1.281x to 1.090x, `bnatt500` matched solve from
+1.285x to 1.176x, and `h80x6320d` presolve from 1.260x to 0.928x native.
+`CompactSparseMatrix::PopulateFromTranspose` also now zeroes and reuses its
+column-start buffer like GLOP's `starts_.assign()`, with an allocation-identity
+test. Four seven-pair matched-solve probes found this last lifecycle repair
+timing-neutral, but it removes an unnecessary representation divergence.
+Formatting, all-target Clippy, the full workspace test suite, strict fast-96
+native trajectories and presolve fixtures, and all 164 completed extra-corpus
+outcomes pass after the full set of repairs.
 
 ## Test inventory caveat
 

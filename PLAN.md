@@ -2510,6 +2510,30 @@ matched solve from 1.386x to 1.332x. DynamicMaximum now stores candidates in
 the upstream-style packed bitset and iterates set bits once; that fidelity
 change did not materially affect timing. The remaining public gap is about
 8%, mostly in matched solve, and is not yet resolved.
+The next extra-corpus outlier pass localized `pg` to residual checks: a
+validated compact-column add now binds the immutable matrix and dense result
+once and uses the same entry-order fused update as GLOP without a gather
+bounds check for each entry. The checked public path remains for malformed
+advanced matrices. Seven paired matched-solve trials improve from 1.281x to
+1.090x. On `bnatt500`, the single-row update path no longer clears the entire
+coefficient row, matching GLOP's resize-and-write behavior; matched solve
+improves from 1.285x to 1.176x. On `h80x6320d`, sparse row-deletion compaction
+now avoids redundant internal parallel-array bounds checks, and
+`SparseMatrix::populate_from_zero` retains column storage across repeated
+transpose construction as upstream does. Presolve improves from 1.260x to
+0.928x. The latest seven-pair public ratios for `pg`, `h80x6320d`,
+`bnatt500`, and `pg5_34` are 1.051x, 0.921x, 1.048x, and 0.996x. Continue
+from the fresh corpus-wide ranking after strict outcome and trajectory gates.
+The fresh 164-model serial run is 0.992x aggregate and 1.013x median per
+model, with all 164 matching status and iteration count; the strict fast-96
+trajectory and presolve fixtures pass. The remaining materially timed gaps
+include `graph20-20-1rand`, `neos-1171737`, and `cvs16r128-89` matched solves
+at about 1.106x, 1.106x, and 1.074x. A further compact-transpose audit found
+that Rust replaced its column-start allocation where GLOP uses `assign` on a
+retained buffer; storage now persists and an identity test guards it. This
+fidelity repair was timing-neutral on those solve probes. Their paired
+profiles show distributed triangular, ratio, pricing, and update-row work;
+further kernel-stage accounting is needed before changing arithmetic.
 Paired whole-solve samples of `fhnw-binpack4-48` place substantial time in
 primal edge-norm BTRAN and the inlined primal-phase loop, not solely in LU.
 The isolated dense rank-one solve microbenchmark is already faster in Rust at
