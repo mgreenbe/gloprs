@@ -97,6 +97,7 @@ pub struct UpdateRow {
     use_transposed_matrix: bool,
     drop_tolerance: f64,
     num_operations: i64,
+    first_slack: Option<usize>,
 }
 
 impl UpdateRow {
@@ -132,6 +133,7 @@ impl UpdateRow {
             use_transposed_matrix: true,
             drop_tolerance: 1e-14,
             num_operations: 0,
+            first_slack: None,
         }
     }
 
@@ -150,7 +152,25 @@ impl UpdateRow {
         self.num_non_zeros = 0;
         self.non_zero_position_set = ColBitVec::new(matrix.num_cols());
         self.coefficients.resize(matrix.num_cols().to_usize(), 0.0);
+        self.first_slack = None;
         self.invalidate();
+    }
+
+    /// Enable GLOP's direct update-row coefficient path for an explicit
+    /// trailing identity block. Advanced callers may provide arbitrary
+    /// compact matrices, so establish this invariant once at rebinding.
+    pub(crate) fn recognize_equation_form_slacks(&mut self, matrix: &CompactSparseMatrix) {
+        let rows = matrix.num_rows().to_usize();
+        let columns = matrix.num_cols().to_usize();
+        self.first_slack = columns.checked_sub(rows).filter(|&first| {
+            (0..rows).all(|row| {
+                let column = matrix.column(ColIndex::from_usize(first + row));
+                column.len() == 1
+                    && column.iter().next().is_some_and(|(index, value)| {
+                        index.to_usize() == row && value.to_bits() == 1.0_f64.to_bits()
+                    })
+            })
+        });
     }
 
     pub fn set_parameters(&mut self, use_transposed_matrix: bool, drop_tolerance: f64) {
@@ -594,6 +614,7 @@ impl UpdateRow {
 
     fn compute_column_wise(&mut self, matrix: MatrixSource<'_>, relevant: &ColBitVec) {
         let left_inverse_values = self.unit_row_left_inverse.values().as_slice();
+        let first_slack = self.first_slack;
         #[cfg(feature = "phase8_update_row_probe")]
         phase8_probe::record(matrix, relevant, left_inverse_values);
         match matrix {
@@ -606,7 +627,15 @@ impl UpdateRow {
                     self.drop_tolerance,
                     matrix.num_cols(),
                     relevant,
-                    |column| dot.column_scalar_product(column),
+                    |column| {
+                        if let Some(first) = first_slack
+                            && column.to_usize() >= first
+                        {
+                            left_inverse_values[column.to_usize() - first]
+                        } else {
+                            dot.column_scalar_product(column)
+                        }
+                    },
                 );
             }
             MatrixSource::Compact(compact, None) => {
@@ -617,7 +646,15 @@ impl UpdateRow {
                     self.drop_tolerance,
                     matrix.num_cols(),
                     relevant,
-                    |column| compact.column_scalar_product_slice(column, left_inverse_values),
+                    |column| {
+                        if let Some(first) = first_slack
+                            && column.to_usize() >= first
+                        {
+                            left_inverse_values[column.to_usize() - first]
+                        } else {
+                            compact.column_scalar_product_slice(column, left_inverse_values)
+                        }
+                    },
                 );
             }
             MatrixSource::Sparse(sparse) => {
@@ -893,6 +930,39 @@ mod tests {
         update_row.compute_single_row(&relevant);
         assert_eq!(update_row.non_zero_positions(), &[0]);
         assert_eq!(update_row.coefficients, [6.0, 7.0]);
+    }
+
+    #[test]
+    fn equation_form_slack_recognition_requires_the_exact_trailing_identity() {
+        let mut matrix = CompactSparseMatrix::default();
+        matrix.reset(RowIndex::new(2));
+        matrix.add_entry_to_current_column(RowIndex::new(0), 3.0);
+        matrix.close_current_column();
+        matrix.add_entry_to_current_column(RowIndex::new(0), 1.0);
+        matrix.close_current_column();
+        matrix.add_entry_to_current_column(RowIndex::new(1), 1.0);
+        matrix.close_current_column();
+        let mut update_row = UpdateRow::new_from_compact(&matrix);
+        update_row.recognize_equation_form_slacks(&matrix);
+        assert_eq!(update_row.first_slack, Some(1));
+        let lhs: [f64; 2] = [2.0, -3.0];
+        for row in 0..2 {
+            let column = ColIndex::from_usize(row + 1);
+            assert_eq!(
+                lhs[row].to_bits(),
+                matrix.column_scalar_product_slice(column, &lhs).to_bits()
+            );
+        }
+
+        let mut malformed = CompactSparseMatrix::default();
+        malformed.reset(RowIndex::new(2));
+        malformed.close_current_column();
+        malformed.add_entry_to_current_column(RowIndex::new(0), 1.0);
+        malformed.close_current_column();
+        malformed.add_entry_to_current_column(RowIndex::new(1), -1.0);
+        malformed.close_current_column();
+        update_row.recognize_equation_form_slacks(&malformed);
+        assert_eq!(update_row.first_slack, None);
     }
 
     #[test]

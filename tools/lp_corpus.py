@@ -14,6 +14,7 @@ FAST = ROOT / "baselines/netlib-dual-trajectories.json.gz"
 MAX_NONZEROS = 150_000
 EXTRA_CORPORA = ("miplib2017", "mittelmann-lpopt")
 EXTRA_FIXTURE = ROOT / "baselines/extra-lp-corpus.json"
+NMM_CORPORA = ("nmm0-50k", "nmm50k-100k", "nmm100k-150k", "nmm150k-200k")
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,17 @@ def models(corpus: str = "netlib-fast96") -> list[Model]:
     """Select MPS files using parser-verified matrix nnz, not objective entries."""
     netlib_manifest = json.loads((DATASETS / "netlib/manifest.json").read_text())
     netlib = {case["name"].casefold() for case in netlib_manifest["problems"]}
+    if corpus in NMM_CORPORA:
+        manifest = json.loads((DATASETS / corpus / "manifest.json").read_text())
+        selected = []
+        for item in manifest["instances"]:
+            path = DATASETS / item["path"]
+            if not path.is_file() or path.stat().st_size != item["mps_bytes"]:
+                raise ValueError(f"missing or changed NMM instance: {path}")
+            selected.append(Model(item["corpus"], item["name"], path, item["nonzeros"]))
+        if len(selected) != manifest["instance_count"]:
+            raise ValueError(f"NMM instance count differs from manifest: {corpus}")
+        return selected
     if corpus == "netlib-fast96":
         with gzip.open(FAST, "rt", encoding="utf-8") as stream:
             names = [case["name"] for case in json.load(stream)["results"]]

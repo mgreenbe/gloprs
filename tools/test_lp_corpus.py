@@ -2,11 +2,25 @@
 
 import unittest
 
-from lp_corpus import MAX_NONZEROS, models
+from lp_corpus import MAX_NONZEROS, NMM_CORPORA, models
 from test_extra_lp_corpus import check
 
 
 class CorpusTests(unittest.TestCase):
+    def test_nmm_bins_are_disjoint_and_complete(self):
+        expected_counts = (213, 25, 20, 16)
+        seen = set()
+        for corpus, count, lower in zip(NMM_CORPORA, expected_counts,
+                                        (0, 50_000, 100_000, 150_000), strict=True):
+            selected = models(corpus)
+            self.assertEqual(len(selected), count)
+            for case in selected:
+                self.assertLessEqual(lower, case.nonzeros)
+                self.assertLess(case.nonzeros, lower + 50_000)
+                self.assertNotIn(case.key, seen)
+                self.assertTrue(case.path.is_file(), case.path)
+                seen.add(case.key)
+
     def test_manifest_selection_is_strict_and_excludes_netlib(self):
         netlib = {case.name.casefold() for case in models()}
         miplib = models("miplib2017")

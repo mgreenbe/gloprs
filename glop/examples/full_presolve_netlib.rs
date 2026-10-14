@@ -36,7 +36,8 @@ fn main() {
         let start = Instant::now();
         let mut result = (String::new(), 0, 0, 0);
         for _ in 0..repetitions {
-            let mut presolved = lp.clone();
+            let mut presolved = lp_data::lp_data::LinearProgram::new();
+            presolved.populate_from_linear_program(&lp);
             presolved.remove_near_zero_entries(parameters.drop_magnitude);
             let mut preprocessor = MainLpPreprocessor::new();
             let mut limit = TimeLimit::new(20.0, f64::INFINITY);
@@ -55,7 +56,8 @@ fn main() {
         );
         return;
     }
-    let mut presolved = lp.clone();
+    let mut presolved = lp_data::lp_data::LinearProgram::new();
+    presolved.populate_from_linear_program(&lp);
     let parameters = glop::parameters::GlopParameters::default();
     presolved.remove_near_zero_entries(parameters.drop_magnitude);
     let mut preprocessor = MainLpPreprocessor::new();
@@ -74,11 +76,19 @@ fn main() {
             value.parse::<f64>().expect("numeric solve wall limit")
         });
         assert!(wall_seconds > 0.0 && wall_seconds.is_finite());
+        let iteration_cap = env::args()
+            .nth(5)
+            .map(|value| value.parse::<i64>().expect("nonnegative iteration cap"));
+        let mut solve_parameters = parameters.clone();
+        if let Some(cap) = iteration_cap {
+            assert!(cap >= 0);
+            solve_parameters.max_number_of_iterations = cap;
+        }
         let start = Instant::now();
         let mut result = (String::new(), 0, 0);
         for _ in 0..repetitions {
             let mut simplex = RevisedSimplex::new();
-            simplex.set_parameters(&parameters);
+            simplex.set_parameters(&solve_parameters);
             let mut limit = TimeLimit::new(wall_seconds, f64::INFINITY);
             simplex.solve(&presolved, &mut limit).expect("direct solve");
             result = (

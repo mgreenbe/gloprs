@@ -98,6 +98,7 @@ impl DynamicMaximum {
         self.values[position] = value;
     }
 
+    #[inline]
     pub fn add_or_update(&mut self, position: usize, value: f64) {
         debug_assert!(!value.is_nan());
         self.is_candidate.set(ColIndex::from_usize(position));

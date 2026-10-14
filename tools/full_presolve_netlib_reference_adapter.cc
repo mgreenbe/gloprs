@@ -361,7 +361,7 @@ extern "C" __attribute__((used, noinline)) int diag_rc_recompute() {
 
 int main(int argc, char** argv) {
   namespace glop = operations_research::glop;
-  if (argc < 2 || argc > 5) return EXIT_FAILURE;
+  if (argc < 2 || argc > 6) return EXIT_FAILURE;
   const auto parse_start = std::chrono::steady_clock::now();
   const auto model = glop::MpsFileToMPModelProto(argv[1]);
   if (!model.ok()) return EXIT_FAILURE;
@@ -415,7 +415,10 @@ int main(int argc, char** argv) {
   if (argc >= 3 && std::strcmp(argv[2], "presolved_solve_timing") == 0) {
     const int repetitions = argc >= 4 ? std::atoi(argv[3]) : 1;
     const double wall_seconds = argc >= 5 ? std::atof(argv[4]) : 20.0;
+    glop::GlopParameters solve_parameters = parameters;
+    if (argc >= 6) solve_parameters.set_max_number_of_iterations(std::atoi(argv[5]));
     if (repetitions <= 0 || !(wall_seconds > 0.0) ||
+        (argc >= 6 && solve_parameters.max_number_of_iterations() < 0) ||
         preprocessor.status() != glop::ProblemStatus::INIT)
       return EXIT_FAILURE;
     glop::ProblemStatus status = glop::ProblemStatus::INIT;
@@ -424,9 +427,13 @@ int main(int argc, char** argv) {
     const auto start = std::chrono::steady_clock::now();
     for (int repetition = 0; repetition < repetitions; ++repetition) {
       glop::RevisedSimplex simplex;
-      simplex.SetParameters(parameters);
+      simplex.SetParameters(solve_parameters);
       operations_research::TimeLimit limit(wall_seconds);
-      if (!simplex.Solve(presolved, &limit).ok()) return EXIT_FAILURE;
+      const auto solve_status = simplex.Solve(presolved, &limit);
+      if (!solve_status.ok() &&
+          !(argc >= 6 && simplex.GetNumberOfIterations() >=
+                              solve_parameters.max_number_of_iterations()))
+        return EXIT_FAILURE;
       status = simplex.GetProblemStatus();
       iterations = simplex.GetNumberOfIterations();
       objective = simplex.GetObjectiveValue();

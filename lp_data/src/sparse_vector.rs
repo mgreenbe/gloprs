@@ -616,7 +616,9 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
         // Use the unconditional sum as the allocation bound. Valid callers
         // delete the common entry and need two fewer slots, but this bound
         // also makes the raw writes safe if the public API is misused.
-        let upper_bound = self.num_entries() + accumulator.num_entries();
+        let size_a = self.num_entries();
+        let size_b = accumulator.num_entries();
+        let upper_bound = size_a + size_b;
         merged.reserve(upper_bound);
         let index_output = merged.indices.as_mut_ptr();
         let coefficient_output = merged.coefficients.as_mut_ptr();
@@ -636,7 +638,7 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
             output_len += 1;
         };
         let source_entry = |position: usize| {
-            debug_assert!(position < self.num_entries());
+            debug_assert!(position < size_a);
             // SAFETY: calls are guarded by source < self.num_entries(). The
             // parallel arrays have equal lengths by the builder invariant.
             unsafe {
@@ -647,7 +649,7 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
             }
         };
         let destination_entry = |position: usize| {
-            debug_assert!(position < accumulator.num_entries());
+            debug_assert!(position < size_b);
             // SAFETY: calls are guarded by destination < accumulator's size,
             // and its index and coefficient arrays have equal lengths.
             unsafe {
@@ -658,7 +660,7 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
             }
         };
         let (mut source, mut destination) = (0, 0);
-        while source < self.num_entries() && destination < accumulator.num_entries() {
+        while source < size_a && destination < size_b {
             let (source_index, source_value) = source_entry(source);
             let (destination_index, destination_value) = destination_entry(destination);
             if source_index == destination_index {
@@ -683,7 +685,7 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
                 destination += 1;
             }
         }
-        while source < self.num_entries() {
+        while source < size_a {
             let (index, coefficient) = source_entry(source);
             let value = multiplier * coefficient;
             if value.abs() > drop_tolerance {
@@ -691,7 +693,7 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
             }
             source += 1;
         }
-        while destination < accumulator.num_entries() {
+        while destination < size_b {
             let (index, coefficient) = destination_entry(destination);
             append(index, coefficient);
             destination += 1;

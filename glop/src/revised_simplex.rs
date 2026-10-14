@@ -2590,6 +2590,7 @@ impl RevisedSimplex {
         } else {
             UpdateRow::new_from_compact(&self.compact_matrix)
         };
+        update_row.recognize_equation_form_slacks(&self.compact_matrix);
         update_row.set_glop_parameters(&self.parameters);
         self.update_row = Some(update_row);
         self.primal_ray = DenseRow::new();
@@ -2733,6 +2734,10 @@ impl RevisedSimplex {
             .as_mut()
             .unwrap()
             .rebind_compact(&self.compact_matrix);
+        self.update_row
+            .as_mut()
+            .unwrap()
+            .recognize_equation_form_slacks(&self.compact_matrix);
         self.reduced_costs = DenseRow::filled(self.num_cols, 0.0);
         self.basic_objective.clear();
         self.basic_objective_dirty = true;
@@ -2897,6 +2902,10 @@ impl RevisedSimplex {
             .as_mut()
             .unwrap()
             .rebind_compact(&self.compact_matrix);
+        self.update_row
+            .as_mut()
+            .unwrap()
+            .recognize_equation_form_slacks(&self.compact_matrix);
         self.primal_edge_norms
             .as_mut()
             .unwrap()
@@ -3174,12 +3183,15 @@ impl RevisedSimplex {
         basis_factorization: &BasisRepresentation,
     ) -> Result<DenseRow, FactorizationError> {
         let mut variable_values = DenseRow::filled(self.num_cols, 0.0);
-        let mut rhs = vec![0.0; self.num_rows.to_usize()];
-        for column in 0..self.num_cols.to_usize() {
-            let index = ColIndex::from_usize(column);
-            if info.is_basic().contains(index) {
-                continue;
-            }
+        // GLOP's VariableValues::RecomputeBasicVariableValues() accumulates
+        // the nonbasic contribution directly in its scattered solve workspace.
+        // Keep the same storage and traverse the nonbasic bitset in column
+        // order, avoiding an extra dense allocation and full-vector copy.
+        // The compact add helper also skips zero-valued nonbasic columns,
+        // as GLOP's ColumnAddMultipleToDenseColumn() does.
+        let mut basic = ScatteredColumn::new(self.num_rows);
+        for index in info.not_basic().iter_ones() {
+            let column = index.to_usize();
             let value = match info.variable_statuses()[index] {
                 VariableStatus::AtLowerBound | VariableStatus::FixedValue => {
                     info.lower_bounds()[column]
@@ -3194,18 +3206,17 @@ impl RevisedSimplex {
                 VariableStatus::Basic => unreachable!(),
             };
             variable_values[index] = value;
-            for (row, coefficient) in self.compact_matrix.column(index).iter() {
-                let row = row.to_usize();
-                rhs[row] = (-coefficient).mul_add(value, rhs[row]);
-            }
+            self.compact_matrix.column_add_multiple_to_dense_column(
+                index,
+                -value,
+                basic.values_mut(),
+            );
         }
         // VariableValues::RecomputeBasicVariableValues() passes a scattered
         // workspace to RightSolve(). Its positions start empty even though
         // the dense values contain the accumulated nonbasic contribution.
         // The solve's output density, not the matrix dimension, determines
         // GLOP's deterministic-time charge.
-        let mut basic = ScatteredColumn::new(self.num_rows);
-        basic.values_mut().as_mut_slice().copy_from_slice(&rhs);
         basis_factorization.solve_with_nonzeros(&mut basic)?;
         for row in 0..self.num_rows.to_usize() {
             let row = RowIndex::from_usize(row);

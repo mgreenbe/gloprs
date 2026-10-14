@@ -24,11 +24,10 @@ Translate the pinned upstream source as faithfully as Rust permits:
 Read `PLAN.md` before beginning substantial work and update it when milestones,
 scope, or evidence change.
 
-Keep `PORTING.md` current as the file-level ledger for the port. Add upstream
-files and dependencies when they enter scope; update each row's Rust
-destination, status, test evidence, divergences, and notes in the same change
-that alters the corresponding port. Do not remove completed rows: the table is
-the durable correspondence between the pinned upstream tree and the Rust tree.
+Keep `PORTING.md` current as the concise file-level ledger for unfinished
+Phase 8 work. Update affected rows with the upstream/Rust correspondence,
+remaining gap, and validation evidence; completed port history is archived in
+Git rather than repeated in the live ledger.
 Use `ported` only when the material upstream algorithms and data structures
 have been translated, including the sparse or incremental implementation used
 in performance-critical code. A dense, simplified, or from-scratch reference

@@ -26,6 +26,7 @@ def main() -> None:
         default=PROJECT_ROOT / "tools" / "glop_reference_adapter.cc",
     )
     parser.add_argument("--extra-source", type=Path, action="append", default=[])
+    parser.add_argument("--target-cpu", help="Clang CPU target, e.g. apple-m2")
     args = parser.parse_args()
 
     source = args.source
@@ -48,6 +49,7 @@ def main() -> None:
         # requirement for public classes whose debug-only fields are guarded
         # by NDEBUG (notably TimeLimit).
         "-DNDEBUG",
+        *([f"-mcpu={args.target_cpu}"] if args.target_cpu else []),
         '-DOR_PROTO_DLL=',
         "-DPROTOBUF_USE_DLLS",
         f"-I{args.upstream}",

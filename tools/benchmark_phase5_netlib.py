@@ -12,7 +12,7 @@ import struct
 import subprocess
 from pathlib import Path
 
-from lp_corpus import models as corpus_models
+from lp_corpus import NMM_CORPORA, models as corpus_models
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,7 +51,7 @@ def main() -> None:
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--models", nargs="+")
     parser.add_argument("--corpus", choices=("netlib-fast96", "miplib2017",
-                                      "mittelmann-lpopt", "extra"),
+                                      "mittelmann-lpopt", "extra", *NMM_CORPORA),
                         default="netlib-fast96")
     parser.add_argument("--mode", choices=("default", "raw", "both"), default="default")
     parser.add_argument("--wall-seconds", type=float, default=20.0)
