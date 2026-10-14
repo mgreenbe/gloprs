@@ -1057,6 +1057,59 @@ extra-corpus outcome gate pass; five paired selected-view `fhnw` LU trials impro
 from about 1.90x to 1.70x native, and the ordinary release presolved-solve
 ratio improved from about 1.57x to 1.21x. The remaining gap is open.
 
+The next selected-view LU pass brought `markowitz.rs` singleton and residual
+pattern setup closer to upstream: empty-matrix testing delegates to the source
+compact matrix, residual pattern initialization counts and reserves row entries
+before filling them, and true singleton pivots write diagonal-only L/U columns
+from a retained `(RowIndex, ColIndex, coefficient)` entry rather than invoking
+the general column copier. Seven paired chronological `fhnw-binpack4-48`
+selected-view trials moved from about 1.69x to 1.54x native; a subsequent
+five-pair run with compact singleton indices was about 1.53x. The finite-input
+check was retained despite a measured 0.04x cost because dropping it changes
+the Rust API's error semantics. LU parity is still open.
+The singleton scan now loads each entry only once; structural residual passes
+read compact-column row indices without materializing coefficient pairs, as
+upstream's row-only `ColumnView` use does. A seven-pair, 500-repetition
+selected-view check was about 1.52x native. An opt-in temporary stage timer
+localized Rust's Markowitz time mostly to true- and residual-singleton
+extraction, not numerical elimination; the diagnostic code was removed after
+measurement. A 32-bit residual-adjacency experiment and a compile-time
+selected-view specialization both regressed and were reverted.
+`TriangularMatrix::transpose_into()` now follows upstream
+`PopulateFromTranspose()` by replacing retained compact storage without
+clearing the solve workspaces. A dimension-changing repeated-transpose/solve
+test guards their validity. Seven paired `fhnw` selected-view trials remained
+about 1.52x, so this is a fidelity repair rather than a material speedup.
+The next permutation-lifecycle repair removes Rust's extra pivot-order writes
+during singleton extraction. Markowitz now writes only GLOP's direct
+input-to-pivot row/column permutations, transfers their owned buffers to LU,
+and LU populates inverse permutations once into retained buffers. The same
+direct storage is handed back to Markowitz before the next refactorization.
+A repeated selected-compact test checks buffer identity, inverse mappings,
+and determinant sign after a column reorder. Seven paired 500-repetition
+`fhnw` selected-view trials improve from about 1.52x to 1.32x native.
+Line-level sampling then localized a large Rust-only transpose cost to the
+adjacent-index prefix sum over column starts. A single forward mutable-slice
+pass computes the same starts without two indexed accesses per iteration.
+Seven paired 500-repetition `fhnw` selected-view trials improve further from
+about 1.32x to 1.13x native; the matched-presolved solve ratio moves from
+1.167x to 1.146x. This keeps the native transpose algorithm and entry order,
+but the remaining LU gap is still measurable. The remaining cost was largely
+the port's per-factorization finite-coefficient validation scan. Compact
+storage now tracks whether it contains nonfinite entries as it is built,
+reset, and transposed. A selected basis still checks its chosen columns if
+any source coefficient is nonfinite, preserving the previous error semantics
+even when only an unselected column contains NaN. This Rust-specific metadata
+is absent upstream, which does not perform the scan. Seven paired selected-view
+trials now measure 1.021–1.031x native (aggregate 1.025x), and the matched
+presolved-solve ratio is 1.124x. Isolated LU is effectively at parity; the
+remaining full-solve gap is outside this isolated factorization comparison.
+The subsequent paired full-solve sample highlighted primal-phase and
+edge-norm/BTRAN work. `CorrectErrorsOnVariableValues` now reuses a retained
+primal-residual scratch vector, matching GLOP's `VariableValues::scratchpad_`
+lifecycle. The seven-pair matched solve ratio remains 1.123x, so that repair
+does not explain the outstanding non-LU gap.
+
 ## Test inventory caveat
 
 

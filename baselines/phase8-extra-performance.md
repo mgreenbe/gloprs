@@ -216,6 +216,72 @@ An independent nine-trial, 50-solve-per-trial serial confirmation measured
 3,774 iterations, and objective bits agreed in every trial. Strict fast-96
 trajectories and the full 164-model extra-corpus outcome gate also passed.
 
+The next selected-view LU pass matched native's constant-time compact-view
+empty test, two-pass residual-pattern row reservation, and diagonal-only true
+singleton factor columns. Retaining each singleton coefficient alongside
+32-bit row/column indices in the sort buffer avoids a second compact-column
+lookup and matches GLOP's `MatrixEntry` layout. On the same 28 chronological
+`fhnw-binpack4-48` selections, the seven-trial Rust/native ratio moved from
+1.69x to 1.54x; five additional paired trials with compact scratch indices
+spanned 1.532–1.555x (sum-of-medians 1.534x). This is a real improvement but
+not LU parity. A five-second Rust sample after the change put roughly 1,002
+of 4,300 samples in triangular-factor transposition and 595 in column close;
+the largest 2,398-sample bucket is inlined Markowitz setup/work and still
+needs finer localization. The strict fast-96 trajectory gate, all workspace
+tests, and the pinned `fhnw` outcome/3,774-iteration check passed. The old
+1.215x whole-solve timing has not yet been remeasured after this pass.
+After the one-read singleton scan and row-only structural traversal, seven
+paired trials with 500 repetitions per selection measured 1.514–1.548x
+Rust/native (sum-of-medians 1.520x). A fresh five-pair matched-presolved
+solve check measured 0.017641 s native and 0.021063 s Rust per solve, or
+1.194x, down from 1.215x. Temporary Rust stage timers over 7,000
+refactorizations attributed 243 ms to true-singleton extraction, 217 ms to
+residual-singleton extraction, 68 ms to residual-pattern construction, 12 ms
+to setup, and 1.4 ms to numerical elimination; factor transpose was outside
+these stages. The timer code was removed after localization. Native stage
+timings are not yet measured, so the next repair should still be checked by
+paired full-factor timings and differential gates.
+Aligning retained transpose population with native's storage lifecycle left
+the seven-trial selected-view ratio at about 1.52x; its benefit is removing
+non-upstream workspace clearing, not a measured speedup. A repeated
+dimension-changing transpose/solve test covers the changed lifecycle.
+Eliminating Rust's extra pivot-order vectors during Markowitz extraction then
+improved the seven-trial, 500-repetition selected-view LU ratio to 1.298–1.328x
+(sum-of-medians 1.317x) from about 1.52x. Native GLOP writes direct row/column
+permutations during extraction and populates their inverses afterward; Rust
+now does the same, transferring and reusing direct-permutation buffers rather
+than writing pivot-order vectors and inverting them again during LU install.
+A five-pair, 20-solve-per-trial matched-presolved `fhnw` check measured
+0.017625 s native and 0.020575 s Rust per solve (1.167x, down from 1.194x).
+The remaining LU and whole-solve gaps are open.
+Line-level sampling identified Rust's adjacent-index prefix sum in
+`TriangularMatrix::transpose_into()` as a major cost. A forward mutable-slice
+prefix pass is algebraically and structurally identical to GLOP's transpose
+population, but avoids repeated checked indexing. Seven paired trials at 500
+repetitions per selected view measured 1.128–1.135x Rust/native
+(sum-of-medians 1.131x), down from 1.317x. A five-pair, 20-solve-per-trial
+matched-presolved check measured 0.017673 s native and 0.020259 s Rust per
+solve (1.146x), down from 1.167x. This is close but not parity; the remaining
+roughly 13% isolated LU gap remained at that point. Tracking nonfinite entries
+in compact storage removes the repeated full validation scan on ordinary
+finite inputs without changing the `NonFinite` error for a selected bad
+column. Seven paired, 500-repetition selected-view trials now range from
+1.021x to 1.031x (sum-of-medians 1.025x); raw data are in
+`target/fhnw-lu-finite-metadata-raw.csv`. Five matched-presolved whole-solve
+trials measure 0.017690 s native and 0.019891 s Rust per solve (1.124x), in
+`target/fhnw-stage-solve-finite-metadata.json`. The isolated LU gap is now
+about 2.5%, while the larger whole-solve gap remains to be localized.
+An eight-second paired sampling pass on repeated `fhnw-binpack4-48` direct
+presolved solves found substantial primal edge-norm BTRAN and primal-phase
+loop work on both sides. The existing isolated dense rank-one solve benchmark
+with 32 updates and 4–16 entries was faster in Rust (0.79–0.86x native), so
+its presence in the sample was not sufficient evidence of a rank-one kernel
+regression. GLOP retains the primal-residual scratchpad while the Rust port
+allocated it on every correction check; Rust now retains and clears that
+vector. Seven paired trials with 50 solves each measured 0.017647 s native
+and 0.019823 s Rust per solve (1.123x), showing negligible timing effect.
+Raw data are in `target/fhnw-stage-solve-residual-reuse.json`.
+
 `miplib2017/enlight_hard` was solved completely by presolve, so it is
 inapplicable to matched-presolved simplex timing but included in the public
 result. `miplib2017/rmatr200-p5` and

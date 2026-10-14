@@ -1319,7 +1319,10 @@ impl TriangularMatrix {
     /// Writes the transpose into a reusable triangular-matrix allocation.
     pub fn transpose_into(&self, output: &mut Self) {
         let n = self.dimension();
-        output.reset(self.num_rows, n);
+        // PopulateFromTranspose() in GLOP replaces compact storage but does
+        // not reset the retained solve workspaces. Their per-solve clearing is
+        // handled by the solve kernels themselves.
+        output.num_rows = self.num_rows;
         output.triangle = match self.triangle {
             Triangle::Lower => Triangle::Upper,
             Triangle::Upper => Triangle::Lower,
@@ -1335,8 +1338,10 @@ impl TriangularMatrix {
         for &row in &self.rows {
             starts[usize::try_from(row).unwrap() + 2] += 1;
         }
-        for column in 2..n + 2 {
-            starts[column] += starts[column - 1];
+        let mut prefix = 0;
+        for start in starts.iter_mut().skip(2) {
+            prefix += *start;
+            *start = prefix;
         }
         let rows = &mut output.rows;
         rows.resize(self.rows.len(), 0);
@@ -1352,9 +1357,11 @@ impl TriangularMatrix {
                 coefficients[destination] = self.coefficients[index];
             }
         }
+        output.diagonal.resize(n, 0.0);
         output.diagonal.copy_from_slice(&self.diagonal[..n]);
         output.column_count = n;
         output.first_non_identity_column = Self::first_non_identity(&output.diagonal, starts);
+        output.permuted_workspace.pruned_ends.resize(n, 0);
         output
             .permuted_workspace
             .pruned_ends
@@ -1648,6 +1655,33 @@ mod tests {
         assert_eq!(transposed.num_cols(), 2);
         assert_eq!(transposed.diagonal(0), 1.0);
         assert_eq!(transposed.diagonal(1), 1.0);
+    }
+
+    #[test]
+    fn reused_transpose_keeps_solve_workspace_valid_after_dimension_change() {
+        let first = TriangularMatrix::from_sparse(
+            &matrix(&[&[2.0, 0.0, 0.0], &[1.0, 3.0, 0.0], &[-1.0, 2.0, 4.0]]),
+            Triangle::Lower,
+            false,
+        )
+        .unwrap();
+        let second = TriangularMatrix::from_sparse(
+            &matrix(&[&[3.0, 0.0], &[2.0, 5.0]]),
+            Triangle::Lower,
+            false,
+        )
+        .unwrap();
+        let mut reused = TriangularMatrix::empty(Triangle::Upper, false);
+        first.transpose_into(&mut reused);
+        reused.solve(&mut [1.0, 2.0, 3.0]).unwrap();
+        second.transpose_into(&mut reused);
+        let mut actual = [7.0, 10.0];
+        let mut expected = actual;
+        reused.solve(&mut actual).unwrap();
+        second.transpose_solve(&mut expected).unwrap();
+        assert_eq!(actual, expected);
+        assert_eq!(reused.num_cols(), 2);
+        assert_eq!(reused.num_entries(), 3);
     }
 
     #[test]

@@ -397,6 +397,8 @@ pub struct RevisedSimplex {
     basis_factorization: Option<BasisRepresentation>,
     variables_info: Option<VariablesInfo>,
     variable_values: DenseRow,
+    // GLOP's VariableValues::scratchpad_.values survives residual checks.
+    primal_residual_scratchpad: Vec<f64>,
     reduced_costs: DenseRow,
     /// GLOP's `ReducedCosts::basic_objective_`, in current basis-row order.
     basic_objective: Vec<f64>,
@@ -524,6 +526,7 @@ impl RevisedSimplex {
             basis_factorization: None,
             variables_info: None,
             variable_values: DenseRow::new(),
+            primal_residual_scratchpad: Vec::new(),
             reduced_costs: DenseRow::new(),
             basic_objective: Vec::new(),
             basic_objective_dirty: true,
@@ -4867,7 +4870,10 @@ impl RevisedSimplex {
     }
 
     fn correct_errors_on_variable_values(&mut self) -> Result<(), FactorizationError> {
-        let mut residual = vec![0.0; self.num_rows.to_usize()];
+        self.primal_residual_scratchpad
+            .resize(self.num_rows.to_usize(), 0.0);
+        self.primal_residual_scratchpad.fill(0.0);
+        let residual = &mut self.primal_residual_scratchpad;
         for column in 0..self.num_cols.to_usize() {
             let column = ColIndex::from_usize(column);
             let value = self.variable_values[column];
@@ -4877,7 +4883,7 @@ impl RevisedSimplex {
             }
         }
         let maximum = residual
-            .into_iter()
+            .iter()
             .fold(0.0_f64, |value, entry| value.max(entry.abs()));
         if maximum
             < self.parameters.harris_tolerance_ratio * self.parameters.primal_feasibility_tolerance

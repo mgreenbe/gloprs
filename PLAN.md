@@ -2446,3 +2446,62 @@ remaining roughly 3.8 ms per-solve gap. A machine-target build is now only
 about the same speed as the ordinary release build after this correction, so
 the earlier apparent target-CPU win was code-generation sensitivity to the
 old grow-on-close representation, not a reason to change portable build flags.
+The next upstream-aligned Markowitz pass replaced the true-singleton generic
+column copy with diagonal-only factor writes and kept the singleton coefficient
+in a compact strong-index scratch entry, as native GLOP does. Residual-pattern
+setup now counts and reserves before filling row adjacency, and the compact
+view's empty test is constant-time. On 28 chronological `fhnw-binpack4-48`
+selected-view matrices, paired release trials improve from about 1.69x to
+1.53x native, but parity remains open. The finite-coefficient validation is
+still present; removing it experimentally gave a further roughly 0.04x
+improvement but would weaken the Rust API. The latest Rust sample places most
+remaining CPU in inlined Markowitz work, with factor transposition and column
+closing the largest separately named functions. Continue stage-localized
+profiling and fidelity repairs; do not infer parity from the singleton gain.
+The next row-only traversal alignment and one-read singleton scan bring the
+28-view ratio to about 1.52x native in seven paired 500-repetition trials.
+Temporary stage timing over the selected views puts Rust Markowitz setup at
+12 ms, true singleton extraction at 243 ms, residual singleton extraction at
+217 ms, residual-pattern construction at 68 ms, and numerical elimination at
+1.4 ms across 7,000 refactorizations; the remaining factor-transpose work is
+outside these stages. These are instrumented Rust timings, not matched native
+stage clocks. A 32-bit residual-adjacency representation and compile-time
+selected-view specialization were measured, regressed, and reverted. The
+current paired matched-presolved whole-solve ratio is 1.194x (versus 1.215x
+before this pass); continue investigating singleton extraction and factor
+transposition, with strict trajectory and outcome gates after each edit.
+The retained transpose no longer clears solve workspaces when populated;
+upstream only replaces compact storage and pruning ends. This has a focused
+dimension-changing regression test and no material effect on the selected-view
+LU ratio (still about 1.52x). The remaining performance gap is not resolved.
+Removing a second, non-upstream pivot-order representation from Markowitz
+substantially improves the singleton-heavy case: direct permutations are now
+written once, ownership moves to LU for inverse population, and their buffers
+return to Markowitz for the next refactorization. Seven paired 500-repetition
+selected-view trials give about 1.32x Rust/native (down from 1.52x); five
+paired matched-presolved whole-solve trials give 1.167x (down from 1.194x).
+The remaining gap is still open; profile the retained transpose and remaining
+singleton column-write cost without reintroducing redundant permutations.
+Line-level sampling of retained transpose population found its indexed
+adjacent-start prefix sum dominating that routine. Expressing the identical
+prefix calculation as one mutable-slice pass improves seven paired
+selected-view LU trials to 1.128–1.135x native (sum-of-medians 1.131x), from
+1.317x before that edit. The five-pair matched-presolved `fhnw` solve ratio is
+now 1.146x. The residual LU gap was predominantly a Rust-only full scan of
+every selected compact basis coefficient before each factorization. Compact
+storage now maintains a nonfinite-entry count during construction, mutation,
+reset, and transpose, and scans selected coefficients only if the source
+contains any nonfinite value. This preserves the selected-column validation
+contract (including nonfinite values in unselected columns). Seven paired
+selected-view trials are now 1.021–1.031x native (sum-of-medians 1.025x);
+matched-presolved solve is 1.124x. Isolated selected-view LU is effectively at
+parity; investigate the remaining whole-solve gap at its other stages.
+Paired whole-solve samples of `fhnw-binpack4-48` place substantial time in
+primal edge-norm BTRAN and the inlined primal-phase loop, not solely in LU.
+The isolated dense rank-one solve microbenchmark is already faster in Rust at
+small update columns, so the sample alone does not justify changing its
+arithmetic. A concrete lifecycle discrepancy in the primal-residual check was
+fixed: Rust now reuses GLOP's retained scratch vector rather than allocating
+one on every check. Seven paired, 50-solve trials remain 1.123x native, so
+this is a fidelity repair, not the explanation for the remaining gap. Localize
+the primal-phase loop and BTRAN mix further with matched stage accounting.

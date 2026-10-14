@@ -21,6 +21,7 @@ pub struct CompactSparseMatrix {
     starts: Vec<usize>,
     rows: Vec<RowIndex>,
     coefficients: Vec<Fractional>,
+    nonfinite_entries: usize,
     num_rows: RowIndex,
     num_cols: ColIndex,
 }
@@ -93,11 +94,13 @@ impl CompactSparseMatrix {
         let mut starts = Vec::with_capacity(matrix.num_cols().to_usize() + 1);
         let mut rows = Vec::with_capacity(matrix.num_entries().value().try_into().unwrap_or(0));
         let mut coefficients = Vec::with_capacity(rows.capacity());
+        let mut nonfinite_entries = 0;
         starts.push(0);
         for column in 0..matrix.num_cols().to_usize() {
             for entry in matrix.column(ColIndex::from_usize(column)) {
                 rows.push(entry.index());
                 coefficients.push(entry.coefficient());
+                nonfinite_entries += usize::from(!entry.coefficient().is_finite());
             }
             starts.push(rows.len());
         }
@@ -105,6 +108,7 @@ impl CompactSparseMatrix {
             starts,
             rows,
             coefficients,
+            nonfinite_entries,
             num_rows: matrix.num_rows(),
             num_cols: matrix.num_cols(),
         }
@@ -133,6 +137,7 @@ impl CompactSparseMatrix {
     }
 
     pub fn populate_from_transpose(&mut self, input: &Self) {
+        self.nonfinite_entries = input.nonfinite_entries;
         self.num_rows = RowIndex::new(input.num_cols().value());
         self.num_cols = ColIndex::new(input.num_rows().value());
         let output_columns = self.num_cols.to_usize();
@@ -159,6 +164,7 @@ impl CompactSparseMatrix {
     }
 
     pub fn reset(&mut self, num_rows: RowIndex) {
+        self.nonfinite_entries = 0;
         self.num_rows = num_rows;
         self.num_cols = ColIndex::new(0);
         self.rows.clear();
@@ -168,6 +174,7 @@ impl CompactSparseMatrix {
     }
 
     pub fn add_entry_to_current_column(&mut self, row: RowIndex, coefficient: Fractional) {
+        self.nonfinite_entries += usize::from(!coefficient.is_finite());
         self.rows.push(row);
         self.coefficients.push(coefficient);
     }
@@ -247,6 +254,15 @@ impl CompactSparseMatrix {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.coefficients.is_empty()
+    }
+
+    /// Whether any stored coefficient is nonfinite. Selected-column users
+    /// still inspect their columns when this is true, since an unselected
+    /// column must not invalidate a factorization.
+    #[must_use]
+    #[inline]
+    pub const fn contains_nonfinite(&self) -> bool {
+        self.nonfinite_entries != 0
     }
 
     #[must_use]
@@ -450,6 +466,12 @@ pub struct CompactColumn<'a> {
 }
 
 impl<'a> CompactColumn<'a> {
+    /// Row indices without loading coefficients, for structural passes.
+    #[inline]
+    pub fn row_indices(self) -> impl Iterator<Item = RowIndex> + 'a {
+        self.rows.iter().copied()
+    }
+
     #[inline]
     pub fn iter(self) -> impl Iterator<Item = (RowIndex, Fractional)> + 'a {
         self.rows
@@ -1032,6 +1054,24 @@ impl SparseMatrix {
 #[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compact_nonfinite_metadata_tracks_build_reset_and_transpose() {
+        let mut matrix = CompactSparseMatrix::default();
+        matrix.reset(RowIndex::new(2));
+        matrix.add_entry_to_current_column(RowIndex::new(1), f64::INFINITY);
+        matrix.close_current_column();
+        assert!(matrix.contains_nonfinite());
+        let mut transpose = CompactSparseMatrix::default();
+        transpose.populate_from_transpose(&matrix);
+        assert!(transpose.contains_nonfinite());
+        matrix.reset(RowIndex::new(1));
+        matrix.add_entry_to_current_column(RowIndex::new(0), 2.0);
+        matrix.close_current_column();
+        assert!(!matrix.contains_nonfinite());
+        transpose.populate_from_transpose(&matrix);
+        assert!(!transpose.contains_nonfinite());
+    }
 
     #[test]
     fn transpose_preserves_coefficients_and_dimensions() {

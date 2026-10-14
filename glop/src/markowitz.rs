@@ -23,9 +23,9 @@ pub struct Pivot {
 
 #[derive(Clone, Debug)]
 pub(crate) struct SparseLu {
-    /// Pivot position -> input row.
+    /// Input row -> pivot position, as in GLOP's `row_perm`.
     pub row_permutation: Vec<usize>,
-    /// Pivot position -> input column.
+    /// Input column -> pivot position, as in GLOP's `col_perm`.
     pub column_permutation: Vec<usize>,
     pub num_fp_operations: i64,
     pub stats: Option<MarkowitzStats>,
@@ -40,8 +40,7 @@ pub(crate) struct MarkowitzStats {
 }
 
 struct MarkowitzResult {
-    pivot_rows: Vec<usize>,
-    pivot_columns: Vec<usize>,
+    pivot_count: usize,
     num_fp_operations: i64,
     stats: Option<MarkowitzStats>,
 }
@@ -77,6 +76,7 @@ trait InputColumn: Copy {
             .map_or(0.0, InputEntry::coefficient)
     }
     fn iter(self) -> impl Iterator<Item = InputEntry>;
+    fn row_indices(self) -> impl Iterator<Item = RowIndex>;
 }
 
 impl InputColumn for &SparseColumn {
@@ -99,6 +99,9 @@ impl InputColumn for &SparseColumn {
             value: entry.coefficient(),
         })
     }
+    fn row_indices(self) -> impl Iterator<Item = RowIndex> {
+        SparseColumn::iter(self).map(lp_data::sparse_vector::SparseEntry::index)
+    }
 }
 
 impl InputColumn for CompactColumn<'_> {
@@ -114,10 +117,14 @@ impl InputColumn for CompactColumn<'_> {
     fn iter(self) -> impl Iterator<Item = InputEntry> {
         CompactColumn::iter(self).map(|(row, value)| InputEntry { row, value })
     }
+    fn row_indices(self) -> impl Iterator<Item = RowIndex> {
+        CompactColumn::row_indices(self)
+    }
 }
 
 trait InputMatrix: Copy {
     type Column: InputColumn;
+    fn is_empty(self) -> bool;
     fn num_rows(self) -> usize;
     fn num_cols(self) -> usize;
     fn column(self, column: usize) -> Self::Column;
@@ -125,6 +132,9 @@ trait InputMatrix: Copy {
 
 impl<'a> InputMatrix for &'a SparseMatrix {
     type Column = &'a SparseColumn;
+    fn is_empty(self) -> bool {
+        SparseMatrix::is_empty(self)
+    }
     fn num_rows(self) -> usize {
         SparseMatrix::num_rows(self).to_usize()
     }
@@ -138,6 +148,9 @@ impl<'a> InputMatrix for &'a SparseMatrix {
 
 impl<'a> InputMatrix for &'a CompactSparseMatrix {
     type Column = CompactColumn<'a>;
+    fn is_empty(self) -> bool {
+        CompactSparseMatrix::is_empty(self)
+    }
     fn num_rows(self) -> usize {
         CompactSparseMatrix::num_rows(self).to_usize()
     }
@@ -170,6 +183,11 @@ impl<'a, M: InputMatrix> MatrixView<'a, M> {
     }
     fn num_rows(self) -> usize {
         self.matrix.num_rows()
+    }
+    fn is_empty(self) -> bool {
+        // A CompactSparseMatrixView delegates IsEmpty() to its source matrix
+        // in GLOP; testing every selected column adds an O(n) pass here.
+        self.matrix.is_empty()
     }
     fn num_columns(self) -> usize {
         self.columns
@@ -225,18 +243,36 @@ impl MatrixNonZeroPattern {
                 self.non_deleted_columns -= 1;
                 continue;
             }
-            for entry in matrix.column(column).iter() {
-                let row = entry.index().to_usize();
-                if row_permutation[row] != INVALID {
-                    continue;
-                }
-                self.row_nonzeros[row].push(column);
+            for row in matrix.column(column).row_indices() {
+                let row = row.to_usize();
                 self.row_degree[row] += 1;
-                self.column_degree[column] += 1;
             }
         }
-        singleton_columns.extend((0..columns).filter(|&column| self.column_degree[column] == 1));
-        singleton_rows.extend((0..rows).filter(|&row| self.row_degree[row] == 1));
+        for (row, &permuted) in row_permutation.iter().enumerate().take(rows) {
+            if permuted == INVALID {
+                self.row_nonzeros[row].reserve(self.row_degree[row]);
+                if self.row_degree[row] == 1 {
+                    singleton_rows.push(row);
+                }
+            } else {
+                self.row_degree[row] = 0;
+            }
+        }
+        for (column, &permuted) in column_permutation.iter().enumerate().take(columns) {
+            if permuted != INVALID {
+                continue;
+            }
+            for row in matrix.column(column).row_indices() {
+                let row = row.to_usize();
+                if row_permutation[row] == INVALID {
+                    self.column_degree[column] += 1;
+                    self.row_nonzeros[row].push(column);
+                }
+            }
+            if self.column_degree[column] == 1 {
+                singleton_columns.push(column);
+            }
+        }
     }
 
     fn delete_row_and_column(&mut self, row: usize, column: usize) {
@@ -335,12 +371,10 @@ fn store_pivot_column<M: InputMatrix>(
     column: usize,
     row_permutation: &mut [usize],
     column_permutation: &mut [usize],
-    pivot_rows: &mut Vec<usize>,
-    pivot_columns: &mut Vec<usize>,
+    step: usize,
     lower_factor: &mut TriangularMatrix,
     upper_factor: &mut TriangularMatrix,
 ) {
-    let step = pivot_rows.len();
     let source = matrix.column(column);
     lower_factor.add_diagonal_only_column(1.0);
     // Every caller has established that this source column has exactly one
@@ -352,8 +386,6 @@ fn store_pivot_column<M: InputMatrix>(
             .map(|entry| (entry.index().to_usize(), entry.coefficient())),
         row,
     );
-    pivot_rows.push(row);
-    pivot_columns.push(column);
     row_permutation[row] = step;
     column_permutation[column] = step;
 }
@@ -518,11 +550,9 @@ pub(crate) struct MarkowitzWorkspace {
     permuted_upper: ReusableColumnMemory,
     singleton_columns: Vec<usize>,
     singleton_rows: Vec<usize>,
-    initial_singletons: Vec<(usize, usize)>,
+    initial_singletons: Vec<(RowIndex, ColIndex, f64)>,
     row_permutation: Vec<usize>,
     column_permutation: Vec<usize>,
-    recycled_pivot_rows: Vec<usize>,
-    recycled_pivot_columns: Vec<usize>,
     queue: ColumnPriorityQueue,
     examined: Vec<usize>,
 }
@@ -539,8 +569,6 @@ impl Default for MarkowitzWorkspace {
             initial_singletons: Vec::new(),
             row_permutation: Vec::new(),
             column_permutation: Vec::new(),
-            recycled_pivot_rows: Vec::new(),
-            recycled_pivot_columns: Vec::new(),
             queue: ColumnPriorityQueue::default(),
             examined: Vec::new(),
         }
@@ -548,9 +576,9 @@ impl Default for MarkowitzWorkspace {
 }
 
 impl MarkowitzWorkspace {
-    pub(crate) fn recycle_pivot_permutations(&mut self, rows: Vec<usize>, columns: Vec<usize>) {
-        self.recycled_pivot_rows = rows;
-        self.recycled_pivot_columns = columns;
+    pub(crate) fn recycle_direct_permutations(&mut self, rows: Vec<usize>, columns: Vec<usize>) {
+        self.row_permutation = rows;
+        self.column_permutation = columns;
     }
 }
 
@@ -860,12 +888,7 @@ fn compute<M: InputMatrix>(
     let col_perm = &mut workspace.column_permutation;
     col_perm.resize(num_columns, INVALID);
     col_perm.fill(INVALID);
-    let mut pivot_rows = std::mem::take(&mut workspace.recycled_pivot_rows);
-    pivot_rows.clear();
-    pivot_rows.reserve(maximum_pivots);
-    let mut pivot_columns = std::mem::take(&mut workspace.recycled_pivot_columns);
-    pivot_columns.clear();
-    pivot_columns.reserve(maximum_pivots);
+    let mut pivot_count = 0;
     lower_factor.reset(num_rows, maximum_pivots);
     upper_factor.reset(num_rows, maximum_pivots);
     let pattern = &mut workspace.pattern;
@@ -881,7 +904,7 @@ fn compute<M: InputMatrix>(
     permuted_lower.reset(num_columns);
     permuted_upper.reset(num_columns);
     let mut num_fp_operations = 0_i64;
-    let matrix_is_empty = (0..num_columns).all(|column| matrix.column(column).is_empty());
+    let matrix_is_empty = matrix.is_empty();
 
     // Upstream first extracts true singleton columns. For competing singleton
     // columns on one row, the lowest input column wins; selected entries are
@@ -891,35 +914,36 @@ fn compute<M: InputMatrix>(
     for column in 0..num_columns {
         let source = matrix.column(column);
         if source.num_entries() == 1 {
-            let row = source
-                .first()
-                .expect("singleton has one entry")
-                .index()
-                .to_usize();
+            let entry = source.first().expect("singleton has one entry");
+            let row = entry.index().to_usize();
             if row_perm[row] == INVALID {
                 // Match GLOP's temporary row-permutation mark. The sorted
                 // singleton pass below replaces it with the actual pivot.
                 row_perm[row] = 0;
-                initial_singletons.push((row, column));
+                initial_singletons.push((
+                    entry.index(),
+                    ColIndex::from_usize(column),
+                    entry.coefficient(),
+                ));
             }
         }
     }
     // GLOP uses libc++ std::sort on MatrixEntry, comparing only the row.
     crate::libcpp_sort::sort_by(initial_singletons, |left, right| left.0.cmp(&right.0));
-    for &(row, column) in initial_singletons.iter() {
-        store_pivot_column(
-            matrix,
-            row,
-            column,
-            row_perm,
-            col_perm,
-            &mut pivot_rows,
-            &mut pivot_columns,
-            lower_factor,
-            upper_factor,
-        );
+    for &(row, column, coefficient) in initial_singletons.iter() {
+        let row = row.to_usize();
+        let column = column.to_usize();
+        // A true singleton has no off-diagonal entries. Upstream writes its
+        // coefficient directly to U's diagonal, without the generic column
+        // copy used for residual singleton pivots.
+        let step = pivot_count;
+        lower_factor.add_diagonal_only_column(1.0);
+        upper_factor.add_diagonal_only_column(coefficient);
+        row_perm[row] = step;
+        col_perm[column] = step;
+        pivot_count += 1;
     }
-    let basis_singletons = pivot_rows.len();
+    let basis_singletons = pivot_count;
 
     // Then make one input-order pass for columns that are singleton after the
     // rows selected above are removed. This mirrors
@@ -930,8 +954,8 @@ fn compute<M: InputMatrix>(
         }
         let mut residual_row = INVALID;
         let mut residual_degree = 0;
-        for entry in matrix.column(column).iter() {
-            let row = entry.index().to_usize();
+        for row in matrix.column(column).row_indices() {
+            let row = row.to_usize();
             if row_perm[row] == INVALID {
                 residual_row = row;
                 residual_degree += 1;
@@ -947,14 +971,14 @@ fn compute<M: InputMatrix>(
                 column,
                 row_perm,
                 col_perm,
-                &mut pivot_rows,
-                &mut pivot_columns,
+                pivot_count,
                 lower_factor,
                 upper_factor,
             );
+            pivot_count += 1;
         }
     }
-    let residual_singletons = pivot_rows.len();
+    let residual_singletons = pivot_count;
     let mut pivots_without_fill_in = residual_singletons;
 
     pattern.reset_from_matrix_subset(
@@ -971,7 +995,8 @@ fn compute<M: InputMatrix>(
     examined.clear();
     examined.reserve(zlatev_parameter.saturating_add(1));
 
-    for step in pivot_rows.len()..maximum_pivots {
+    let first_general_step = pivot_count;
+    for step in first_general_step..maximum_pivots {
         let Some(pivot) = find_pivot(
             matrix,
             parameters,
@@ -1062,11 +1087,11 @@ fn compute<M: InputMatrix>(
                 pivot.column,
                 row_perm,
                 col_perm,
-                &mut pivot_rows,
-                &mut pivot_columns,
+                step,
                 lower_factor,
                 upper_factor,
             );
+            pivot_count = step + 1;
             continue;
         }
 
@@ -1084,17 +1109,16 @@ fn compute<M: InputMatrix>(
         );
         permuted_lower.clear_and_release_column(pivot.column);
         permuted_upper.clear_and_release_column(pivot.column);
-        pivot_rows.push(pivot.row);
-        pivot_columns.push(pivot.column);
         row_perm[pivot.row] = step;
         col_perm[pivot.column] = step;
+        pivot_count = step + 1;
     }
 
     let lower_entries = lower_factor.num_entries();
     let upper_entries = upper_factor.num_entries();
     // Native Markowitz returns immediately on a missing/small pivot. Its
     // final L/U storage charge is reached only for a complete permutation.
-    if pivot_rows.len() == maximum_pivots {
+    if pivot_count == maximum_pivots {
         num_fp_operations +=
             10 * i64::try_from(lower_entries.saturating_add(upper_entries)).unwrap_or(i64::MAX);
     }
@@ -1108,8 +1132,7 @@ fn compute<M: InputMatrix>(
         degree_two_pivot_columns: 0.0,
     });
     MarkowitzResult {
-        pivot_rows,
-        pivot_columns,
+        pivot_count,
         num_fp_operations,
         stats,
     }
@@ -1130,7 +1153,7 @@ pub(crate) fn factorize(
         lower,
         upper,
     );
-    factors_from_result(result, n, workspace, lower, upper)
+    factors_from_result(&result, n, workspace, lower, upper)
 }
 
 #[cfg(test)]
@@ -1150,7 +1173,7 @@ pub(crate) fn factorize_selected(
         lower,
         upper,
     );
-    factors_from_result(result, n, workspace, lower, upper)
+    factors_from_result(&result, n, workspace, lower, upper)
 }
 
 /// Factorizes selected columns directly from GLOP's compact numerical matrix.
@@ -1170,18 +1193,18 @@ pub(crate) fn factorize_selected_compact(
         lower,
         upper,
     );
-    factors_from_result(result, n, workspace, lower, upper)
+    factors_from_result(&result, n, workspace, lower, upper)
 }
 
 fn factors_from_result(
-    result: MarkowitzResult,
+    result: &MarkowitzResult,
     n: usize,
-    workspace: &MarkowitzWorkspace,
+    workspace: &mut MarkowitzWorkspace,
     lower: &mut TriangularMatrix,
     upper: &mut TriangularMatrix,
 ) -> Result<SparseLu, usize> {
-    if result.pivot_rows.len() != n {
-        return Err(result.pivot_rows.len());
+    if result.pivot_count != n {
+        return Err(result.pivot_count);
     }
     // Match Markowitz::ComputeLU(): permute stored off-diagonal row indices
     // in place, without changing their order or rebuilding either factor.
@@ -1190,8 +1213,8 @@ fn factors_from_result(
     debug_assert!((0..n).all(|column| lower.column(column).all(|(row, _)| row > column)));
     debug_assert!((0..n).all(|column| upper.column(column).all(|(row, _)| row < column)));
     Ok(SparseLu {
-        row_permutation: result.pivot_rows,
-        column_permutation: result.pivot_columns,
+        row_permutation: std::mem::take(&mut workspace.row_permutation),
+        column_permutation: std::mem::take(&mut workspace.column_permutation),
         num_fp_operations: result.num_fp_operations,
         stats: result.stats,
     })
@@ -1213,16 +1236,17 @@ pub(crate) fn compute_pivot_sequence_with_operations(
 ) -> (Vec<usize>, Vec<usize>, i64) {
     let mut lower = TriangularMatrix::empty(Triangle::Lower, true);
     let mut upper = TriangularMatrix::empty(Triangle::Upper, false);
+    let mut workspace = MarkowitzWorkspace::default();
     let result = compute(
         MatrixView::selected(matrix, columns),
         parameters,
-        &mut MarkowitzWorkspace::default(),
+        &mut workspace,
         &mut lower,
         &mut upper,
     );
     (
-        result.pivot_rows,
-        result.pivot_columns,
+        invert_partial_permutation(&workspace.row_permutation, result.pivot_count),
+        invert_partial_permutation(&workspace.column_permutation, result.pivot_count),
         result.num_fp_operations,
     )
 }
@@ -1234,18 +1258,29 @@ pub(crate) fn compute_pivot_sequence_compact_with_operations(
 ) -> (Vec<usize>, Vec<usize>, i64) {
     let mut lower = TriangularMatrix::empty(Triangle::Lower, true);
     let mut upper = TriangularMatrix::empty(Triangle::Upper, false);
+    let mut workspace = MarkowitzWorkspace::default();
     let result = compute(
         MatrixView::selected(matrix, columns),
         parameters,
-        &mut MarkowitzWorkspace::default(),
+        &mut workspace,
         &mut lower,
         &mut upper,
     );
     (
-        result.pivot_rows,
-        result.pivot_columns,
+        invert_partial_permutation(&workspace.row_permutation, result.pivot_count),
+        invert_partial_permutation(&workspace.column_permutation, result.pivot_count),
         result.num_fp_operations,
     )
+}
+
+fn invert_partial_permutation(permutation: &[usize], count: usize) -> Vec<usize> {
+    let mut inverse = vec![0; count];
+    for (input, &position) in permutation.iter().enumerate() {
+        if position != INVALID && position < count {
+            inverse[position] = input;
+        }
+    }
+    inverse
 }
 
 #[cfg(test)]

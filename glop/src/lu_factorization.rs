@@ -179,6 +179,10 @@ impl LuFactorization {
                 }
             }
         }
+        self.markowitz_workspace.recycle_direct_permutations(
+            std::mem::take(&mut self.row_permutation),
+            std::mem::take(&mut self.column_permutation),
+        );
         let factors = markowitz::factorize(
             matrix,
             parameters,
@@ -225,16 +229,23 @@ impl LuFactorization {
         if rows != columns {
             return Err(FactorizationError::NonSquare { rows, columns });
         }
+        let contains_nonfinite = matrix.contains_nonfinite();
         for &column in selected_columns {
             if column >= matrix.num_cols().to_usize() {
                 return Err(FactorizationError::DimensionMismatch);
             }
-            for (_, value) in matrix.column(ColIndex::from_usize(column)).iter() {
-                if !value.is_finite() {
-                    return Err(FactorizationError::NonFinite);
+            if contains_nonfinite {
+                for (_, value) in matrix.column(ColIndex::from_usize(column)).iter() {
+                    if !value.is_finite() {
+                        return Err(FactorizationError::NonFinite);
+                    }
                 }
             }
         }
+        self.markowitz_workspace.recycle_direct_permutations(
+            std::mem::take(&mut self.row_permutation),
+            std::mem::take(&mut self.column_permutation),
+        );
         let factors = markowitz::factorize_selected_compact(
             matrix,
             selected_columns,
@@ -259,16 +270,18 @@ impl LuFactorization {
             deterministic_time_for_fp_operations(factors.num_fp_operations);
         self.lower.transpose_into(&mut self.transpose_lower);
         self.upper.transpose_into(&mut self.transpose_upper);
-        let inverse_row_permutation = factors.row_permutation;
-        let inverse_column_permutation = factors.column_permutation;
-        // GLOP reassigns retained permutation storage on every refactorization.
-        self.row_permutation.resize(rows, 0);
-        self.column_permutation.resize(columns, 0);
-        for (position, &row) in inverse_row_permutation.iter().enumerate() {
-            self.row_permutation[row] = position;
+        self.row_permutation = factors.row_permutation;
+        self.column_permutation = factors.column_permutation;
+        // Markowitz writes the input-to-pivot permutations directly, as GLOP
+        // does. Populate the inverse once, retaining its storage for the next
+        // refactorization rather than constructing and re-inverting pivot lists.
+        self.inverse_row_permutation.resize(rows, 0);
+        self.inverse_column_permutation.resize(columns, 0);
+        for (row, &position) in self.row_permutation.iter().enumerate() {
+            self.inverse_row_permutation[position] = row;
         }
-        for (position, &column) in inverse_column_permutation.iter().enumerate() {
-            self.column_permutation[column] = position;
+        for (column, &position) in self.column_permutation.iter().enumerate() {
+            self.inverse_column_permutation[position] = column;
         }
         if let Some(stats) = factors.stats {
             self.markowitz_stats.add(
@@ -293,17 +306,6 @@ impl LuFactorization {
             );
         }
         self.is_identity_factorization = false;
-        let old_inverse_rows =
-            std::mem::replace(&mut self.inverse_row_permutation, inverse_row_permutation);
-        let old_inverse_columns = std::mem::replace(
-            &mut self.inverse_column_permutation,
-            inverse_column_permutation,
-        );
-        // Return the previous permutation buffers to Markowitz. Its next
-        // refactorization fills them in place, as GLOP does with row_perm and
-        // col_perm owned by the retained LU object.
-        self.markowitz_workspace
-            .recycle_pivot_permutations(old_inverse_rows, old_inverse_columns);
         self.parameters = parameters.clone();
         self.deterministic_time_of_last_factorization = deterministic_time_of_last_factorization;
         let scratchpad = self.dense_zero_scratchpad.get_mut();
@@ -1414,6 +1416,73 @@ mod tests {
         }
         result.clean_up();
         result
+    }
+
+    #[test]
+    fn selected_compact_refactorization_reuses_direct_permutation_storage() {
+        let source = CompactSparseMatrix::from_sparse(&matrix(&[
+            &[2.0, 1.0, 0.0],
+            &[0.0, 3.0, 1.0],
+            &[1.0, 0.0, 4.0],
+        ]));
+        let parameters = GlopParameters::default();
+        let mut factorization = LuFactorization::new();
+        factorization
+            .compute_factorization_selected_compact_with_parameters(
+                &source,
+                &[0, 1, 2],
+                &parameters,
+            )
+            .unwrap();
+        let row_storage = factorization.row_permutation.as_ptr();
+        let column_storage = factorization.column_permutation.as_ptr();
+        let first_determinant = factorization.determinant();
+        factorization
+            .compute_factorization_selected_compact_with_parameters(
+                &source,
+                &[1, 0, 2],
+                &parameters,
+            )
+            .unwrap();
+        assert_eq!(factorization.row_permutation.as_ptr(), row_storage);
+        assert_eq!(factorization.column_permutation.as_ptr(), column_storage);
+        assert_eq!(
+            factorization.determinant().to_bits(),
+            (-first_determinant).to_bits()
+        );
+        for (row, &position) in factorization.row_permutation.iter().enumerate() {
+            assert_eq!(factorization.inverse_row_permutation[position], row);
+        }
+        for (column, &position) in factorization.column_permutation.iter().enumerate() {
+            assert_eq!(factorization.inverse_column_permutation[position], column);
+        }
+    }
+
+    #[test]
+    fn selected_compact_checks_nonfinite_only_in_selected_columns() {
+        let mut source = SparseMatrix::new();
+        source.populate_from_zero(RowIndex::new(1), ColIndex::new(2));
+        source
+            .mutable_column(ColIndex::new(0))
+            .add_entry(RowIndex::new(0), 2.0);
+        source
+            .mutable_column(ColIndex::new(1))
+            .add_entry(RowIndex::new(0), f64::NAN);
+        let compact = CompactSparseMatrix::from_sparse(&source);
+        assert!(compact.contains_nonfinite());
+        let mut factorization = LuFactorization::new();
+        let parameters = GlopParameters::default();
+        factorization
+            .compute_factorization_selected_compact_with_parameters(&compact, &[0], &parameters)
+            .unwrap();
+        assert_eq!(
+            factorization.compute_factorization_selected_compact_with_parameters(
+                &compact,
+                &[1],
+                &parameters,
+            ),
+            Err(FactorizationError::NonFinite)
+        );
     }
 
     fn multiply(matrix: &[&[f64]], vector: &[f64], transpose: bool) -> Vec<f64> {
