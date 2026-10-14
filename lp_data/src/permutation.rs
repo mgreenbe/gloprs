@@ -152,7 +152,7 @@ pub fn apply_permutation<P: VectorIndex, V: VectorIndex, T: Clone>(
     result: &mut TypedVec<V, T>,
 ) {
     if permutation.is_empty() {
-        *result = input.clone();
+        result.clone_from(input);
         return;
     }
     assert_eq!(permutation.as_slice().len(), input.as_slice().len());
@@ -175,7 +175,7 @@ pub fn apply_inverse_permutation<P: VectorIndex, V: VectorIndex, T: Clone>(
     result: &mut TypedVec<V, T>,
 ) {
     if permutation.is_empty() {
-        *result = input.clone();
+        result.clone_from(input);
         return;
     }
     assert_eq!(permutation.as_slice().len(), input.as_slice().len());

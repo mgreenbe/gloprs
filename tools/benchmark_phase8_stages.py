@@ -77,6 +77,8 @@ def main() -> None:
                         default="netlib-fast96")
     parser.add_argument("--rust", type=Path, default=RUST,
                         help="release Rust adapter to compare with native GLOP")
+    parser.add_argument("--native", type=Path, default=NATIVE,
+                        help="reference adapter (also permits a saved Rust A/B binary)")
     parser.add_argument("--output", type=Path)
     options = parser.parse_args()
     if (options.trials < 1 or options.warmups < 0
@@ -103,7 +105,7 @@ def main() -> None:
                         "nonzeros": case.nonzeros}
         for stage in stages:
             if stage == "solve":
-                presolve_native = run(NATIVE, model, "presolve", 1)
+                presolve_native = run(options.native, model, "presolve", 1)
                 presolve_rust = run(options.rust, model, "presolve", 1)
                 presolve_native.pop("seconds")
                 presolve_rust.pop("seconds")
@@ -116,11 +118,11 @@ def main() -> None:
             repetitions = (options.presolve_repetitions if stage == "presolve"
                            else options.solve_repetitions)
             for _ in range(options.warmups):
-                run(NATIVE, model, stage, repetitions, options.wall_seconds)
+                run(options.native, model, stage, repetitions, options.wall_seconds)
                 run(options.rust, model, stage, repetitions, options.wall_seconds)
             times: dict[str, list[float]] = {"native": [], "rust": []}
             for trial in range(options.trials):
-                order = (("native", NATIVE), ("rust", options.rust))
+                order = (("native", options.native), ("rust", options.rust))
                 if trial % 2:
                     order = tuple(reversed(order))
                 outcomes = {}

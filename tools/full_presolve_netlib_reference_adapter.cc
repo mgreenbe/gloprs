@@ -376,6 +376,35 @@ int main(int argc, char** argv) {
               << " nonzeros " << lp.num_entries().value() << '\n';
     return EXIT_SUCCESS;
   }
+  if (argc >= 3 && std::strcmp(argv[2], "copy_timing") == 0) {
+    const int repetitions = argc >= 4 ? std::atoi(argv[3]) : 1;
+    if (repetitions <= 0) return EXIT_FAILURE;
+    int nonzeros = 0;
+    glop::LinearProgram copy;
+    const auto start = std::chrono::steady_clock::now();
+    for (int repetition = 0; repetition < repetitions; ++repetition) {
+      copy.PopulateFromLinearProgram(lp);
+      nonzeros = copy.num_entries().value();
+    }
+    const double seconds = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - start).count() / repetitions;
+    std::cout << std::setprecision(17) << "copy_seconds " << seconds
+              << " nonzeros " << nonzeros << '\n';
+    return EXIT_SUCCESS;
+  }
+  if (argc >= 3 && std::strcmp(argv[2], "matrix_copy_timing") == 0) {
+    const int repetitions = argc >= 4 ? std::atoi(argv[3]) : 1;
+    int nonzeros = 0;
+    glop::SparseMatrix copy;
+    const auto start = std::chrono::steady_clock::now();
+    for (int repetition = 0; repetition < repetitions; ++repetition) {
+      copy.PopulateFromSparseMatrix(lp.GetSparseMatrix());
+      nonzeros = copy.num_entries().value();
+    }
+    const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() / repetitions;
+    std::cout << std::setprecision(17) << "matrix_copy_seconds " << seconds << " nonzeros " << nonzeros << '\n';
+    return EXIT_SUCCESS;
+  }
   if (argc >= 3 && std::strcmp(argv[2], "presolve_timing") == 0) {
     const int repetitions = argc >= 4 ? std::atoi(argv[3]) : 1;
     if (repetitions <= 0) return EXIT_FAILURE;

@@ -984,7 +984,7 @@ impl SparseMatrix {
         assert_eq!(destination_by_source.len(), self.columns.len());
         let mut permuted = vec![SparseColumn::new(); self.columns.len()];
         for (source, &destination) in destination_by_source.iter().enumerate() {
-            permuted[destination] = self.columns[source].clone();
+            permuted[destination].clone_from(&self.columns[source]);
         }
         self.columns = permuted;
     }

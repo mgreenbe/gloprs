@@ -86,10 +86,24 @@ pub const fn row_to_int_index(row: RowIndex) -> GlopIndex {
 }
 
 /// A vector that can only be indexed with its logical LP index type.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Debug, Default, Eq, PartialEq)]
 pub struct TypedVec<I, T> {
     values: Vec<T>,
     index: PhantomData<fn(I) -> I>,
+}
+
+impl<I, T: Clone> Clone for TypedVec<I, T> {
+    fn clone(&self) -> Self {
+        Self {
+            values: self.values.clone(),
+            index: PhantomData,
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        // Match upstream vector assignment: retain the destination allocation.
+        self.values.clone_from(&source.values);
+    }
 }
 
 pub trait VectorIndex: Copy {
@@ -529,8 +543,13 @@ impl<I: VectorIndex> Iterator for BitOnesIter<'_, I> {
 impl<I: VectorIndex> BitVec<I> {
     /// GLOP's branchless dual-infeasibility membership test: the conditions
     /// are mutually exclusive, so at most one selected bit can be nonzero.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is outside either bitset.
     #[must_use]
     #[inline]
+    #[allow(unsafe_code)]
     pub fn conditional_xor_of_two_bits(
         index: I,
         use_first: bool,
@@ -539,11 +558,17 @@ impl<I: VectorIndex> BitVec<I> {
         second: &Self,
     ) -> bool {
         let position = index.to_usize();
-        debug_assert!(position < first.len && position < second.len);
+        assert!(position < first.len && position < second.len);
         let word = position / 64;
         let bit = position % 64;
-        ((u64::from(use_first) << bit) & first.words[word])
-            ^ ((u64::from(use_second) << bit) & second.words[word])
+        // SAFETY: the assertion above checks both logical lengths, and each
+        // bitset stores ceil(len / 64) words. This preserves a safe public API
+        // while avoiding redundant physical-vector bounds checks on pricing
+        // candidates, matching GLOP's direct bucket reads.
+        let first_word = unsafe { *first.words.get_unchecked(word) };
+        let second_word = unsafe { *second.words.get_unchecked(word) };
+        ((u64::from(use_first) << bit) & first_word)
+            ^ ((u64::from(use_second) << bit) & second_word)
             != 0
     }
 
@@ -907,6 +932,27 @@ pub fn deterministic_time_for_fp_operations(operations: i64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn typed_vec_clone_from_reuses_destination_storage() {
+        let mut destination = TypedVec::<ColIndex, String>::new();
+        destination.reserve(ColIndex::new(16));
+        destination.push("old".to_owned());
+        let capacity = destination.capacity();
+        let source = TypedVec::<ColIndex, String>::from_vec(vec!["new".to_owned()]);
+        destination.clone_from(&source);
+        assert_eq!(destination, source);
+        assert_eq!(destination.capacity(), capacity);
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion failed")]
+    fn conditional_xor_rejects_out_of_range_index() {
+        let first = ColBitVec::new(ColIndex::new(1));
+        let second = ColBitVec::new(ColIndex::new(1));
+        let _ =
+            ColBitVec::conditional_xor_of_two_bits(ColIndex::new(1), true, &first, false, &second);
+    }
 
     #[test]
     fn typed_vectors_use_logical_indices() {

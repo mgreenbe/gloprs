@@ -55,6 +55,10 @@ def main() -> None:
                         default="netlib-fast96")
     parser.add_argument("--mode", choices=("default", "raw", "both"), default="default")
     parser.add_argument("--wall-seconds", type=float, default=20.0)
+    parser.add_argument("--native", type=Path, default=NATIVE,
+                        help="reference adapter (or saved Rust A/B binary)")
+    parser.add_argument("--rust", type=Path, default=RUST,
+                        help="Rust public-solver adapter")
     parser.add_argument("--output", type=Path)
     options = parser.parse_args()
     if options.trials < 1 or options.warmups < 0:
@@ -86,10 +90,10 @@ def main() -> None:
             trial_outcomes: list[dict[str, tuple[str, int, int]]] = []
             limited_trials: list[bool] = []
             for _ in range(options.warmups):
-                run(NATIVE, model, mode, options.wall_seconds)
-                run(RUST, model, mode, options.wall_seconds)
+                run(options.native, model, mode, options.wall_seconds)
+                run(options.rust, model, mode, options.wall_seconds)
             for trial in range(options.trials):
-                order = (("native", NATIVE), ("rust", RUST))
+                order = (("native", options.native), ("rust", options.rust))
                 if trial % 2:
                     order = tuple(reversed(order))
                 outcomes: dict[str, tuple[str, int, int]] = {}

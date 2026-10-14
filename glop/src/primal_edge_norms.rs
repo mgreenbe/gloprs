@@ -4,7 +4,9 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use lp_data::lp_types::{ColBitVec, ColIndex, VectorIndex, deterministic_time_for_fp_operations};
-use lp_data::lp_utils::{precise_squared_norm, scattered_squared_norm};
+use lp_data::lp_utils::{
+    clear_and_resize_vector_with_non_zeros, precise_squared_norm, scattered_squared_norm,
+};
 use lp_data::scattered_vector::{ScatteredColumn, ScatteredRow};
 use lp_data::sparse::{CompactSparseMatrix, SparseMatrix, ValidatedCompactRows};
 
@@ -263,7 +265,10 @@ impl PrimalEdgeNorms {
                     as f64)
                     < 2.0 * threshold
             {
-                self.direction_left_inverse.clear();
+                clear_and_resize_vector_with_non_zeros(
+                    ColIndex::from_usize(size),
+                    &mut self.direction_left_inverse,
+                );
                 for entry in direction {
                     // GLOP writes through operator[] here. It does not mark
                     // sparse-mask bits: the subsequent triangular solve may

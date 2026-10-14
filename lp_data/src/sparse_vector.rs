@@ -45,7 +45,7 @@ impl SparseEntry<ColIndex> {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct SparseVector<I> {
     // GLOP keeps indices and coefficients in two contiguous regions of one
     // allocation. Rust cannot safely split one untyped allocation this way,
@@ -54,6 +54,24 @@ pub struct SparseVector<I> {
     indices: Vec<I>,
     coefficients: Vec<Fractional>,
     may_contain_duplicates: Cell<bool>,
+}
+
+impl<I: Clone> Clone for SparseVector<I> {
+    fn clone(&self) -> Self {
+        Self {
+            indices: self.indices.clone(),
+            coefficients: self.coefficients.clone(),
+            may_contain_duplicates: Cell::new(self.may_contain_duplicates.get()),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        // Reuse both column buffers, as upstream SparseVector assignment does.
+        self.indices.clone_from(&source.indices);
+        self.coefficients.clone_from(&source.coefficients);
+        self.may_contain_duplicates
+            .set(source.may_contain_duplicates.get());
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -595,7 +613,12 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
         );
     }
 
-    #[allow(clippy::comparison_chain, clippy::float_cmp, unsafe_code)] // Preserve upstream branch order and exact-zero preconditions.
+    #[allow(clippy::comparison_chain, clippy::float_cmp, unsafe_code)]
+    // Preserve upstream branch order and exact-zero preconditions.
+    // Keep this merge out of the doubleton-preprocessor body, as upstream's
+    // sparse-vector kernel is. On neos-1445765, inlining it inflated the
+    // caller enough to make presolve about 18% slower in paired M2 trials.
+    #[inline(never)]
     fn add_multiple_to_sparse_vector_with_common_index(
         &self,
         multiplier: Fractional,
@@ -1032,6 +1055,30 @@ impl RandomAccessSparseColumn {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sparse_vector_clone_from_reuses_both_column_buffers() {
+        let mut destination = SparseColumn::new();
+        destination.reserve(16);
+        destination.add_entry(RowIndex::new(2), 3.0);
+        let capacities = (
+            destination.indices.capacity(),
+            destination.coefficients.capacity(),
+        );
+        let mut source = SparseColumn::new();
+        source.add_entry(RowIndex::new(1), 4.0);
+        source.may_contain_duplicates.set(true);
+        destination.clone_from(&source);
+        assert_eq!(destination.entry(0), source.entry(0));
+        assert!(destination.may_contain_duplicates.get());
+        assert_eq!(
+            (
+                destination.indices.capacity(),
+                destination.coefficients.capacity()
+            ),
+            capacities
+        );
+    }
 
     #[test]
     fn partial_permutation_compacts_in_place_and_preserves_capacity() {

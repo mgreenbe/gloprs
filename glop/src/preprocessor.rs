@@ -3388,8 +3388,10 @@ impl ShiftVariableBoundsPreprocessor {
     ///
     /// Returns `InvalidProblem` on shift overflow.
     pub fn run(&mut self, lp: &mut LinearProgram) -> Result<bool, ProblemStatus> {
-        self.variable_initial_lbs = lp.variable_lower_bounds().clone();
-        self.variable_initial_ubs = lp.variable_upper_bounds().clone();
+        self.variable_initial_lbs
+            .clone_from(lp.variable_lower_bounds());
+        self.variable_initial_ubs
+            .clone_from(lp.variable_upper_bounds());
         let num_cols = lp.num_variables().to_usize();
         let needs_shift = (0..num_cols).any(|position| {
             let col = ColIndex::from_usize(position);

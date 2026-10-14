@@ -27,6 +27,38 @@ fn main() {
         );
         return;
     }
+    if matches!(env::args().nth(2).as_deref(), Some("copy_timing")) {
+        let repetitions: u32 = env::args()
+            .nth(3)
+            .map_or(1, |value| value.parse().expect("positive repetitions"));
+        assert!(repetitions > 0);
+        let mut copy = lp_data::lp_data::LinearProgram::new();
+        let start = Instant::now();
+        let mut nonzeros = 0;
+        for _ in 0..repetitions {
+            copy.populate_from_linear_program(&lp);
+            nonzeros = std::hint::black_box(copy.num_entries().value());
+        }
+        println!(
+            "copy_seconds {:.17} nonzeros {nonzeros}",
+            start.elapsed().as_secs_f64() / f64::from(repetitions)
+        );
+        return;
+    }
+    if matches!(env::args().nth(2).as_deref(), Some("matrix_copy_timing")) {
+        let repetitions: u32 = env::args().nth(3).unwrap().parse().unwrap();
+        let mut copy = lp_data::sparse::SparseMatrix::default();
+        let start = Instant::now();
+        for _ in 0..repetitions {
+            copy.populate_from_sparse(lp.matrix());
+            std::hint::black_box(copy.num_entries());
+        }
+        println!(
+            "matrix_copy_seconds {:.17}",
+            start.elapsed().as_secs_f64() / f64::from(repetitions)
+        );
+        return;
+    }
     if matches!(env::args().nth(2).as_deref(), Some("presolve_timing")) {
         let repetitions: u32 = env::args()
             .nth(3)
