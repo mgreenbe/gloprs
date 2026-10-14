@@ -8,6 +8,20 @@ when timing-neutral; do not trade trajectory or KKT agreement for speed.
 
 ## Current baseline
 
+- A pivot-loop clock-fidelity repair replaces Rust's 100-element scan per
+  limit check with GLOP's `RunningMax` ring and reuses the same clock sample
+  for the deadline check. Paired Rust A/B solves improve `graph` about
+  0.4–0.9% and `milo` about 0.5–0.7%; `cvs` is neutral. Fourteen capped
+  presolved-state fingerprints for those three models are bit-exact against
+  native, including basis, values, reduced costs, deterministic clocks, and
+  refactorization counts. Remaining gaps are pivot-time performance, not
+  observed path divergence at those checkpoints.
+- Solver-owned middle-product updates now append and consume the right
+  scratchpad's touched rows in upstream order, including duplicates, and
+  clear values in the compact-column append. This removes the Rust-only
+  sparse-mask rebuild. Paired matched solves are now about 1.057x native for
+  `milo`, 1.086x for `graph`, and 1.042x for `cvs`; the remaining pivot-time
+  gaps still need localization.
 - The newest triangular-solve alignment mirrors GLOP's compile-time
   unit-diagonal dispatch and contiguous indexed traversal. `milo` matched
   solve improved about 2% but remains 1.066x native; `graph` remains 1.097x

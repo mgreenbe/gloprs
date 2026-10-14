@@ -1327,7 +1327,21 @@ impl BasisRepresentation {
             &mut right_update,
             LeftUpdateSource::Stored(left_index),
         );
-        right_update.clear();
+        // The stored-column path above follows GLOP's
+        // AddAndClearColumnWithNonZeros() and has already zeroed all touched
+        // values and cleared their list. Retain that ready-to-use scratchpad;
+        // early-refactorization/error paths still need the sparse clear.
+        if right_update.non_zeros().is_empty() {
+            debug_assert!(
+                right_update
+                    .values()
+                    .as_slice()
+                    .iter()
+                    .all(|&value| value == 0.0)
+            );
+        } else {
+            right_update.clear();
+        }
         self.right_update_scratch = Some(right_update);
         result
     }
@@ -1354,19 +1368,15 @@ impl BasisRepresentation {
         }
 
         let right_update_is_dense = right_update.non_zeros().is_empty();
-        if !right_update_is_dense {
-            // The partial solve deliberately leaves the scattered membership
-            // mask cleared. Rebuild it before accumulating `-U[:, p]`; unlike
-            // GLOP's AddAndClearColumnWithNonZeros() storage path, the Rust
-            // packed update is formed directly from the position list and
-            // therefore must not admit duplicate positions here.
-            right_update.repopulate_sparse_mask();
-        }
-        for (row, value) in self.factorization.column_of_upper(leaving_column) {
-            right_update.add(lp_data::lp_types::RowIndex::from_usize(row), -value);
-        }
         match left_update {
             LeftUpdateSource::Stored(index) => {
+                // GLOP accumulates -U[:, p] directly and records every row,
+                // including duplicates, for a clearing compact-column pass.
+                for (row, value) in self.factorization.column_of_upper(leaving_column) {
+                    let row = lp_data::lp_types::RowIndex::from_usize(row);
+                    right_update.values_mut()[row] -= value;
+                    right_update.non_zeros_mut().push(row);
+                }
                 // GLOP computes this product from its stored left column, then
                 // appends the right scratchpad and that same compact column.
                 let storage = self.left_storage.get_mut();
@@ -1378,14 +1388,16 @@ impl BasisRepresentation {
                     });
                 }
                 self.basis.install(leaving_column, entering_column);
-                self.updates.update_from_compact(
-                    right_update,
-                    right_update_is_dense,
-                    storage.column(index),
-                    u_dot_v,
-                );
+                self.updates
+                    .update_from_compact(right_update, storage.column(index), u_dot_v);
             }
             LeftUpdateSource::Scattered(left_update) => {
+                if !right_update_is_dense {
+                    right_update.repopulate_sparse_mask();
+                }
+                for (row, value) in self.factorization.column_of_upper(leaving_column) {
+                    right_update.add(lp_data::lp_types::RowIndex::from_usize(row), -value);
+                }
                 let u: Vec<_> = if right_update_is_dense {
                     right_update
                         .values()

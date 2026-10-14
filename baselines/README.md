@@ -52,6 +52,11 @@ python3 tools/generate_phase8_extra_trajectories.py --binary <instrumented-nativ
 cargo test --release -p gloprs-glop --test phase8_extra_trajectories -- --ignored
 ```
 
+For the same three presolved performance targets (`milo`, `graph`, and `cvs`),
+`python3 tools/validate_phase8_nmm_presolved_checkpoints.py` checks 14 pinned
+native/Rust capped-state fingerprints, including basis, values, reduced costs,
+deterministic clocks, and refactorization count.
+
 The fixture generator requires a temporary diagnostic native build as described
 in `tools/generate_netlib_trajectory_fixture.py`. Validate gloprs against it
 with a fresh 20-second wall-clock limit for every model:

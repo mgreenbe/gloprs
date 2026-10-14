@@ -36,6 +36,44 @@ above). The local raw A/B, stage, and selected-view LU measurements are under
 `target/phase8-*`; commands use `benchmark_phase8_stages.py` and
 `benchmark_netlib_factorizations.py` with `--selected-source`.
 
+## Clock and presolved-state follow-up
+
+The Rust wall-limit check was scanning all 100 saved intervals on every call.
+Pinned GLOP uses `RunningMax`, which recomputes only when an evicted maximum
+must be replaced. Porting its ring update gives 0.991x `graph` and 0.993x
+`milo` Rust A/B solve time in an 11-trial run (0.996x and 0.995x in a
+21-trial combined recheck); `cvs` is timing-neutral. Using the same clock
+sample for interval and deadline comparison, as upstream does, is also
+timing-neutral. Native/Rust time-limit traces and deterministic clock-prefix
+tests pass.
+
+The opt-in `tools/validate_phase8_nmm_presolved_checkpoints.py` gate pins
+14 native presolved states across these models. Rust matches each exactly for
+status, iteration, basis hash, variable-value hash, reduced-cost hash,
+deterministic-clock bits, and refactorization count. These checkpoints do not
+prove every intermediate pivot, but they rule out a different state at the
+sampled caps. Fixed-basis RHS probes on `graph` show some large *ratios* for
+very short FTRAN calls; the summed absolute difference is under a millisecond
+and does not account for the whole-solve excess. Accumulated basis updates
+between refactorizations remain a better localization target.
+
+The solver-owned middle-product update was then aligned with GLOP's compact
+column append-and-clear path: duplicate touched rows are retained in traversal
+order, their final values are appended once, and the scratchpad is cleared on
+consume. This removes a Rust-only sparse-mask rebuild. Two serial Rust A/B
+rechecks gave `graph` 0.989x and 0.992x, and `cvs` 0.996x twice; `milo` was
+0.994x in the first recheck. Matched native-relative median presolved-solve
+times after both changes are 1.057x for `milo` (15 trials), 1.086x for
+`graph` (15), and 1.042x for `cvs` (7). These remain real gaps, most notably
+`graph`; selected-view LU and fixed-basis RHS probes explain only a minority
+of its whole-solve excess. The duplicate-row unit test, direct pivot fixture,
+14 presolved-state checkpoints, and fast-96 trajectory gate pass.
+The final one-pass 213-model public recheck after this update had matching
+statuses and iteration counts throughout, no timeouts, and a 0.995x aggregate
+Rust/native time ratio. `capri` alone differed by one objective bit, as in
+the preexisting numerical tolerance checks. This one-pass aggregate is not a
+substitute for the repeated matched timings above.
+
 ## Fresh paired rerun at `8d51e03` (14 October 2026)
 
 Two independent serial passes covered all 213 deduplicated models. Each pass

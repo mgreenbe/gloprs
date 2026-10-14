@@ -199,31 +199,26 @@ impl RankOneUpdateFactorization {
     /// directly, avoiding per-pivot temporary u/v allocations.
     pub(crate) fn update_from_compact(
         &mut self,
-        right: &ScatteredColumn,
-        right_is_dense: bool,
+        right: &mut ScatteredColumn,
         left: CompactColumn<'_>,
         u_dot_v: f64,
     ) {
         let u_start = self.entry_rows.len();
-        if right_is_dense {
-            for (row, &coefficient) in right.values().as_slice().iter().enumerate() {
-                if coefficient != 0.0 {
-                    self.entry_rows
-                        .push(u32::try_from(row).expect("update row fits 32 bits"));
-                    self.entry_coefficients.push(coefficient);
-                }
-            }
-        } else {
-            for entry in right {
-                let coefficient = entry.coefficient();
-                if coefficient != 0.0 {
-                    self.entry_rows.push(
-                        u32::try_from(entry.row().to_usize()).expect("update row fits 32 bits"),
-                    );
-                    self.entry_coefficients.push(coefficient);
-                }
+        // Match CompactSparseMatrix::AddAndClearColumnWithNonZeros(): the
+        // touched list can contain duplicates. The first visit stores and
+        // clears the final value; subsequent visits see zero.
+        let (values, touched) = right.mutable_parts();
+        for &row in touched.iter() {
+            let index = row.to_usize();
+            let coefficient = values[index];
+            if coefficient != 0.0 {
+                self.entry_rows
+                    .push(u32::try_from(index).expect("update row fits 32 bits"));
+                self.entry_coefficients.push(coefficient);
+                values[index] = 0.0;
             }
         }
+        touched.clear();
         let u_end = self.entry_rows.len();
         let v_start = u_end;
         for (row, coefficient) in left.iter() {
@@ -394,6 +389,28 @@ impl RankOneUpdateFactorization {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lp_data::sparse::CompactSparseMatrix;
+
+    #[test]
+    fn compact_update_consumes_duplicate_touched_rows_once() {
+        let mut right = ScatteredColumn::new(RowIndex::new(3));
+        right.scatter_entry_without_mask(RowIndex::new(1), 2.0);
+        right.values_mut()[RowIndex::new(1)] -= 0.5;
+        right.non_zeros_mut().push(RowIndex::new(1));
+        right.scatter_entry_without_mask(RowIndex::new(2), -3.0);
+
+        let mut left = CompactSparseMatrix::default();
+        left.reset(RowIndex::new(3));
+        left.add_entry_to_current_column(RowIndex::new(0), 4.0);
+        left.close_current_column();
+        let mut updates = RankOneUpdateFactorization::default();
+        updates.update_from_compact(&mut right, left.column(ColIndex::new(0)), 0.0);
+
+        assert_eq!(updates.entry_rows, [1, 2, 0]);
+        assert_eq!(updates.entry_coefficients, [1.5, -3.0, 4.0]);
+        assert!(right.values().as_slice().iter().all(|&value| value == 0.0));
+        assert!(right.non_zeros().is_empty());
+    }
 
     #[test]
     fn packed_dot_preserves_four_accumulator_bits() {

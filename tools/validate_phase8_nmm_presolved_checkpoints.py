@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""Check pinned native and Rust presolved simplex states at selected NMM caps.
+
+The fingerprints cover the basis, variable values, reduced costs,
+deterministic clocks, and refactorization count. They do not by themselves
+prove that every intermediate pivot is identical.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import subprocess
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+DATASETS = ROOT.parent / "datasets"
+NATIVE = ROOT / "target/native/full_presolve_netlib_reference_adapter"
+RUST = ROOT / "target/release/examples/full_presolve_netlib"
+
+# Generated with the pinned native adapter on the nmm0-50k manifest inputs.
+EXPECTED = {
+    ("graph20-20-1rand", 0): "fingerprint PRIMAL_FEASIBLE 0 18115681209554895603 5528257989551234239 10400167623947623615 4568592036833713431 4561811347695373883 0",
+    ("graph20-20-1rand", 100): "fingerprint PRIMAL_FEASIBLE 100 14581738113941871096 5528257989551234239 13098879331905215679 4571020562273805748 4570584292164776498 2",
+    ("graph20-20-1rand", 500): "fingerprint PRIMAL_FEASIBLE 500 16338097337534949198 5528257989551234239 289771178454326463 4581407385533742335 4581250026159882308 8",
+    ("graph20-20-1rand", 1000): "fingerprint PRIMAL_FEASIBLE 1000 8566681371569910229 5528257989551234239 11970651559149873601 4586490873498072704 4586281339814443199 16",
+    ("graph20-20-1rand", 3092): "fingerprint OPTIMAL 3092 4161816976057999248 5528257989551234239 8863115078037494758 4598868927510086532 4596680109487759518 48",
+    ("milo-v12-6-r2-40-1", 0): "fingerprint INIT 0 8920254665387033403 15283696316252943947 17040710990381795511 4555035650596926254 4553825839333596087 0",
+    ("milo-v12-6-r2-40-1", 100): "fingerprint INIT 100 3794359598470875377 6276560499960737137 5219104895884864181 4564652523409668612 4563795469233259992 1",
+    ("milo-v12-6-r2-40-1", 500): "fingerprint PRIMAL_FEASIBLE 500 13592111565212047149 16385771185778707919 2489901147230856210 4580997200447065718 4580723195392898598 8",
+    ("milo-v12-6-r2-40-1", 1000): "fingerprint PRIMAL_FEASIBLE 1000 9338624560440972321 9950180193893516891 3249617395028678693 4588518049073291162 4587967952177033583 36",
+    ("milo-v12-6-r2-40-1", 2346): "fingerprint OPTIMAL 2346 16130391205911220686 6183047438706081503 6762916642960583443 4595177720822130908 4594653123667251471 62",
+    ("cvs16r128-89", 0): "fingerprint PRIMAL_FEASIBLE 0 2970228910462045599 13552159626220423999 5878025861181098815 4564448961262493943 0 0",
+    ("cvs16r128-89", 1000): "fingerprint PRIMAL_FEASIBLE 1000 10300188548051297329 18321471631605779263 870023075545107263 4568658885946050894 4568332152603331332 7",
+    ("cvs16r128-89", 10000): "fingerprint PRIMAL_FEASIBLE 10000 10989969267392845445 3850791535228120662 3258710604938244831 4607898109121648742 4607545836234737531 137",
+    ("cvs16r128-89", 19626): "fingerprint OPTIMAL 19626 11675935993283387378 7650528134875759102 9149524500111334250 4614084954854536877 4613458725768507304 285",
+}
+
+
+def fingerprint(binary: Path, model: Path, cap: int) -> str:
+    result = subprocess.run(
+        [binary, model, str(cap), "fingerprint", "60"],
+        check=True, capture_output=True, text=True, timeout=90,
+    )
+    return result.stdout.strip()
+
+
+def main() -> None:
+    manifest = json.loads((DATASETS / "nmm0-50k/manifest.json").read_text())
+    cases = {case["name"]: case for case in manifest["instances"]}
+    for (name, cap), expected in EXPECTED.items():
+        case = cases[name]
+        model = DATASETS / case["path"]
+        assert hashlib.sha256(model.read_bytes()).hexdigest() == case["sha256"], name
+        for label, binary in (("native", NATIVE), ("rust", RUST)):
+            actual = fingerprint(binary, model, cap)
+            assert actual == expected, (label, name, cap, expected, actual)
+        print(f"{name} cap={cap}: both pinned fingerprints match", flush=True)
+
+
+if __name__ == "__main__":
+    main()
