@@ -14,7 +14,6 @@
     clippy::too_many_lines
 )]
 
-use std::borrow::Cow;
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -64,13 +63,14 @@ pub enum SimplexPhase {
 #[derive(Clone, Copy)]
 enum EquationMatrix<'a> {
     Sparse(&'a SparseMatrix),
+    SparseWithSlacks(&'a SparseMatrix),
     Compact(&'a Rc<CompactSparseMatrix>),
 }
 
 impl EquationMatrix<'_> {
     fn num_rows(self) -> RowIndex {
         match self {
-            Self::Sparse(matrix) => matrix.num_rows(),
+            Self::Sparse(matrix) | Self::SparseWithSlacks(matrix) => matrix.num_rows(),
             Self::Compact(matrix) => matrix.num_rows(),
         }
     }
@@ -78,6 +78,9 @@ impl EquationMatrix<'_> {
     fn num_cols(self) -> ColIndex {
         match self {
             Self::Sparse(matrix) => matrix.num_cols(),
+            Self::SparseWithSlacks(matrix) => {
+                ColIndex::from_usize(matrix.num_cols().to_usize() + matrix.num_rows().to_usize())
+            }
             Self::Compact(matrix) => matrix.num_cols(),
         }
     }
@@ -85,6 +88,13 @@ impl EquationMatrix<'_> {
     fn column_len(self, column: ColIndex) -> usize {
         match self {
             Self::Sparse(matrix) => matrix.column(column).num_entries(),
+            Self::SparseWithSlacks(matrix) => {
+                if column < matrix.num_cols() {
+                    matrix.column(column).num_entries()
+                } else {
+                    1
+                }
+            }
             Self::Compact(matrix) => matrix.column(column).len(),
         }
     }
@@ -94,6 +104,18 @@ impl EquationMatrix<'_> {
             Self::Sparse(matrix) => {
                 let entry = matrix.column(column).entry(position);
                 (entry.index(), entry.coefficient())
+            }
+            Self::SparseWithSlacks(matrix) => {
+                if column < matrix.num_cols() {
+                    let entry = matrix.column(column).entry(position);
+                    (entry.index(), entry.coefficient())
+                } else {
+                    debug_assert_eq!(position, 0);
+                    (
+                        RowIndex::from_usize(column.to_usize() - matrix.num_cols().to_usize()),
+                        1.0,
+                    )
+                }
             }
             Self::Compact(matrix) => {
                 let column = matrix.column(column);
@@ -108,6 +130,11 @@ impl EquationMatrix<'_> {
     fn to_compact_shared(self) -> Rc<CompactSparseMatrix> {
         match self {
             Self::Sparse(matrix) => Rc::new(CompactSparseMatrix::from_sparse(matrix)),
+            Self::SparseWithSlacks(matrix) => {
+                let mut compact = CompactSparseMatrix::default();
+                compact.populate_from_sparse_and_add_slacks(matrix);
+                Rc::new(compact)
+            }
             Self::Compact(matrix) => Rc::clone(matrix),
         }
     }
@@ -193,7 +220,13 @@ impl<'a> EquationFormView<'a> {
     }
 
     fn objective_coefficient_for_minimization(&self, column: ColIndex) -> f64 {
-        let value = self.objective[column];
+        let value = if matches!(self.matrix, EquationMatrix::SparseWithSlacks(_))
+            && column >= self.first_slack
+        {
+            0.0
+        } else {
+            self.objective[column]
+        };
         if self.maximization { -value } else { value }
     }
 
@@ -370,6 +403,71 @@ mod phase_one_breakpoint_tests {
         let rows: Vec<_> =
             std::iter::from_fn(|| heap.pop().map(|entry| entry.row.to_usize())).collect();
         assert_eq!(rows, [0, 1, 2, 3, 4, 5]);
+    }
+}
+
+#[cfg(test)]
+mod structural_equation_view_tests {
+    use super::{
+        ColIndex, CompactSparseMatrix, EquationMatrix, LinearProgram, RowIndex, VectorIndex,
+    };
+
+    #[test]
+    fn virtual_slacks_match_materialized_equation_form() {
+        let mut lp = LinearProgram::default();
+        let x = lp.create_new_variable();
+        let y = lp.create_new_variable();
+        let r0 = lp.create_new_constraint();
+        let r1 = lp.create_new_constraint();
+        lp.set_coefficient(r0, x, 2.0);
+        lp.set_coefficient(r1, x, -3.0);
+        lp.set_coefficient(r1, y, 4.0);
+        lp.set_constraint_bounds(r0, -2.0, 5.0);
+        lp.set_constraint_bounds(r1, 1.0, 7.0);
+        let mut materialized = LinearProgram::default();
+        materialized.populate_from_linear_program(&lp);
+        materialized.add_slack_variables_where_necessary(false);
+        let virtual_matrix = EquationMatrix::SparseWithSlacks(lp.matrix());
+        let compact = virtual_matrix.to_compact_shared();
+        let expected = CompactSparseMatrix::from_sparse(materialized.matrix());
+        assert_eq!(virtual_matrix.num_rows(), materialized.num_constraints());
+        assert_eq!(virtual_matrix.num_cols(), materialized.num_variables());
+        for column in 0..virtual_matrix.num_cols().to_usize() {
+            let column = ColIndex::from_usize(column);
+            assert_eq!(
+                virtual_matrix.column_len(column),
+                expected.column(column).len()
+            );
+            for position in 0..virtual_matrix.column_len(column) {
+                let entry = virtual_matrix.entry(column, position);
+                assert_eq!(
+                    entry,
+                    (
+                        expected.column(column).entry_row(position),
+                        expected.column(column).entry_coefficient(position),
+                    )
+                );
+                assert_eq!(
+                    entry,
+                    (
+                        compact.column(column).entry_row(position),
+                        compact.column(column).entry_coefficient(position),
+                    )
+                );
+            }
+        }
+        for row in 0..2 {
+            let slack = ColIndex::from_usize(2 + row);
+            let row = RowIndex::from_usize(row);
+            assert_eq!(
+                materialized.variable_lower_bounds()[slack],
+                -lp.constraint_upper_bounds()[row]
+            );
+            assert_eq!(
+                materialized.variable_upper_bounds()[slack],
+                -lp.constraint_lower_bounds()[row]
+            );
+        }
     }
 }
 
@@ -2205,21 +2303,48 @@ impl RevisedSimplex {
         compact_matrix_prepopulated: bool,
     ) -> Result<(), FactorizationError> {
         self.recovered_warm_basis = None;
-        // An already equation-form model can be viewed directly, as GLOP
-        // does. Only a structural LP needs a local slack-augmented copy.
-        let equation_lp = if lp.is_in_equation_form() {
-            Cow::Borrowed(lp)
-        } else {
+        if lp.is_in_equation_form() {
+            return self.initialize_equation_form(
+                &EquationFormView::from_lp(lp),
+                matrix_known_unchanged,
+                compact_matrix_prepopulated,
+            );
+        }
+        if lp.first_slack_variable().is_some() {
+            // Preserve the existing partial-slack repair path. A virtual
+            // identity block is only equivalent when no slacks exist yet.
             let mut converted = LinearProgram::default();
             converted.populate_from_linear_program(lp);
             converted.add_slack_variables_where_necessary(false);
-            Cow::Owned(converted)
+            return self.initialize_equation_form(
+                &EquationFormView::from_lp(&converted),
+                matrix_known_unchanged,
+                compact_matrix_prepopulated,
+            );
+        }
+        // GLOP augments the compact structural matrix with implicit slack
+        // columns. Only their bounds need storage; copying the whole LP first
+        // adds an allocation-heavy pass absent from the native path.
+        let rows = lp.num_constraints().to_usize();
+        let mut lower = Vec::with_capacity(lp.num_variables().to_usize() + rows);
+        let mut upper = Vec::with_capacity(lower.capacity());
+        lower.extend_from_slice(lp.variable_lower_bounds().as_slice());
+        upper.extend_from_slice(lp.variable_upper_bounds().as_slice());
+        for row in 0..rows {
+            lower.push(-lp.constraint_upper_bounds()[RowIndex::from_usize(row)]);
+            upper.push(-lp.constraint_lower_bounds()[RowIndex::from_usize(row)]);
+        }
+        let input = EquationFormView {
+            matrix: EquationMatrix::SparseWithSlacks(lp.matrix()),
+            lower_bounds: &lower,
+            upper_bounds: &upper,
+            objective: lp.objective_coefficients(),
+            first_slack: lp.num_variables(),
+            maximization: lp.is_maximization_problem(),
+            scaling: lp.objective_scaling_factor(),
+            offset: lp.objective_offset(),
         };
-        self.initialize_equation_form(
-            &EquationFormView::from_lp(&equation_lp),
-            matrix_known_unchanged,
-            compact_matrix_prepopulated,
-        )
+        self.initialize_equation_form(&input, matrix_known_unchanged, compact_matrix_prepopulated)
     }
 
     fn initialize_equation_form(
@@ -2354,7 +2479,8 @@ impl RevisedSimplex {
             basis = self.singleton_initial_basis(&mut info);
         }
         if !has_external_basis && self.parameters.initial_basis != InitialBasisHeuristic::None {
-            let mut crashed = RowToColMapping::from_vec(basis.clone());
+            // GLOP mutates the same basis buffer during crash construction.
+            let mut crashed = RowToColMapping::from_vec(std::mem::take(&mut basis));
             if matches!(
                 self.parameters.initial_basis,
                 InitialBasisHeuristic::Bixby | InitialBasisHeuristic::Triangular
@@ -2369,13 +2495,11 @@ impl RevisedSimplex {
                     }
                 }
             }
-            let crash_lower = DenseRow::from_vec(info.lower_bounds().to_vec());
-            let crash_upper = DenseRow::from_vec(info.upper_bounds().to_vec());
             let mut crash = InitialBasis::new(
                 &self.compact_matrix,
                 &self.objective,
-                &crash_lower,
-                &crash_upper,
+                info.lower_bounds(),
+                info.upper_bounds(),
                 info.variable_types(),
             );
             match self.parameters.initial_basis {
@@ -2419,12 +2543,12 @@ impl RevisedSimplex {
                     crashed[row] = ColIndex::new(self.first_slack_col.value() + row.value());
                 }
             }
-            basis = crashed.as_slice().to_vec();
+            basis = crashed.into_vec();
         }
         let had_recovered_warm_basis = self.recovered_warm_basis.is_some();
         if let Some(recovered) = self.recovered_warm_basis.take() {
             self.phase4_event("warm_added_row_recovered_basis_used");
-            basis = recovered.as_slice().to_vec();
+            basis = recovered.into_vec();
         }
         // FinishInitialization() uses a saved state as candidate columns.
         // Unless it supplies exactly one BASIC candidate per row, upstream
@@ -2443,7 +2567,7 @@ impl RevisedSimplex {
             let mut factorization = self.new_basis_representation(&slack_basis)?;
             let candidates: Vec<_> = info.is_basic().iter_ones().collect();
             let recovered = factorization.compute_initial_basis(&candidates)?;
-            basis = recovered.as_slice().to_vec();
+            basis = recovered.into_vec();
             candidate_factorization = Some(factorization);
             self.phase4_event("warm_changed_matrix_compute_initial_basis");
         }
@@ -2533,7 +2657,9 @@ impl RevisedSimplex {
                 return Err(FactorizationError::IllConditioned { upper_bound });
             }
         }
-        let info_before_advanced_basis = info.clone();
+        // Only TRIANGULAR can retry this initialization with an all-slack
+        // basis. GLOP does not copy VariablesInfo on the ordinary path.
+        let info_before_advanced_basis = triangular_crash_can_fall_back.then(|| info.clone());
         let unused_basic_variables = info.change_unused_basic_variables_to_free(&self.basis);
         if unused_basic_variables != 0
             && info.snap_free_variables_to_bound(
@@ -2552,7 +2678,7 @@ impl RevisedSimplex {
                 self.use_all_slack_basis();
                 self.phase4_event("initial_triangular_basis_fallback");
                 self.reinitialize_basis_representation(&mut basis_factorization, &self.basis)?;
-                info = info_before_advanced_basis;
+                info = info_before_advanced_basis.expect("triangular retry saved its state");
                 info.change_unused_basic_variables_to_free(&self.basis);
                 self.compute_initial_values(&info, &basis_factorization)?
             }

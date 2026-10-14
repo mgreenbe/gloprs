@@ -174,18 +174,48 @@ impl CompactSparseMatrix {
         *self = Self::from_matrix_view(matrix);
     }
 
+    /// Builds the structural columns followed by one identity slack per row.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the sparse matrix reports a negative or unrepresentable entry count.
     pub fn populate_from_sparse_and_add_slacks(&mut self, matrix: &SparseMatrix) {
-        self.reset(matrix.num_rows());
-        for position in 0..matrix.num_cols().to_usize() {
-            for entry in matrix.column(ColIndex::from_usize(position)) {
-                self.add_entry_to_current_column(entry.index(), entry.coefficient());
+        // Match GLOP's PopulateFromSparseMatrixAndAddSlacks: size the three
+        // contiguous arrays once, then fill each entry at its final offset.
+        // Repeated push/close operations otherwise grow three buffers while
+        // constructing every fresh simplex model.
+        let rows = matrix.num_rows().to_usize();
+        let structural_columns = matrix.num_cols().to_usize();
+        let columns = structural_columns + rows;
+        let entries = usize::try_from(matrix.num_entries().value())
+            .expect("nonnegative sparse entry count")
+            + rows;
+        self.num_rows = matrix.num_rows();
+        self.num_cols = ColIndex::from_usize(columns);
+        self.starts.resize(columns + 1, 0);
+        self.starts.fill(0);
+        self.coefficients.resize(entries, 0.0);
+        self.rows.resize(entries, RowIndex::new(0));
+        self.nonfinite_entries = 0;
+        let mut index = 0;
+        for column in 0..structural_columns {
+            self.starts[column] = index;
+            for entry in matrix.column(ColIndex::from_usize(column)) {
+                let value = entry.coefficient();
+                self.coefficients[index] = value;
+                self.rows[index] = entry.index();
+                self.nonfinite_entries += usize::from(!value.is_finite());
+                index += 1;
             }
-            self.close_current_column();
         }
-        for position in 0..matrix.num_rows().to_usize() {
-            self.add_entry_to_current_column(RowIndex::from_usize(position), 1.0);
-            self.close_current_column();
+        for row in 0..rows {
+            self.starts[structural_columns + row] = index;
+            self.coefficients[index] = 1.0;
+            self.rows[index] = RowIndex::from_usize(row);
+            index += 1;
         }
+        debug_assert_eq!(index, entries);
+        self.starts[columns] = index;
     }
 
     pub fn populate_from_transpose(&mut self, input: &Self) {

@@ -57,7 +57,7 @@ pub struct TriangularMatrix {
 #[derive(Clone, Debug, Default)]
 struct SymbolicWorkspace {
     stored: Vec<bool>,
-    touched: Vec<usize>,
+    sorted_stored: RowBitVec,
     nodes_to_explore: Vec<SymbolicNode>,
 }
 
@@ -276,7 +276,7 @@ impl TriangularMatrix {
         self.first_non_identity_column = 0;
         let symbolic = self.symbolic_workspace.get_mut();
         symbolic.stored.clear();
-        symbolic.touched.clear();
+        symbolic.sorted_stored.clear();
         symbolic.nodes_to_explore.clear();
         let permuted = &mut self.permuted_workspace;
         permuted.stored.clear();
@@ -1443,13 +1443,13 @@ impl TriangularMatrix {
             return;
         }
         let mut workspace = self.symbolic_workspace.borrow_mut();
-        workspace.stored.resize(self.dimension(), false);
-        workspace.touched.clear();
+        workspace
+            .sorted_stored
+            .resize(RowIndex::from_usize(self.dimension()));
         for &typed_row in non_zeros.iter() {
-            let row = typed_row.to_usize();
-            if !workspace.stored[row] {
-                workspace.stored[row] = true;
-                workspace.touched.push(row);
+            let row = RowIndex::from_usize(typed_row.to_usize());
+            if !workspace.sorted_stored.contains(row) {
+                workspace.sorted_stored.set(row);
             }
         }
         let mut position = 0;
@@ -1457,12 +1457,11 @@ impl TriangularMatrix {
             let column = non_zeros[position].to_usize();
             // The coefficient array is irrelevant to this symbolic pass.
             for &row in &self.rows[self.starts[column]..self.starts[column + 1]] {
-                let row = row as usize;
                 operations += 1;
-                if !workspace.stored[row] {
-                    workspace.stored[row] = true;
-                    workspace.touched.push(row);
-                    non_zeros.push(I::from_usize(row));
+                let row = RowIndex::from_usize(row as usize);
+                if !workspace.sorted_stored.contains(row) {
+                    workspace.sorted_stored.set(row);
+                    non_zeros.push(I::from_usize(row.to_usize()));
                 }
             }
             if operations > operations_threshold {
@@ -1470,13 +1469,16 @@ impl TriangularMatrix {
             }
             position += 1;
         }
-        while let Some(row) = workspace.touched.pop() {
-            workspace.stored[row] = false;
-        }
         if operations > operations_threshold {
+            workspace.sorted_stored.clear();
             non_zeros.clear();
         } else {
             non_zeros.sort_unstable();
+            for row in non_zeros.iter().copied() {
+                workspace
+                    .sorted_stored
+                    .clear_bucket(RowIndex::from_usize(row.to_usize()));
+            }
         }
     }
 }
@@ -1593,6 +1595,35 @@ mod tests {
             .unwrap();
         assert_eq!(dense_rhs, sparse_rhs);
         assert_eq!(non_zeros, vec![RowIndex::new(2), RowIndex::new(90)]);
+    }
+
+    #[test]
+    fn sorted_symbolic_bitset_clears_between_sparse_and_dense_fallbacks() {
+        let n = 128;
+        let mut columns = vec![Vec::new(); n];
+        columns[2].push((3, 1.0));
+        columns[3].push((4, 1.0));
+        columns[66].push((67, 1.0));
+        for row in 11..21 {
+            columns[10].push((row, 1.0));
+        }
+        let lower =
+            TriangularMatrix::from_columns(&columns, &vec![1.0; n], Triangle::Lower, true).unwrap();
+        let mut first = vec![RowIndex::new(2)];
+        lower.compute_rows_to_consider_in_sorted_order(&mut first);
+        assert_eq!(
+            first,
+            [RowIndex::new(2), RowIndex::new(3), RowIndex::new(4)]
+        );
+        let mut dense_fallback = vec![RowIndex::new(10)];
+        lower.compute_rows_to_consider_in_sorted_order(&mut dense_fallback);
+        assert!(dense_fallback.is_empty());
+        let mut repeated = vec![RowIndex::new(2)];
+        lower.compute_rows_to_consider_in_sorted_order(&mut repeated);
+        assert_eq!(repeated, first);
+        let mut other_bucket = vec![RowIndex::new(66)];
+        lower.compute_rows_to_consider_in_sorted_order(&mut other_bucket);
+        assert_eq!(other_bucket, [RowIndex::new(66), RowIndex::new(67)]);
     }
 
     #[test]

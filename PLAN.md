@@ -75,6 +75,99 @@ when timing-neutral; do not trade trajectory or KKT agreement for speed.
   gates pass. An analogous Harris function-boundary experiment slowed the
   selected solves slightly and was reverted. The `neos` presolve gap is
   resolved; its initial solve/pricing gap remains.
+- The next pricing-boundary check kept the hot incremental candidate update
+  out of line, as in pinned GLOP. Two alternating 21-trial A/B runs against
+  the saved Rust binary measured 0.994-0.995x previous solve time on `neos`
+  and 0.988x on `graph`. Strict fast-96 trajectories pass. Native-relative
+  15-trial presolved-solve ratios are still 1.265x and 1.104x respectively;
+  this small consistent gain does not explain the broader kernel gap.
+- A matched edge-norm audit found Rust constructing a compact-column view
+  solely to count its entries inside each pivot update; GLOP uses the direct
+  `ColumnNumEntries()` accessor. Using the existing Rust direct-count accessor
+  gives 0.986-0.992x previous Rust solve time on `neos` and 0.991-0.992x on
+  `graph` in two alternating 21-trial A/B runs. Clippy and strict fast-96
+  trajectories pass. This is another small fidelity and timing repair, not
+  resolution of the remaining whole-solve gap.
+- A new `--iteration-cap` mode in the serial matched-stage harness isolates
+  the early `neos` and `graph` discrepancy. At cap 1, 21-trial median solve
+  time is 0.924/2.456 ms native/Rust on `neos` and 1.121/2.058 ms on
+  `graph`; at cap 100 it is 1.168/2.670 ms and 2.335/3.427 ms.
+  Cap 0 takes a different exit path (6.284/7.968 ms and 5.326/5.898 ms),
+  so do not treat cap-0-to-1 differences as pivot cost. Repeated cap-1
+  sampling shows Rust malloc/free and equation-form initialization prominent,
+  while native's profile is dominated by compact column products and transpose
+  construction. Next audit the structural LP-to-equation-form path and
+  initialization ownership/lifecycle before optimizing steady-state pivots.
+- The structural initialization path now borrows the input LP and presents
+  virtual slack columns to the equation-form initializer. It allocates only
+  the augmented bound arrays and builds the compact matrix directly with
+  slacks, as pinned GLOP does, instead of cloning/cleaning a complete LP.
+  Partial-slack inputs retain the old repair path. A unit test compares the
+  virtual columns and bounds with materialized equation form; 72 library
+  tests, Clippy, fast-96 trajectories, and native presolve fixtures pass.
+  At cap 1 the 21-trial native-relative solve ratios fall from 2.657x to
+  1.401x on `neos` and from 1.835x to 1.209x on `graph`. A direct 21-trial
+  old/new Rust full-solve comparison is 0.900x on `neos` and 1.001x on
+  `graph`. Fresh 15-trial public-pipeline ratios are 1.037x and 1.088x;
+  full presolved-solve ratios are 1.131x and 1.093x. Initialization fidelity
+  fixes most of `neos`'s fixed early excess, but steady-state gaps remain.
+- Follow-up ownership audit: `InitialBasis` now borrows the existing bound
+  slices instead of materializing two dense copies, and the mutable basis
+  buffer moves into and out of crash construction rather than being cloned
+  twice. These changes mirror GLOP's view and in-place basis APIs. Separate
+  31-trial cap-1 A/B runs measured 0.986x previous Rust time on `neos` for
+  bound borrowing and 0.984x on `graph` for basis transfer; the other model
+  was near neutral in each comparison. Clippy, library/state tests, and the
+  strict fast-96 trajectory gate pass. A fresh 15-trial presolved-solve check
+  after both changes is 1.123x native on `neos` and 1.096x on `graph`.
+- A further initialization audit found an unconditional `VariablesInfo` clone
+  used only if a TRIANGULAR crash must be retried. It is now conditional;
+  recovered warm-start basis buffers also move into place instead of being
+  copied. The one-pivot timing of the selected default-path models is
+  essentially unchanged, as expected, but ownership matches the native path
+  more closely. Library tests, Clippy, strict fast-96 trajectories, and native
+  presolve fixtures pass.
+- The compact structural-matrix builder now follows pinned GLOP's
+  `PopulateFromSparseMatrixAndAddSlacks()` storage lifecycle: pre-size starts,
+  coefficients, and rows once and fill final offsets in source entry order.
+  The previous Rust implementation pushed each entry and closed each column,
+  growing three buffers during every initialization. Two alternating 31-trial
+  cap-1 A/B runs measured 0.978x/0.981x previous Rust time on `graph` and
+  0.979x/0.994x on `neos`. Unit tests, Clippy, strict fast-96 trajectories,
+  and presolve fixtures pass. Fresh 21-trial full presolved-solve ratios remain
+  1.135x on `neos` and 1.093x on `graph`; the builder correction primarily
+  affects fixed startup cost.
+- The sorted symbolic closure in triangular solves now uses a retained
+  `RowBitVec` and native-style bucket clearing, instead of a byte-per-row
+  mask plus touched-index vector. DFS uses its existing separate workspace.
+  Two alternating 21-trial old/new Rust full-solve runs measured 0.979x and
+  0.971x on `neos`; `graph` was neutral at 1.000x. All 67 `lp_data` tests,
+  Clippy, strict fast-96 trajectories, and native presolve fixtures pass.
+- Fresh three-second `graph20-20-1rand` solve samples after the bitset change
+  show distributed cost: dense transpose substitution, Harris ratio testing,
+  row-wise update-row multiplication, incremental pricing, and edge-norm
+  updates. A direct trailing-zero scan in transpose substitution was about
+  0.3% slower in paired timing and reverted. A safe validated three-vector
+  gather for Harris removed redundant bound checks but slowed both selected
+  solves about 0.5%; it too was reverted. Unsafe numerical accesses are now
+  permitted when justified and accompanied by a safety-invariant comment;
+  speculative hot-loop changes still require matched validation and timing.
+  A focused symbolic-closure regression now covers repeated sparse reaches,
+  dense fallback, and separate bitset buckets; it passes with Clippy.
+- The full Phase 4 native-case gate exposed a fixture setup mismatch hidden by
+  the former structural LP copy: Rust did not clean modified sparse columns
+  before a warm solve, while the native adapter does. The fixture now calls
+  `clean_up()` at the same point. It also revealed that an advanced transposed
+  solve may have nonzero slack objective coefficients; only virtual slacks
+  have implicit zero cost. The corrected objective view passes Phase 4 cases,
+  full workspace tests, strict fast-96 trajectories, and native presolve and
+  public-iteration fixtures.
+- A pinned-native strict pivot-path fixture now covers direct dual solves of
+  `neos-1445765` (5,688 pivots) and `graph20-20-1rand` (1,137 pivots), including
+  status, iteration count, terminal basis, and every entering/leaving/row
+  choice. The opt-in release regression passes. A fresh 21-trial matched
+  presolved-solve rerun measures 1.105x and 1.086x native respectively; the
+  remaining cost is not a pivot-path divergence.
 - The latest serial, alternating 164-model MIPLIB/Mittelmann public-solver run
   is 0.992x Rust/native in aggregate and 1.013x by median model ratio; all
   completed models match status and iteration count. Two wall-limited models
@@ -106,11 +199,12 @@ when timing-neutral; do not trade trajectory or KKT agreement for speed.
    rewrite LU from whole-solve samples: selected-view LU is already close to
    parity. For every concrete discrepancy, compare the pinned C++ path and
    Rust path, then repair representation or lifecycle differences first.
-3. Add a strict pivot-by-pivot native trajectory fixture for the selected
-   extra-corpus models. The existing 164-model gate checks public outcomes,
-   status, and iteration count, not every pivot. Preserve the fast-96 strict
-   trajectory, public postsolve/KKT, presolve, and focused numerical-kernel
-   gates after each performance edit.
+3. Extend the new strict pivot-by-pivot native fixture beyond `neos-1445765`
+   and `graph20-20-1rand` to the other selected extra-corpus outliers. The
+   existing 164-model gate checks public outcomes, status, and iteration
+   count, not every pivot. Preserve the fast-96 strict trajectory, public
+   postsolve/KKT, presolve, and focused numerical-kernel gates after each
+   performance edit.
 4. Repeat serial paired stage and public-pipeline benchmarks after repairs.
    Report per-model timings, absolute excesses, median and size-weighted
    ratios, trial dispersion, build fingerprints, and timeouts. Keep benchmark

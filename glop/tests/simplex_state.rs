@@ -352,7 +352,13 @@ fn initial_basis_crashes_agree_with_native_glop() {
             let candidate_columns = if mode == 0 { structural } else { columns };
             let initial = RowToColMapping::filled(RowIndex::from_usize(rows), INVALID_COL);
             let mut rust_basis = initial.clone();
-            let mut crash = InitialBasis::new(&compact, &objective, &lower, &upper, &types);
+            let mut crash = InitialBasis::new(
+                &compact,
+                &objective,
+                lower.as_slice(),
+                upper.as_slice(),
+                &types,
+            );
             match mode {
                 0 => crash
                     .complete_bixby_basis(ColIndex::from_usize(candidate_columns), &mut rust_basis),

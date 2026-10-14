@@ -229,8 +229,8 @@ fn candidate_is_worse(left: &TriangularCandidate, right: &TriangularCandidate) -
 pub struct InitialBasis<'a> {
     compact_matrix: &'a CompactSparseMatrix,
     objective: &'a DenseRow,
-    lower_bound: &'a DenseRow,
-    upper_bound: &'a DenseRow,
+    lower_bound: &'a [f64],
+    upper_bound: &'a [f64],
     variable_type: &'a VariableTypeRow,
     max_scaled_abs_cost: f64,
 }
@@ -240,8 +240,8 @@ impl<'a> InitialBasis<'a> {
     pub const fn new(
         compact_matrix: &'a CompactSparseMatrix,
         objective: &'a DenseRow,
-        lower_bound: &'a DenseRow,
-        upper_bound: &'a DenseRow,
+        lower_bound: &'a [f64],
+        upper_bound: &'a [f64],
         variable_type: &'a VariableTypeRow,
     ) -> Self {
         Self {
@@ -563,10 +563,10 @@ impl<'a> InitialBasis<'a> {
 
     fn column_penalty(&self, column: ColIndex) -> f64 {
         let bound_penalty = match self.variable_type[column] {
-            VariableType::LowerBounded => self.lower_bound[column],
-            VariableType::UpperBounded => -self.upper_bound[column],
+            VariableType::LowerBounded => self.lower_bound[column.to_usize()],
+            VariableType::UpperBounded => -self.upper_bound[column.to_usize()],
             VariableType::UpperAndLowerBounded => {
-                self.lower_bound[column] - self.upper_bound[column]
+                self.lower_bound[column.to_usize()] - self.upper_bound[column.to_usize()]
             }
             VariableType::Unconstrained | VariableType::FixedVariable => 0.0,
         };

@@ -425,9 +425,12 @@ impl PrimalEdgeNorms {
                         .column_scalar_product_slice(column, left_inverse_values)
                 }
             };
-            self.num_operations +=
-                i64::try_from(self.matrix.column(ColIndex::from_usize(column)).len())
-                    .unwrap_or(i64::MAX);
+            // GLOP accounts via view.ColumnNumEntries(), without building
+            // a sparse-column view in this pivot-hot loop.
+            self.num_operations += self
+                .matrix
+                .column_num_entries(ColIndex::from_usize(column))
+                .value();
             let inner = coefficient.mul_add(leaving_squared_norm, factor * scalar_product);
             let norm = &mut self.edge_squared_norms[column];
             *norm = coefficient.mul_add(inner, *norm);

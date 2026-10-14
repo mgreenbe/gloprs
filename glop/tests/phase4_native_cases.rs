@@ -738,6 +738,9 @@ fn small_phase4_cases_match_pinned_native_glop() {
                 first
             }
         } else {
+            // The native fixture adapter calls CleanUp() after mutating the
+            // matrix; preserve its source-column order and zero-removal here.
+            lp.clean_up();
             simplex.solve(&lp, &mut time_limit)
         };
         if let Some(expected_error) = &expected.error {

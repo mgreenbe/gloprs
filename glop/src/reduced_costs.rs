@@ -604,6 +604,9 @@ impl PrimalPrices {
     }
 
     /// Incrementally updates prices touched by a primal pivot.
+    // GLOP's candidate-update template is emitted out of line. Keeping this
+    // pivot-hot loop separate likewise avoids inflating its caller.
+    #[inline(never)]
     pub fn update_before_basis_pivot_from_values(
         &mut self,
         entering_column: ColIndex,

@@ -42,6 +42,16 @@ editing the upstream checkout. Run its opt-in release regression with:
 cargo test --release -p gloprs-glop --test qap12_primal -- --ignored
 ```
 
+`phase8-extra-trajectories.json.gz` pins the complete direct dual-simplex
+pivot sequences and terminal bases for `neos-1445765` and
+`graph20-20-1rand`, two remaining Phase 8 performance targets. Regenerate it
+with an instrumented pinned-native adapter and check it with:
+
+```text
+python3 tools/generate_phase8_extra_trajectories.py --binary <instrumented-native-adapter>
+cargo test --release -p gloprs-glop --test phase8_extra_trajectories -- --ignored
+```
+
 The fixture generator requires a temporary diagnostic native build as described
 in `tools/generate_netlib_trajectory_fixture.py`. Validate gloprs against it
 with a fresh 20-second wall-clock limit for every model:

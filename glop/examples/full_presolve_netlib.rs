@@ -95,6 +95,16 @@ fn main() {
     let mut preprocessor = MainLpPreprocessor::new();
     let mut presolve_limit = TimeLimit::new(20.0, f64::INFINITY);
     preprocessor.run(&mut presolved, &parameters, &mut presolve_limit);
+    if matches!(env::args().nth(2).as_deref(), Some("presolved_form")) {
+        println!(
+            "equation_form {} rows {} columns {} nonzeros {}",
+            presolved.is_in_equation_form(),
+            presolved.num_constraints().value(),
+            presolved.num_variables().value(),
+            presolved.num_entries().value()
+        );
+        return;
+    }
     if matches!(
         env::args().nth(2).as_deref(),
         Some("presolved_solve_timing")

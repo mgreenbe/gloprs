@@ -297,6 +297,12 @@ impl<I: VectorIndex, T> TypedVec<I, T> {
         }
     }
 
+    /// Transfers the backing allocation to an untyped owner without copying.
+    #[must_use]
+    pub fn into_vec(self) -> Vec<T> {
+        self.values
+    }
+
     #[must_use]
     #[inline]
     pub fn len(&self) -> I {

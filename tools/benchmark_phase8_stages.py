@@ -32,13 +32,15 @@ def version(command: list[str]) -> str:
 
 
 def run(executable: Path, model: Path, stage: str, repetitions: int,
-        wall_seconds: float = 20.0) -> dict:
+        wall_seconds: float = 20.0, iteration_cap: int | None = None) -> dict:
     mode = "presolved_solve_timing" if stage == "solve" else f"{stage}_timing"
     command = [executable, model, mode]
     if stage != "parse":
         command.append(str(repetitions))
     if stage == "solve":
         command.append(str(wall_seconds))
+        if iteration_cap is not None:
+            command.append(str(iteration_cap))
     process = subprocess.run(
         command, check=True, capture_output=True, text=True,
         timeout=max(60, wall_seconds * repetitions + 30)
@@ -69,6 +71,8 @@ def main() -> None:
     parser.add_argument("--warmups", type=int, default=1)
     parser.add_argument("--presolve-repetitions", type=int, default=3)
     parser.add_argument("--solve-repetitions", type=int, default=1)
+    parser.add_argument("--iteration-cap", type=int,
+                        help="cap each presolved solve at this many pivots")
     parser.add_argument("--wall-seconds", type=float, default=20.0,
                         help="per-solve wall limit for matched-presolved solves")
     parser.add_argument("--models", nargs="+")
@@ -83,7 +87,8 @@ def main() -> None:
     options = parser.parse_args()
     if (options.trials < 1 or options.warmups < 0
             or options.presolve_repetitions < 1 or options.solve_repetitions < 1
-            or not 0 < options.wall_seconds <= 3600):
+            or not 0 < options.wall_seconds <= 3600
+            or (options.iteration_cap is not None and options.iteration_cap < 0)):
         parser.error("invalid trial, warmup, or repetition count")
     selected = corpus_models(options.corpus)
     by_key = {model.key: model for model in selected}
@@ -118,8 +123,10 @@ def main() -> None:
             repetitions = (options.presolve_repetitions if stage == "presolve"
                            else options.solve_repetitions)
             for _ in range(options.warmups):
-                run(options.native, model, stage, repetitions, options.wall_seconds)
-                run(options.rust, model, stage, repetitions, options.wall_seconds)
+                run(options.native, model, stage, repetitions, options.wall_seconds,
+                    options.iteration_cap)
+                run(options.rust, model, stage, repetitions, options.wall_seconds,
+                    options.iteration_cap)
             times: dict[str, list[float]] = {"native": [], "rust": []}
             for trial in range(options.trials):
                 order = (("native", options.native), ("rust", options.rust))
@@ -128,7 +135,7 @@ def main() -> None:
                 outcomes = {}
                 for label, executable in order:
                     measured = run(executable, model, stage, repetitions,
-                                   options.wall_seconds)
+                                   options.wall_seconds, options.iteration_cap)
                     times[label].append(measured.pop("seconds"))
                     outcomes[label] = measured
                 if (stage == "solve" and options.corpus != "netlib-fast96"
@@ -195,6 +202,7 @@ def main() -> None:
         "warmups": options.warmups,
         "presolve_repetitions": options.presolve_repetitions,
         "solve_repetitions": options.solve_repetitions,
+        "iteration_cap": options.iteration_cap,
         "wall_seconds": options.wall_seconds,
         "corpus": options.corpus,
         "summary": summary,
