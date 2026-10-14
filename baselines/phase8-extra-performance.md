@@ -1,5 +1,23 @@
 # Phase 8: MIPLIB 2017 and Mittelmann LPopt timing baseline
 
+## Fresh public-pipeline rerun at `67e47af`
+
+The serial, alternating three-pair public-solver run was repeated after the
+selected-view LU fidelity repairs, with one warmup per side and the same
+60-second per-solve wall limit. The complete results are in
+[`phase8-extra-public-current.json`](phase8-extra-public-current.json). Among
+164 comparable completed models, native totals 136.355 s and Rust totals
+135.896 s (0.997x); the median model ratio is 1.028x and the sqrt(nnz)-weighted
+geometric ratio is 1.033x. Both `rmatr200-p5` and `nug08-3rd` remain
+wall-limited and are excluded. All 164 comparable results agree on status,
+iteration count, and objective under the harness checks.
+
+The leading public-pipeline ratios are `pg` 1.439x, `neos-1445765` 1.375x,
+`neos-3381206-awhea` 1.222x, `bnatt500` 1.196x, and `neos-950242` 1.171x.
+`fhnw-binpack4-48` is now 1.074x, down from 1.582x in the initial baseline.
+The remaining high-ratio models still warrant isolated stage and kernel
+measurements; the near-parity aggregate does not establish per-model parity.
+
 This is the first repeatable serial comparison of pinned upstream GLOP and
 `gloprs` on the shared MIPLIB 2017 and Mittelmann LPopt datasets. Selection is
 in [`extra-lp-corpus.json`](extra-lp-corpus.json): 166 non-Netlib MPS models
