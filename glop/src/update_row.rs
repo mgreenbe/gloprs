@@ -102,6 +102,11 @@ pub struct UpdateRow {
 
 impl UpdateRow {
     #[must_use]
+    pub(crate) fn storage_width(&self) -> usize {
+        self.non_zero_positions.len()
+    }
+
+    #[must_use]
     pub fn new(matrix: &SparseMatrix) -> Self {
         Self::new_from_compact(&CompactSparseMatrix::from_sparse(matrix))
     }
@@ -511,6 +516,7 @@ impl UpdateRow {
     ) -> Result<(), FactorizationError> {
         if left_inverse.len() != matrix.num_rows().to_usize()
             || relevant.len().to_usize() != matrix.num_cols().to_usize()
+            || self.non_zero_positions.len() != matrix.num_cols().to_usize()
         {
             return Err(FactorizationError::DimensionMismatch);
         }
@@ -691,13 +697,20 @@ impl UpdateRow {
         // The full-width buffer is allocated at construction (or expanded on
         // rebind) and is never shrunk after an update. Match GLOP's cursor
         // writes into its retained non_zero_position_list_.
+        debug_assert_eq!(non_zero_positions.len(), num_cols.to_usize());
+        debug_assert_eq!(relevant.len(), num_cols);
         *num_non_zeros = 0;
         for typed_column in relevant.iter_ones() {
             let column = typed_column.to_usize();
             let coefficient = dot(typed_column);
             if coefficient.abs() > drop_tolerance {
-                coefficients[column] = coefficient;
-                non_zero_positions[*num_non_zeros] = column;
+                // SAFETY: the relevant bitset and both retained buffers have
+                // num_cols slots. Each relevant column is visited once, so
+                // the output cursor stays below num_cols as in GLOP.
+                unsafe {
+                    *coefficients.get_unchecked_mut(column) = coefficient;
+                    *non_zero_positions.get_unchecked_mut(*num_non_zeros) = column;
+                }
                 *num_non_zeros += 1;
             }
         }
@@ -913,6 +926,30 @@ mod tests {
         update_row.rebuild_non_zeros(&relevant);
         assert_eq!(update_row.non_zero_positions(), &[1, 3]);
         assert_eq!(update_row.non_zero_positions.as_ptr(), storage);
+    }
+
+    #[test]
+    fn benchmark_rejects_a_matrix_with_a_different_column_count() {
+        let mut narrow = CompactSparseMatrix::default();
+        narrow.reset(RowIndex::new(1));
+        narrow.close_current_column();
+        let mut update_row = UpdateRow::new_from_compact(&narrow);
+
+        let mut wide = CompactSparseMatrix::default();
+        wide.reset(RowIndex::new(1));
+        wide.close_current_column();
+        wide.close_current_column();
+        let relevant = ColBitVec::new(ColIndex::new(2));
+        assert!(matches!(
+            update_row.compute_update_row_for_benchmark_compact(
+                &wide,
+                None,
+                &relevant,
+                &[0.0],
+                UpdateRowAlgorithm::Column,
+            ),
+            Err(FactorizationError::DimensionMismatch)
+        ));
     }
 
     #[test]

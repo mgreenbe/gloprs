@@ -246,6 +246,12 @@ impl PrimalEdgeNorms {
         if direction.len().to_usize() != basis.dimension()
             || entering_column >= self.matrix.num_cols().to_usize()
             || leaving_column >= self.matrix.num_cols().to_usize()
+            || leaving_row >= basis.dimension()
+            || update_row.storage_width() != self.matrix.num_cols().to_usize()
+            || (!self.recompute_edge_squared_norms
+                && self.edge_squared_norms.len() != self.matrix.num_cols().to_usize())
+            || (!self.reset_devex_weights
+                && self.devex_weights.len() != self.matrix.num_cols().to_usize())
         {
             return Err(FactorizationError::DimensionMismatch);
         }
@@ -397,7 +403,15 @@ impl PrimalEdgeNorms {
         update_row: &UpdateRow,
     ) {
         let pivot = -direction[leaving_row];
-        let entering_squared_norm = self.edge_squared_norms[entering_column];
+        debug_assert_eq!(
+            self.edge_squared_norms.len(),
+            self.matrix.num_cols().to_usize()
+        );
+        // SAFETY: the public pivot entry point checked entering_column against
+        // the matrix, and exact norm recomputation sizes this retained vector
+        // to one entry per matrix column before incremental updates begin.
+        let entering_squared_norm =
+            unsafe { *self.edge_squared_norms.get_unchecked(entering_column) };
         let leaving_squared_norm = (entering_squared_norm / (pivot * pivot)).max(1.0);
         let factor = 2.0 / pivot;
         let first_slack = self
@@ -432,7 +446,9 @@ impl PrimalEdgeNorms {
                 .column_num_entries(ColIndex::from_usize(column))
                 .value();
             let inner = coefficient.mul_add(leaving_squared_norm, factor * scalar_product);
-            let norm = &mut self.edge_squared_norms[column];
+            // SAFETY: UpdateRow only records positions from the same compact
+            // matrix, so column is below the norm vector's validated length.
+            let norm = unsafe { self.edge_squared_norms.get_unchecked_mut(column) };
             *norm = coefficient.mul_add(inner, *norm);
             let scaled_coefficient = coefficient / pivot;
             let lower_bound = 1.0 + scaled_coefficient * scaled_coefficient;
@@ -441,7 +457,11 @@ impl PrimalEdgeNorms {
                 lower_bounded_norms += 1;
             }
         }
-        self.edge_squared_norms[leaving_column] = leaving_squared_norm;
+        // SAFETY: the public pivot entry point checked leaving_column, and
+        // this retained vector still has one slot per matrix column.
+        unsafe {
+            *self.edge_squared_norms.get_unchecked_mut(leaving_column) = leaving_squared_norm;
+        };
         self.stats.add(
             "lower_bounded_norms",
             DistributionKind::Integer,
@@ -459,12 +479,18 @@ impl PrimalEdgeNorms {
         let pivot_magnitude = direction[leaving_row].abs();
         let entering_norm = precise_squared_norm(direction).sqrt();
         let leaving_norm = (entering_norm / pivot_magnitude).max(1.0);
+        debug_assert_eq!(self.devex_weights.len(), self.matrix.num_cols().to_usize());
         for &column in update_row.non_zero_positions() {
             let update_norm = update_row.coefficient(column).abs() * leaving_norm;
-            let weight = &mut self.devex_weights[column];
+            // SAFETY: initialized Devex weights have one slot per matrix
+            // column; UpdateRow positions are drawn from that same matrix.
+            let weight = unsafe { self.devex_weights.get_unchecked_mut(column) };
             *weight = (*weight).max(update_norm * update_norm);
         }
-        self.devex_weights[leaving_column] = leaving_norm * leaving_norm;
+        // SAFETY: the public pivot entry point checked leaving_column.
+        unsafe {
+            *self.devex_weights.get_unchecked_mut(leaving_column) = leaving_norm * leaving_norm;
+        };
     }
 }
 

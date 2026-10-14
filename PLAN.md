@@ -8,6 +8,13 @@ when timing-neutral; do not trade trajectory or KKT agreement for speed.
 
 ## Current baseline
 
+- An indexed-access audit compared hot numerical loops with pinned GLOP.
+  Primal/dual edge-norm updates and column-wise update-row output now use
+  documented unchecked access only after their dimensions are established;
+  caller-controlled public inputs remain checked. Two paired old/new Rust
+  runs are neutral to about 1% slower, so this is a fidelity alignment rather
+  than a performance fix. See `baselines/phase8-bounds-audit.md`.
+
 - A profiled LU scattered-permutation access change removed redundant Rust
   bounds checks while preserving a release-mode check for caller-mutable
   sparse positions. Two paired matched-solve A/B runs improve `cvs`, `rmatr`,

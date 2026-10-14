@@ -154,6 +154,7 @@ impl DualEdgeNorms {
         if leaving_row >= n
             || direction.len() != n
             || unit_row_left_inverse.values().len().to_usize() != n
+            || self.edge_squared_norms.len() != n
         {
             return Err(FactorizationError::DimensionMismatch);
         }
@@ -163,22 +164,37 @@ impl DualEdgeNorms {
         // therefore takes the sparse/hyper-sparse solve path. Preserve that
         // numerical path instead of silently switching to the dense solve.
         let tau = basis.right_solve_for_tau(unit_row_left_inverse)?;
+        debug_assert_eq!(self.edge_squared_norms.len(), n);
         let pivot = direction[leaving_row];
-        let new_leaving_squared_norm = self.edge_squared_norms[leaving_row] / (pivot * pivot);
+        // SAFETY: leaving_row and direction length were checked above; exact
+        // norm recomputation sizes this retained vector to basis dimension.
+        let new_leaving_squared_norm =
+            unsafe { *self.edge_squared_norms.get_unchecked(leaving_row) } / (pivot * pivot);
         let factor = 2.0 / pivot;
+        debug_assert_eq!(tau.len(), n);
         for (row, &coefficient) in direction.iter().enumerate() {
             if coefficient == 0.0 {
                 continue;
             }
             // Koberstein 8.2.2.1: this operation ordering is intentional.
-            let inner = coefficient.mul_add(new_leaving_squared_norm, -(factor * tau[row]));
-            let norm = &mut self.edge_squared_norms[row];
+            // SAFETY: direction, tau, and the retained norm vector all have
+            // basis dimension n; row comes from enumerating direction.
+            let (tau_value, norm) = unsafe {
+                (
+                    *tau.get_unchecked(row),
+                    self.edge_squared_norms.get_unchecked_mut(row),
+                )
+            };
+            let inner = coefficient.mul_add(new_leaving_squared_norm, -(factor * tau_value));
             *norm = coefficient.mul_add(inner, *norm);
             if row != leaving_row && *norm < 1e-4 {
                 *norm = 1e-4;
             }
         }
-        self.edge_squared_norms[leaving_row] = new_leaving_squared_norm;
+        // SAFETY: leaving_row was checked above and norms have length n.
+        unsafe {
+            *self.edge_squared_norms.get_unchecked_mut(leaving_row) = new_leaving_squared_norm;
+        };
         Ok(())
     }
 
