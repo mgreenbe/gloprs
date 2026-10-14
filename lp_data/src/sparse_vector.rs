@@ -595,7 +595,7 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
         );
     }
 
-    #[allow(clippy::comparison_chain, clippy::float_cmp)] // Preserve upstream branch order and exact-zero preconditions.
+    #[allow(clippy::comparison_chain, clippy::float_cmp, unsafe_code)] // Preserve upstream branch order and exact-zero preconditions.
     fn add_multiple_to_sparse_vector_with_common_index(
         &self,
         multiplier: Fractional,
@@ -613,59 +613,94 @@ impl<I: VectorIndex + Ord> SparseVector<I> {
         // materializing an array of entry pairs and copying it back into two
         // arrays adds a full extra pass on this presolve hot path.
         let mut merged = Self::new();
-        merged.reserve(
-            (self.num_entries() + accumulator.num_entries())
-                .saturating_sub(usize::from(!retain_common) * 2),
-        );
+        // Use the unconditional sum as the allocation bound. Valid callers
+        // delete the common entry and need two fewer slots, but this bound
+        // also makes the raw writes safe if the public API is misused.
+        let upper_bound = self.num_entries() + accumulator.num_entries();
+        merged.reserve(upper_bound);
+        let index_output = merged.indices.as_mut_ptr();
+        let coefficient_output = merged.coefficients.as_mut_ptr();
+        let mut output_len = 0;
+        let mut append = |index: I, coefficient: Fractional| {
+            debug_assert!(output_len < upper_bound);
+            // SAFETY: Reserve allocated at least upper_bound slots in both
+            // vectors. The merge emits no more than size_a + size_b entries,
+            // even when the common-index precondition is violated. Each slot
+            // is initialized exactly once, and lengths are set only after
+            // the merge finishes. This mirrors GLOP's indexed writes into
+            // its reserved, not-yet-logically-sized sparse-vector storage.
+            unsafe {
+                index_output.add(output_len).write(index);
+                coefficient_output.add(output_len).write(coefficient);
+            }
+            output_len += 1;
+        };
+        let source_entry = |position: usize| {
+            debug_assert!(position < self.num_entries());
+            // SAFETY: calls are guarded by source < self.num_entries(). The
+            // parallel arrays have equal lengths by the builder invariant.
+            unsafe {
+                (
+                    *self.indices.get_unchecked(position),
+                    *self.coefficients.get_unchecked(position),
+                )
+            }
+        };
+        let destination_entry = |position: usize| {
+            debug_assert!(position < accumulator.num_entries());
+            // SAFETY: calls are guarded by destination < accumulator's size,
+            // and its index and coefficient arrays have equal lengths.
+            unsafe {
+                (
+                    *accumulator.indices.get_unchecked(position),
+                    *accumulator.coefficients.get_unchecked(position),
+                )
+            }
+        };
         let (mut source, mut destination) = (0, 0);
         while source < self.num_entries() && destination < accumulator.num_entries() {
-            let source_index = self.indices[source];
-            let destination_index = accumulator.indices[destination];
+            let (source_index, source_value) = source_entry(source);
+            let (destination_index, destination_value) = destination_entry(destination);
             if source_index == destination_index {
                 if source_index != common_index {
-                    let value = multiplier * self.coefficients[source]
-                        + accumulator.coefficients[destination];
+                    let value = multiplier * source_value + destination_value;
                     if value.abs() > drop_tolerance {
-                        merged.indices.push(source_index);
-                        merged.coefficients.push(value);
+                        append(source_index, value);
                     }
                 } else if retain_common {
-                    merged.indices.push(destination_index);
-                    merged
-                        .coefficients
-                        .push(accumulator.coefficients[destination]);
+                    append(destination_index, destination_value);
                 }
                 source += 1;
                 destination += 1;
             } else if source_index < destination_index {
-                let value = multiplier * self.coefficients[source];
+                let value = multiplier * source_value;
                 if value.abs() > drop_tolerance {
-                    merged.indices.push(source_index);
-                    merged.coefficients.push(value);
+                    append(source_index, value);
                 }
                 source += 1;
             } else {
-                merged.indices.push(destination_index);
-                merged
-                    .coefficients
-                    .push(accumulator.coefficients[destination]);
+                append(destination_index, destination_value);
                 destination += 1;
             }
         }
         while source < self.num_entries() {
-            let value = multiplier * self.coefficients[source];
+            let (index, coefficient) = source_entry(source);
+            let value = multiplier * coefficient;
             if value.abs() > drop_tolerance {
-                merged.indices.push(self.indices[source]);
-                merged.coefficients.push(value);
+                append(index, value);
             }
             source += 1;
         }
         while destination < accumulator.num_entries() {
-            merged.indices.push(accumulator.indices[destination]);
-            merged
-                .coefficients
-                .push(accumulator.coefficients[destination]);
+            let (index, coefficient) = destination_entry(destination);
+            append(index, coefficient);
             destination += 1;
+        }
+        // SAFETY: append initialized exactly output_len entries in each
+        // reserved buffer. Both vector lengths were zero before the merge.
+        unsafe {
+            merged.indices.set_len(output_len);
+            merged.coefficients.set_len(output_len);
         }
         accumulator.swap(&mut merged);
         accumulator.may_contain_duplicates.set(false);

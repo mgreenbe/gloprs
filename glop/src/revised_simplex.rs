@@ -398,7 +398,7 @@ pub struct RevisedSimplex {
     variables_info: Option<VariablesInfo>,
     variable_values: DenseRow,
     // GLOP's VariableValues::scratchpad_.values survives residual checks.
-    primal_residual_scratchpad: Vec<f64>,
+    primal_residual_scratchpad: DenseColumn,
     reduced_costs: DenseRow,
     /// GLOP's `ReducedCosts::basic_objective_`, in current basis-row order.
     basic_objective: Vec<f64>,
@@ -526,7 +526,7 @@ impl RevisedSimplex {
             basis_factorization: None,
             variables_info: None,
             variable_values: DenseRow::new(),
-            primal_residual_scratchpad: Vec::new(),
+            primal_residual_scratchpad: DenseColumn::new(),
             reduced_costs: DenseRow::new(),
             basic_objective: Vec::new(),
             basic_objective_dirty: true,
@@ -4870,19 +4870,20 @@ impl RevisedSimplex {
     }
 
     fn correct_errors_on_variable_values(&mut self) -> Result<(), FactorizationError> {
-        self.primal_residual_scratchpad
-            .resize(self.num_rows.to_usize(), 0.0);
-        self.primal_residual_scratchpad.fill(0.0);
-        let residual = &mut self.primal_residual_scratchpad;
+        self.primal_residual_scratchpad.resize(self.num_rows, 0.0);
+        self.primal_residual_scratchpad.as_mut_slice().fill(0.0);
         for column in 0..self.num_cols.to_usize() {
             let column = ColIndex::from_usize(column);
             let value = self.variable_values[column];
-            for (row, coefficient) in self.compact_matrix.column(column).iter() {
-                let row = row.to_usize();
-                residual[row] = coefficient.mul_add(value, residual[row]);
-            }
+            self.compact_matrix.column_add_multiple_to_dense_column(
+                column,
+                value,
+                &mut self.primal_residual_scratchpad,
+            );
         }
-        let maximum = residual
+        let maximum = self
+            .primal_residual_scratchpad
+            .as_slice()
             .iter()
             .fold(0.0_f64, |value, entry| value.max(entry.abs()));
         if maximum

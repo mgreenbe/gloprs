@@ -2496,6 +2496,20 @@ contract (including nonfinite values in unselected columns). Seven paired
 selected-view trials are now 1.021–1.031x native (sum-of-medians 1.025x);
 matched-presolved solve is 1.124x. Isolated selected-view LU is effectively at
 parity; investigate the remaining whole-solve gap at its other stages.
+On `neos-1445765`, fresh seven-pair stage timings localized a 1.493x presolve
+and 1.386x matched-solve ratio. The pinned upstream sparse-vector merge
+reserves output storage and writes entries directly; Rust still pushed through
+two checked `Vec`s. Indexed writes into reserved parallel buffers, followed
+by single guarded reads of each source and accumulator entry, retain the same
+merge order and drop rule. The unconditional sum of input lengths bounds all
+raw output writes even if a public caller violates the common-index
+precondition. Presolve is now 1.022x native in seven pairs, and the public
+pipeline improved from 1.375x to 1.078x. In the simplex residual correction,
+using GLOP's compact-column add instead of a hand-written entry loop improved
+matched solve from 1.386x to 1.332x. DynamicMaximum now stores candidates in
+the upstream-style packed bitset and iterates set bits once; that fidelity
+change did not materially affect timing. The remaining public gap is about
+8%, mostly in matched solve, and is not yet resolved.
 Paired whole-solve samples of `fhnw-binpack4-48` place substantial time in
 primal edge-norm BTRAN and the inlined primal-phase loop, not solely in LU.
 The isolated dense rank-one solve microbenchmark is already faster in Rust at

@@ -18,6 +18,18 @@ The leading public-pipeline ratios are `pg` 1.439x, `neos-1445765` 1.375x,
 The remaining high-ratio models still warrant isolated stage and kernel
 measurements; the near-parity aggregate does not establish per-model parity.
 
+The subsequent `neos-1445765` investigation split its current timings into
+parse 0.919x, presolve 1.493x, and matched solve 1.386x. Sampling localized
+presolve to the doubleton-free sparse-vector merge. GLOP's reserved indexed
+output writes and guarded single reads are now mirrored in Rust; seven-pair
+100-presolve-repetition timing is 1.022x native. Replacing the simplex
+residual hand-loop with GLOP's compact column-add kernel brought seven-pair
+50-solve matched timing to about 1.33x. Packed-bitset pricing restored native
+candidate traversal without a material additional timing gain. The latest
+seven-pair public-pipeline ratio is 1.078x (0.027730 s native, 0.029899 s
+Rust); raw stage and public timings are in `target/neos1445765-*`. The
+remaining solve-stage gap is open.
+
 This is the first repeatable serial comparison of pinned upstream GLOP and
 `gloprs` on the shared MIPLIB 2017 and Mittelmann LPopt datasets. Selection is
 in [`extra-lp-corpus.json`](extra-lp-corpus.json): 166 non-Netlib MPS models

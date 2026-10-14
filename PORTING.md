@@ -1109,6 +1109,17 @@ edge-norm/BTRAN work. `CorrectErrorsOnVariableValues` now reuses a retained
 primal-residual scratch vector, matching GLOP's `VariableValues::scratchpad_`
 lifecycle. The seven-pair matched solve ratio remains 1.123x, so that repair
 does not explain the outstanding non-LU gap.
+The `neos-1445765` follow-up also aligns the sparse-vector common-index merge
+with GLOP's reserved-storage indexed writes and one-read input traversal.
+The output bound uses the sum of input lengths to keep unchecked writes safe
+even for malformed public callers. Seven-pair presolve timings improve from
+1.493x to 1.022x native; the public pipeline improves from 1.375x to 1.078x.
+The simplex residual check now calls the compact column-add kernel as GLOP
+does, improving matched solve from 1.386x to about 1.33x. DynamicMaximum now
+uses a packed candidate bitset and single-pass set-bit iteration, matching the
+native representation and traversal, with negligible timing change. Strict
+fast-96 trajectories, the native presolve fixture, and all 164 completed
+extra-corpus outcome checks pass after these edits.
 
 ## Test inventory caveat
 

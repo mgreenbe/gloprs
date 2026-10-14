@@ -2,7 +2,7 @@
 //!
 //! Direct port of the algorithm in `ortools/glop/pricing.h`: updates are
 //! constant-time, while `get_maximum()` usually hits a lazily maintained
-//! top-31 heap and falls back to a dense candidate scan when necessary.
+//! top-31 heap and falls back to a set-bit candidate scan when necessary.
 
 #![allow(
     clippy::cast_possible_truncation,
@@ -11,6 +11,7 @@
 )]
 
 use crate::random::SharedRandom;
+use lp_data::lp_types::{ColBitVec, ColIndex, VectorIndex};
 
 const TOP_K: usize = 31;
 
@@ -23,7 +24,7 @@ struct HeapElement {
 #[derive(Clone, Debug)]
 pub struct DynamicMaximum {
     values: Vec<f64>,
-    is_candidate: Vec<bool>,
+    is_candidate: ColBitVec,
     threshold: f64,
     tops: Vec<HeapElement>,
     equivalent_choices: Vec<usize>,
@@ -55,7 +56,7 @@ impl DynamicMaximum {
     pub fn new_with_random(random: SharedRandom) -> Self {
         Self {
             values: Vec::new(),
-            is_candidate: Vec::new(),
+            is_candidate: ColBitVec::new(ColIndex::new(0)),
             threshold: f64::NEG_INFINITY,
             tops: Vec::new(),
             equivalent_choices: Vec::new(),
@@ -67,8 +68,8 @@ impl DynamicMaximum {
         self.tops.clear();
         self.threshold = f64::NEG_INFINITY;
         self.values.resize(size, 0.0);
-        self.is_candidate.clear();
-        self.is_candidate.resize(size, false);
+        self.is_candidate
+            .clear_and_resize(ColIndex::from_usize(size));
     }
 
     pub fn clear(&mut self) {
@@ -82,7 +83,7 @@ impl DynamicMaximum {
     }
 
     pub fn remove(&mut self, position: usize) {
-        self.is_candidate[position] = false;
+        self.is_candidate.clear_bit(ColIndex::from_usize(position));
     }
 
     pub fn start_dense_updates(&mut self) {
@@ -93,13 +94,13 @@ impl DynamicMaximum {
     pub fn dense_add_or_update(&mut self, position: usize, value: f64) {
         debug_assert!(!value.is_nan());
         debug_assert!(self.tops.is_empty());
-        self.is_candidate[position] = true;
+        self.is_candidate.set(ColIndex::from_usize(position));
         self.values[position] = value;
     }
 
     pub fn add_or_update(&mut self, position: usize, value: f64) {
         debug_assert!(!value.is_nan());
-        self.is_candidate[position] = true;
+        self.is_candidate.set(ColIndex::from_usize(position));
         self.values[position] = value;
         if value >= self.threshold {
             self.update_top_k(position, value);
@@ -115,7 +116,11 @@ impl DynamicMaximum {
             let mut new_size = 0;
             for old_position in 0..self.tops.len() {
                 let element = self.tops[old_position];
-                if self.is_candidate[element.index] && self.values[element.index] == element.value {
+                if self
+                    .is_candidate
+                    .contains(ColIndex::from_usize(element.index))
+                    && self.values[element.index] == element.value
+                {
                     self.tops[new_size] = element;
                     new_size += 1;
                     if element.value >= best_value {
@@ -136,15 +141,19 @@ impl DynamicMaximum {
         }
 
         self.threshold = f64::NEG_INFINITY;
-        for position in 0..self.values.len() {
-            if !self.is_candidate[position] {
-                continue;
-            }
+        for candidate in self.is_candidate.iter_ones() {
+            let position = candidate.to_usize();
             let value = self.values[position];
             if value < self.threshold {
                 continue;
             }
-            self.update_top_k(position, value);
+            Self::update_top_k_parts(
+                &mut self.tops,
+                &mut self.threshold,
+                &self.random,
+                position,
+                value,
+            );
             if value >= best_value {
                 if value == best_value {
                     self.equivalent_choices.push(position);
@@ -170,21 +179,37 @@ impl DynamicMaximum {
     }
 
     fn update_top_k(&mut self, position: usize, value: f64) {
-        debug_assert!(value >= self.threshold);
-        if self.tops.len() < TOP_K {
-            self.tops.push(HeapElement {
+        Self::update_top_k_parts(
+            &mut self.tops,
+            &mut self.threshold,
+            &self.random,
+            position,
+            value,
+        );
+    }
+
+    fn update_top_k_parts(
+        tops: &mut Vec<HeapElement>,
+        threshold: &mut f64,
+        random: &SharedRandom,
+        position: usize,
+        value: f64,
+    ) {
+        debug_assert!(value >= *threshold);
+        if tops.len() < TOP_K {
+            tops.push(HeapElement {
                 index: position,
                 value,
             });
-            if self.tops.len() == TOP_K {
-                self.make_heap();
-                self.threshold = self.tops[0].value;
+            if tops.len() == TOP_K {
+                Self::make_heap(tops);
+                *threshold = tops[0].value;
             }
             return;
         }
-        if value == self.tops[0].value {
-            if self.random.bernoulli_half() {
-                self.tops[0].index = position;
+        if value == tops[0].value {
+            if random.bernoulli_half() {
+                tops[0].index = position;
             }
             return;
         }
@@ -192,58 +217,56 @@ impl DynamicMaximum {
         while heap_position < TOP_K / 2 {
             let left = 2 * heap_position + 1;
             let right = left + 1;
-            let next = if self.tops[left].value > self.tops[right].value {
-                if value <= self.tops[right].value {
+            let next = if tops[left].value > tops[right].value {
+                if value <= tops[right].value {
                     break;
                 }
                 right
             } else {
-                if value <= self.tops[left].value {
+                if value <= tops[left].value {
                     break;
                 }
                 left
             };
-            self.tops[heap_position] = self.tops[next];
+            tops[heap_position] = tops[next];
             heap_position = next;
         }
-        self.tops[heap_position] = HeapElement {
+        tops[heap_position] = HeapElement {
             index: position,
             value,
         };
-        self.threshold = self.tops[0].value;
+        *threshold = tops[0].value;
     }
 
     /// Reproduces libc++'s `std::make_heap()` ordering. Equal-valued elements
     /// are intentionally not ordered by index because the vector order affects
     /// both later tie draws and GLOP's shared random stream.
-    fn make_heap(&mut self) {
-        for start in (0..=(self.tops.len() - 2) / 2).rev() {
+    fn make_heap(tops: &mut [HeapElement]) {
+        for start in (0..=(tops.len() - 2) / 2).rev() {
             let mut child = 2 * start + 1;
-            if child + 1 < self.tops.len() && self.tops[child].value > self.tops[child + 1].value {
+            if child + 1 < tops.len() && tops[child].value > tops[child + 1].value {
                 child += 1;
             }
-            if self.tops[child].value > self.tops[start].value {
+            if tops[child].value > tops[start].value {
                 continue;
             }
-            let top = self.tops[start];
+            let top = tops[start];
             let mut hole = start;
             loop {
-                self.tops[hole] = self.tops[child];
+                tops[hole] = tops[child];
                 hole = child;
-                if (self.tops.len() - 2) / 2 < child {
+                if (tops.len() - 2) / 2 < child {
                     break;
                 }
                 child = 2 * child + 1;
-                if child + 1 < self.tops.len()
-                    && self.tops[child].value > self.tops[child + 1].value
-                {
+                if child + 1 < tops.len() && tops[child].value > tops[child + 1].value {
                     child += 1;
                 }
-                if self.tops[child].value > top.value {
+                if tops[child].value > top.value {
                     break;
                 }
             }
-            self.tops[hole] = top;
+            tops[hole] = top;
         }
     }
 }
