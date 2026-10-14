@@ -1,5 +1,95 @@
 # NMM 0–50k: M2 performance triage
 
+## LU permutation access follow-up (14 October 2026)
+
+Three matched-stage profiles of `cvs16r128-89`, `rmatr100-p10`, and
+`graph20-20-1rand` located the remaining excess in the presolved simplex
+solve, not presolve. `rmatr` spent a substantial share of Rust samples in
+LU's scattered permutation. Pinned GLOP traverses a validated permutation
+and n-dimensional scratch vectors directly. Rust now uses narrowly scoped,
+commented unchecked accesses there; it retains an explicit release-mode
+check on each caller-mutable sparse position, so malformed safe-API input
+still panics rather than causing undefined behavior.
+
+Two 11-trial alternating old/new Rust matched-solve comparisons measured
+0.988x/0.990x on `cvs`, 0.976x/0.977x on `rmatr`, and 0.989x/0.988x on
+`graph` before the explicit sparse-position check was added. A seven-trial
+public old/new check of the final checked variant measured 0.984x, 0.919x,
+and 0.989x respectively; the unusually large `rmatr` gain should be read
+alongside native-relative timings, not assumed to be solely the bounds-check
+effect. Raw A/B diagnostics are under `target/phase8-permutation-access-*`.
+
+After the final edit, a serial three-trial 213-model native-relative run
+matched all statuses and iteration counts with no timeouts. Its aggregate
+Rust/native ratio is **0.9756x** (23.680 / 24.273 s); excluding `qap12`,
+0.9840x. Median model ratio is 0.9521x and sqrt(nnz)-weighted geometric
+ratio is 0.9651x. Raw results are in
+[the post-edit public fixture](phase8-nmm0-50k-public-permutation-access.json).
+Seven-trial rechecks, in
+[the final focus fixture](phase8-nmm0-50k-focus-permutation-access-final.json),
+give:
+
+| Model | Native → Rust | Rust/native | Excess |
+|---|---:|---:|---:|
+| `cvs16r128-89` | 1.690 → 1.729 s | 1.023x | +38.4 ms |
+| `graph20-20-1rand` | 0.151 → 0.162 s | 1.067x | +10.2 ms |
+| `milo-v12-6-r2-40-1` | 0.107 → 0.111 s | 1.035x | +3.7 ms |
+| `traininstance2` | 0.099 → 0.103 s | 1.039x | +3.9 ms |
+| `neos-5107597-kakapo` | 0.059 → 0.062 s | 1.039x | +2.3 ms |
+| `d6cube` | 0.593 → 0.598 s | 1.009x | +5.1 ms |
+| `rmatr100-p10` | 0.840 → 0.798 s | 0.949x | -42.6 ms |
+
+Thus `rmatr` no longer needs intervention on this build; `cvs` and `graph`
+remain the major repeatable gaps. `dfl001` is near parity in the three-trial
+post-edit corpus (0.995x). The fast-96 strict trajectory fixture, extra-model
+strict pivot fixture, full workspace tests, and Clippy pass.
+
+## Fresh native-CPU rebuild at `a63f578` (14 October 2026)
+
+The release Rust public adapter was rebuilt after adding
+`-C target-cpu=native` to `.cargo/config.toml`; the paired pinned-GLOP
+adapter is unchanged. On Apple M2, the established serial public-pipeline
+harness ran one warmup and three alternating trials per side for all 213
+manifest models, with a 20-second per-solve limit. Parsing and output are
+excluded, while presolve, simplex, and postsolve are included. Every model
+matched native status and iteration count; objectives passed the harness's
+`1e-8` relative/absolute tolerance. No model hit the wall limit.
+
+The sum of per-model median solve times was 24.148 s native and 23.859 s
+Rust: **0.9880x Rust/native**. The median model ratio was 0.9568x and the
+sqrt(nnz)-weighted geometric ratio 0.9679x. Excluding the 9.6-second
+`qap12`, the aggregate ratio was 0.9957x. Raw results are in
+[the 213-model fixture](phase8-nmm0-50k-public-a63f578.json). The dataset
+manifest SHA-256 is
+`f7e397964e5d26fa6897dab1d2fc65ae9c065c5783fabe4c1c7ce954522861f2`;
+the Rust/native adapter hashes are
+`426f58910ee2b8edb5f89df7ddf739459683bead870849cd4f43577875fbfa5a` /
+`399a6767b9e6822e37c00dcb62f2f8b6d46a09fa7bf8c4c9fba03e4dfd2abd44`.
+
+Eleven candidates received seven additional alternating trials each. Their
+native and Rust trial ranges do not overlap except for `seymour`; this is a
+repeatability screen, not a confidence interval. Full trials are in
+[the focus fixture](phase8-nmm0-50k-focus-a63f578.json).
+
+| Priority | Model | nnz | Native → Rust median | Ratio | Excess |
+|---|---|---:|---:|---:|---:|
+| 1 | `cvs16r128-89` | 14,576 | 1.699 → 1.761 s | 1.036x | 61.7 ms |
+| 2 | `rmatr100-p10` | 29,236 | 0.844 → 0.875 s | 1.036x | 30.7 ms |
+| 3 | `graph20-20-1rand` | 19,314 | 0.151 → 0.163 s | 1.076x | 11.5 ms |
+| 4 | `dfl001` | 41,873 | 3.089 → 3.106 s | 1.006x | 17.6 ms |
+| 5 | `d6cube` | 43,888 | 0.593 → 0.601 s | 1.014x | 8.1 ms |
+| 6 | `milo-v12-6-r2-40-1` | 14,814 | 0.107 → 0.112 s | 1.047x | 5.1 ms |
+| 7 | `traininstance2` | 41,532 | 0.099 → 0.103 s | 1.042x | 4.1 ms |
+| 8 | `neos-5107597-kakapo` | 19,416 | 0.059 → 0.062 s | 1.055x | 3.3 ms |
+
+`dfl001` is still reproducibly slower but now only 0.6%; investigate after
+the larger percentage gaps unless a shared kernel explains it. `seymour1`
+(1.022x, +3.7 ms) and `seymour` (1.019x, +3.2 ms; overlapping ranges) are
+secondary. `neos-1445765` is 1.033x but only +0.9 ms in this public run;
+its older much larger gap should not be extrapolated to this build.
+Aggregate parity has been reached on this corpus, but these repeatable
+individual regressions remain before per-instance parity can be declared.
+
 ## Focused follow-up after the fresh rerun
 
 GLOP dispatches unit/nonunit triangular solves to separate template kernels

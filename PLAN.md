@@ -8,6 +8,14 @@ when timing-neutral; do not trade trajectory or KKT agreement for speed.
 
 ## Current baseline
 
+- A profiled LU scattered-permutation access change removed redundant Rust
+  bounds checks while preserving a release-mode check for caller-mutable
+  sparse positions. Two paired matched-solve A/B runs improve `cvs`, `rmatr`,
+  and `graph`; the final 213-model native-relative ratio is 0.9756x with
+  matching status/iterations. `rmatr` is now 0.949x native in seven trials;
+  `cvs` (1.023x, +38 ms) and `graph` (1.067x, +10 ms) remain the principal
+  per-instance targets. See `baselines/phase8-nmm0-50k-performance.md`.
+
 - A broader constructor/copy-site scan found that basis permutation on
   refactorization cloned the basis, dual Phase-I prices, and permutation.
   It now uses GLOP-style retained temporary vectors and a borrowed permutation

@@ -1015,6 +1015,7 @@ impl LuFactorization {
         // the already-zero destination; neither dense array is copied.
         vector.values_mut().swap_storage_with_raw(&mut scratch);
         let (values, non_zeros) = vector.mutable_parts();
+        debug_assert_eq!(values.len(), n);
         if non_zeros.is_empty() {
             debug_assert_eq!(scratch.len(), destination_by_source.len());
             // Iterating the two equally sized input arrays together lets the
@@ -1022,17 +1023,28 @@ impl LuFactorization {
             // dense permutation, while preserving GLOP's traversal order.
             for (&value, &destination) in scratch.iter().zip(destination_by_source) {
                 if value != 0.0 {
-                    values[destination] = value;
+                    // SAFETY: factorization permutations are bijections of
+                    // 0..n, and the swapped output vector has length n.
+                    unsafe { *values.get_unchecked_mut(destination) = value };
                 }
             }
             scratch.fill(0.0);
         } else {
             for source in non_zeros.iter_mut() {
                 let source_position = source.to_usize();
-                let destination = destination_by_source[source_position];
-                let value = scratch[source_position];
-                scratch[source_position] = 0.0;
-                values[destination] = value;
+                // The public scattered-vector API can expose its position
+                // list, so retain the safe API's panic for malformed input.
+                assert!(source_position < n, "sparse position exceeds LU dimension");
+                // SAFETY: sparse positions are produced by the n-dimensional
+                // solve (and checked above), the factorization permutation
+                // maps 0..n to 0..n, and both arrays have length n.
+                let destination = unsafe {
+                    let destination = *destination_by_source.get_unchecked(source_position);
+                    let value = *scratch.get_unchecked(source_position);
+                    *scratch.get_unchecked_mut(source_position) = 0.0;
+                    *values.get_unchecked_mut(destination) = value;
+                    destination
+                };
                 *source = I::from_usize(destination);
             }
         }
