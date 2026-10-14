@@ -1,0 +1,718 @@
+{
+  "machine": "macOS-15.6.1-arm64-arm-64bit-Mach-O",
+  "processor": "Apple M2",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "clang": "Apple clang version 17.0.0 (clang-1700.6.4.2)",
+  "gloprs_commit": "8d51e0390d7a598b9f444094002b7a1b9131b1cc",
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "trials": 5,
+  "warmups": 1,
+  "presolve_repetitions": 5,
+  "solve_repetitions": 1,
+  "iteration_cap": null,
+  "wall_seconds": 20.0,
+  "corpus": "nmm0-50k",
+  "summary": {
+    "parse": {
+      "timed_models": 8,
+      "skipped_models": 0,
+      "native_total_seconds": 0.052961751,
+      "rust_total_seconds": 0.052687668,
+      "aggregate_ratio": 0.9948248878704935,
+      "median_model_ratio": 1.031329101757602,
+      "sqrt_nnz_weighted_geometric_ratio": 0.9946137156068127
+    },
+    "presolve": {
+      "timed_models": 8,
+      "skipped_models": 0,
+      "native_total_seconds": 0.06800655,
+      "rust_total_seconds": 0.0616336498,
+      "aggregate_ratio": 0.9062899058987701,
+      "median_model_ratio": 0.9136539721261381,
+      "sqrt_nnz_weighted_geometric_ratio": 0.9043523271314484
+    },
+    "solve": {
+      "timed_models": 8,
+      "skipped_models": 0,
+      "native_total_seconds": 6.593170248,
+      "rust_total_seconds": 6.784592499,
+      "aggregate_ratio": 1.0290334154586813,
+      "median_model_ratio": 1.0427498472787349,
+      "sqrt_nnz_weighted_geometric_ratio": 1.0544043131030947
+    }
+  },
+  "results": [
+    {
+      "name": "cvs16r128-89",
+      "corpus": "miplib2017",
+      "nonzeros": 14576,
+      "parse": {
+        "native_seconds": 0.003735917,
+        "rust_seconds": 0.004036417,
+        "ratio": 1.0804354058187051,
+        "native_trials_seconds": [
+          0.00393775,
+          0.003826417,
+          0.003735917,
+          0.00372675,
+          0.003693667
+        ],
+        "rust_trials_seconds": [
+          0.004234792,
+          0.004036417,
+          0.004381041,
+          0.00401775,
+          0.004014208
+        ],
+        "native_median_absolute_deviation_seconds": 4.225000000000019e-05,
+        "rust_median_absolute_deviation_seconds": 2.2208999999999597e-05,
+        "outcome": {
+          "rows": "4633",
+          "columns": "3472",
+          "nonzeros": "12528"
+        }
+      },
+      "presolve": {
+        "native_seconds": 0.0018256166000000002,
+        "rust_seconds": 0.0015810334,
+        "ratio": 0.8660270727161442,
+        "native_trials_seconds": [
+          0.0018051083999999998,
+          0.0019440834,
+          0.0018256166000000002,
+          0.001865975,
+          0.0018022
+        ],
+        "rust_trials_seconds": [
+          0.001618025,
+          0.00152255,
+          0.0015810334,
+          0.0015202916,
+          0.001644475
+        ],
+        "native_median_absolute_deviation_seconds": 2.3416600000000266e-05,
+        "rust_median_absolute_deviation_seconds": 5.848340000000015e-05,
+        "outcome": {
+          "status": "INIT",
+          "rows": "4633",
+          "columns": "3472",
+          "nonzeros": "12528"
+        }
+      },
+      "solve": {
+        "native_seconds": 1.686844916,
+        "rust_seconds": 1.7597590410000001,
+        "ratio": 1.0432251502840586,
+        "native_trials_seconds": [
+          1.688280916,
+          1.690103708,
+          1.686844916,
+          1.683854916,
+          1.684336375
+        ],
+        "rust_trials_seconds": [
+          1.7665995410000002,
+          1.759000291,
+          1.7597590410000001,
+          1.7638223750000002,
+          1.757896708
+        ],
+        "native_median_absolute_deviation_seconds": 0.0025085410000000863,
+        "rust_median_absolute_deviation_seconds": 0.0018623330000000493,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "19626",
+          "objective_bits": "13862079653046386688"
+        }
+      }
+    },
+    {
+      "name": "dfl001",
+      "corpus": "netlib",
+      "nonzeros": 41873,
+      "parse": {
+        "native_seconds": 0.008825417,
+        "rust_seconds": 0.007209417,
+        "ratio": 0.8168925049093997,
+        "native_trials_seconds": [
+          0.00880325,
+          0.009018667,
+          0.009068541,
+          0.008708208,
+          0.008825417
+        ],
+        "rust_trials_seconds": [
+          0.00718425,
+          0.007489542,
+          0.007209417,
+          0.007102916,
+          0.007214
+        ],
+        "native_median_absolute_deviation_seconds": 0.00011720900000000006,
+        "rust_median_absolute_deviation_seconds": 2.5167000000000418e-05,
+        "outcome": {
+          "rows": "6071",
+          "columns": "12230",
+          "nonzeros": "35632"
+        }
+      },
+      "presolve": {
+        "native_seconds": 0.022049025,
+        "rust_seconds": 0.0184083332,
+        "ratio": 0.8348819596331358,
+        "native_trials_seconds": [
+          0.022002416599999998,
+          0.022049025,
+          0.0221890334,
+          0.0220800084,
+          0.0220392082
+        ],
+        "rust_trials_seconds": [
+          0.0183809416,
+          0.0184083332,
+          0.018500525,
+          0.018544175,
+          0.0183670166
+        ],
+        "native_median_absolute_deviation_seconds": 3.098340000000019e-05,
+        "rust_median_absolute_deviation_seconds": 4.131660000000065e-05,
+        "outcome": {
+          "status": "INIT",
+          "rows": "4602",
+          "columns": "9216",
+          "nonzeros": "30719"
+        }
+      },
+      "solve": {
+        "native_seconds": 3.064176667,
+        "rust_seconds": 3.109225667,
+        "ratio": 1.0147018285483211,
+        "native_trials_seconds": [
+          3.07031175,
+          3.082640792,
+          3.064176667,
+          3.059477833,
+          3.057185375
+        ],
+        "rust_trials_seconds": [
+          3.109225667,
+          3.109632458,
+          3.105970041,
+          3.099663667,
+          3.109881375
+        ],
+        "native_median_absolute_deviation_seconds": 0.006135083000000208,
+        "rust_median_absolute_deviation_seconds": 0.0006557080000000326,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "16966",
+          "objective_bits": "4712310210922698543"
+        }
+      }
+    },
+    {
+      "name": "rmatr100-p10",
+      "corpus": "miplib2017",
+      "nonzeros": 29236,
+      "parse": {
+        "native_seconds": 0.007395958,
+        "rust_seconds": 0.008356875,
+        "ratio": 1.1299246155805642,
+        "native_trials_seconds": [
+          0.007395958,
+          0.007699208,
+          0.007282,
+          0.007288125,
+          0.007410875
+        ],
+        "rust_trials_seconds": [
+          0.008257791,
+          0.008239375,
+          0.008356875,
+          0.008838417,
+          0.008448125
+        ],
+        "native_median_absolute_deviation_seconds": 0.00010783299999999989,
+        "rust_median_absolute_deviation_seconds": 9.908399999999928e-05,
+        "outcome": {
+          "rows": "7260",
+          "columns": "7359",
+          "nonzeros": "21877"
+        }
+      },
+      "presolve": {
+        "native_seconds": 0.0039673,
+        "rust_seconds": 0.0037517834,
+        "ratio": 0.9456767574925012,
+        "native_trials_seconds": [
+          0.0039836,
+          0.0039673,
+          0.0040567916,
+          0.0039381418,
+          0.0039124916
+        ],
+        "rust_trials_seconds": [
+          0.0037800418,
+          0.0037517834,
+          0.0037072,
+          0.0036773332,
+          0.003774475
+        ],
+        "native_median_absolute_deviation_seconds": 2.9158199999999683e-05,
+        "rust_median_absolute_deviation_seconds": 2.8258399999999892e-05,
+        "outcome": {
+          "status": "INIT",
+          "rows": "7260",
+          "columns": "7359",
+          "nonzeros": "21877"
+        }
+      },
+      "solve": {
+        "native_seconds": 0.834054125,
+        "rust_seconds": 0.863368708,
+        "ratio": 1.0351470991166192,
+        "native_trials_seconds": [
+          0.835882875,
+          0.8346485,
+          0.833475667,
+          0.833159459,
+          0.834054125
+        ],
+        "rust_trials_seconds": [
+          0.863368708,
+          0.862043125,
+          0.863165042,
+          0.865621458,
+          0.864974292
+        ],
+        "native_median_absolute_deviation_seconds": 0.0005943750000000358,
+        "rust_median_absolute_deviation_seconds": 0.0013255829999999635,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "7866",
+          "objective_bits": "4645051240743820511"
+        }
+      }
+    },
+    {
+      "name": "d6cube",
+      "corpus": "netlib",
+      "nonzeros": 43888,
+      "parse": {
+        "native_seconds": 0.005958917,
+        "rust_seconds": 0.005683708,
+        "ratio": 0.9538156010563664,
+        "native_trials_seconds": [
+          0.005958917,
+          0.006277875,
+          0.00582425,
+          0.005965792,
+          0.005943791
+        ],
+        "rust_trials_seconds": [
+          0.00550825,
+          0.005772375,
+          0.005567583,
+          0.00578325,
+          0.005683708
+        ],
+        "native_median_absolute_deviation_seconds": 1.5125999999999855e-05,
+        "rust_median_absolute_deviation_seconds": 9.95420000000002e-05,
+        "outcome": {
+          "rows": "415",
+          "columns": "6184",
+          "nonzeros": "37704"
+        }
+      },
+      "presolve": {
+        "native_seconds": 0.0058751668,
+        "rust_seconds": 0.0048958416,
+        "ratio": 0.8333110814828271,
+        "native_trials_seconds": [
+          0.0059160166,
+          0.0058751668,
+          0.0057777,
+          0.005847691800000001,
+          0.0059089666
+        ],
+        "rust_trials_seconds": [
+          0.00491395,
+          0.0049426166,
+          0.0048087416,
+          0.004840125,
+          0.0048958416
+        ],
+        "native_median_absolute_deviation_seconds": 3.379980000000043e-05,
+        "rust_median_absolute_deviation_seconds": 4.677499999999977e-05,
+        "outcome": {
+          "status": "INIT",
+          "rows": "403",
+          "columns": "5443",
+          "nonzeros": "34233"
+        }
+      },
+      "solve": {
+        "native_seconds": 0.586551916,
+        "rust_seconds": 0.599840125,
+        "ratio": 1.0226547874749419,
+        "native_trials_seconds": [
+          0.586765208,
+          0.587804667,
+          0.586551916,
+          0.586252375,
+          0.58580475
+        ],
+        "rust_trials_seconds": [
+          0.60054675,
+          0.599820083,
+          0.600824125,
+          0.599840125,
+          0.599408834
+        ],
+        "native_median_absolute_deviation_seconds": 0.00029954099999995876,
+        "rust_median_absolute_deviation_seconds": 0.0004312909999999448,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "10046",
+          "objective_bits": "4644257804287073755"
+        }
+      }
+    },
+    {
+      "name": "graph20-20-1rand",
+      "corpus": "miplib2017",
+      "nonzeros": 19314,
+      "parse": {
+        "native_seconds": 0.005597875,
+        "rust_seconds": 0.00633825,
+        "ratio": 1.1322600093785589,
+        "native_trials_seconds": [
+          0.00549625,
+          0.005711833,
+          0.00563975,
+          0.005476125,
+          0.005597875
+        ],
+        "rust_trials_seconds": [
+          0.00633825,
+          0.006457416,
+          0.006548125,
+          0.00628975,
+          0.006296542
+        ],
+        "native_median_absolute_deviation_seconds": 0.00010162500000000015,
+        "rust_median_absolute_deviation_seconds": 4.849999999999993e-05,
+        "outcome": {
+          "rows": "5587",
+          "columns": "2183",
+          "nonzeros": "19277"
+        }
+      },
+      "presolve": {
+        "native_seconds": 0.0038263999999999998,
+        "rust_seconds": 0.00356295,
+        "ratio": 0.931149383232281,
+        "native_trials_seconds": [
+          0.0038762334000000003,
+          0.0038263999999999998,
+          0.0038757916,
+          0.0037621250000000003,
+          0.0038005668
+        ],
+        "rust_trials_seconds": [
+          0.0035209,
+          0.00356295,
+          0.0036515,
+          0.003584675,
+          0.0035307334
+        ],
+        "native_median_absolute_deviation_seconds": 4.9391600000000396e-05,
+        "rust_median_absolute_deviation_seconds": 3.2216600000000047e-05,
+        "outcome": {
+          "status": "INIT",
+          "rows": "2109",
+          "columns": "6924",
+          "nonzeros": "19462"
+        }
+      },
+      "solve": {
+        "native_seconds": 0.147324,
+        "rust_seconds": 0.16134425,
+        "ratio": 1.0951660964948005,
+        "native_trials_seconds": [
+          0.147263833,
+          0.168005875,
+          0.147350917,
+          0.147324,
+          0.147056167
+        ],
+        "rust_trials_seconds": [
+          0.161195917,
+          0.16134425,
+          0.161766875,
+          0.161841833,
+          0.16115275
+        ],
+        "native_median_absolute_deviation_seconds": 6.016699999999986e-05,
+        "rust_median_absolute_deviation_seconds": 0.00019149999999998335,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "3092",
+          "objective_bits": "13853776141233422336"
+        }
+      }
+    },
+    {
+      "name": "milo-v12-6-r2-40-1",
+      "corpus": "miplib2017",
+      "nonzeros": 14814,
+      "parse": {
+        "native_seconds": 0.0040315,
+        "rust_seconds": 0.004538334,
+        "ratio": 1.1257184670718094,
+        "native_trials_seconds": [
+          0.0040315,
+          0.003992417,
+          0.004087792,
+          0.003982,
+          0.004267
+        ],
+        "rust_trials_seconds": [
+          0.004538334,
+          0.004494041,
+          0.004622958,
+          0.004559167,
+          0.00432875
+        ],
+        "native_median_absolute_deviation_seconds": 4.9500000000000065e-05,
+        "rust_median_absolute_deviation_seconds": 4.4292999999999937e-05,
+        "outcome": {
+          "rows": "5628",
+          "columns": "2688",
+          "nonzeros": "14604"
+        }
+      },
+      "presolve": {
+        "native_seconds": 0.0048614418,
+        "rust_seconds": 0.004745525,
+        "ratio": 0.9761558803398613,
+        "native_trials_seconds": [
+          0.0048674832,
+          0.0048614418,
+          0.0048063915999999995,
+          0.0049374250000000005,
+          0.0048329168
+        ],
+        "rust_trials_seconds": [
+          0.0047550666,
+          0.0047475584,
+          0.0047410166,
+          0.0047233416,
+          0.004745525
+        ],
+        "native_median_absolute_deviation_seconds": 2.852499999999973e-05,
+        "rust_median_absolute_deviation_seconds": 4.508399999999559e-06,
+        "outcome": {
+          "status": "INIT",
+          "rows": "2252",
+          "columns": "5612",
+          "nonzeros": "14144"
+        }
+      },
+      "solve": {
+        "native_seconds": 0.102275208,
+        "rust_seconds": 0.11112225,
+        "ratio": 1.0865023124665754,
+        "native_trials_seconds": [
+          0.10241125,
+          0.102098625,
+          0.101703167,
+          0.102436791,
+          0.102275208
+        ],
+        "rust_trials_seconds": [
+          0.11104425,
+          0.111157709,
+          0.11112225,
+          0.11147425,
+          0.110988834
+        ],
+        "native_median_absolute_deviation_seconds": 0.00016158299999999293,
+        "rust_median_absolute_deviation_seconds": 7.800000000000862e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "2346",
+          "objective_bits": "4686302049657140773"
+        }
+      }
+    },
+    {
+      "name": "seymour",
+      "corpus": "miplib2017",
+      "nonzeros": 34921,
+      "parse": {
+        "native_seconds": 0.006124417,
+        "rust_seconds": 0.006015542,
+        "ratio": 0.982222797696499,
+        "native_trials_seconds": [
+          0.00607225,
+          0.006248292,
+          0.00605725,
+          0.006124417,
+          0.006166333
+        ],
+        "rust_trials_seconds": [
+          0.005934375,
+          0.006255916,
+          0.006015542,
+          0.005963625,
+          0.006125167
+        ],
+        "native_median_absolute_deviation_seconds": 5.2166999999999665e-05,
+        "rust_median_absolute_deviation_seconds": 8.116699999999918e-05,
+        "outcome": {
+          "rows": "4944",
+          "columns": "1372",
+          "nonzeros": "33549"
+        }
+      },
+      "presolve": {
+        "native_seconds": 0.007972491600000001,
+        "rust_seconds": 0.0071446166,
+        "ratio": 0.8961585610199951,
+        "native_trials_seconds": [
+          0.008144675,
+          0.0080883582,
+          0.007972491600000001,
+          0.007954816600000001,
+          0.007943133199999999
+        ],
+        "rust_trials_seconds": [
+          0.0071299834,
+          0.007113525,
+          0.0072405666,
+          0.0071446166,
+          0.0071550084
+        ],
+        "native_median_absolute_deviation_seconds": 2.9358400000002033e-05,
+        "rust_median_absolute_deviation_seconds": 1.4633200000000075e-05,
+        "outcome": {
+          "status": "INIT",
+          "rows": "1103",
+          "columns": "5502",
+          "nonzeros": "33187"
+        }
+      },
+      "solve": {
+        "native_seconds": 0.162464791,
+        "rust_seconds": 0.169332916,
+        "ratio": 1.0422745442734112,
+        "native_trials_seconds": [
+          0.162644208,
+          0.163041333,
+          0.161988292,
+          0.16198075,
+          0.162464791
+        ],
+        "rust_trials_seconds": [
+          0.16935725,
+          0.169352291,
+          0.169332916,
+          0.167869792,
+          0.168932667
+        ],
+        "native_median_absolute_deviation_seconds": 0.00047649899999999135,
+        "rust_median_absolute_deviation_seconds": 2.4333999999986977e-05,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "2634",
+          "objective_bits": "4645812158497802704"
+        }
+      }
+    },
+    {
+      "name": "neos-1445765",
+      "corpus": "miplib2017",
+      "nonzeros": 41230,
+      "parse": {
+        "native_seconds": 0.01129175,
+        "rust_seconds": 0.010509125,
+        "ratio": 0.9306905484092368,
+        "native_trials_seconds": [
+          0.011662292,
+          0.01129175,
+          0.01121275,
+          0.011138375,
+          0.011561291
+        ],
+        "rust_trials_seconds": [
+          0.010558417,
+          0.010492917,
+          0.010509125,
+          0.010501833,
+          0.010526666
+        ],
+        "native_median_absolute_deviation_seconds": 0.000153374999999999,
+        "rust_median_absolute_deviation_seconds": 1.6208000000000194e-05,
+        "outcome": {
+          "rows": "2147",
+          "columns": "20617",
+          "nonzeros": "40230"
+        }
+      },
+      "presolve": {
+        "native_seconds": 0.0176291082,
+        "rust_seconds": 0.0175435666,
+        "ratio": 0.9951477069044253,
+        "native_trials_seconds": [
+          0.0176291082,
+          0.0175987916,
+          0.017728966800000003,
+          0.017664533399999998,
+          0.017603225
+        ],
+        "rust_trials_seconds": [
+          0.0174212584,
+          0.0175435666,
+          0.0176944916,
+          0.0177358084,
+          0.0174174416
+        ],
+        "native_median_absolute_deviation_seconds": 3.0316600000000055e-05,
+        "rust_median_absolute_deviation_seconds": 0.00012612500000000124,
+        "outcome": {
+          "status": "INIT",
+          "rows": "1001",
+          "columns": "12808",
+          "nonzeros": "25616"
+        }
+      },
+      "solve": {
+        "native_seconds": 0.009478625,
+        "rust_seconds": 0.010599542,
+        "ratio": 1.1182573421777948,
+        "native_trials_seconds": [
+          0.009433084,
+          0.009478625,
+          0.009547083,
+          0.00942575,
+          0.009571625
+        ],
+        "rust_trials_seconds": [
+          0.010679833,
+          0.010599542,
+          0.010798875,
+          0.010373416,
+          0.010469125
+        ],
+        "native_median_absolute_deviation_seconds": 5.28749999999991e-05,
+        "rust_median_absolute_deviation_seconds": 0.00013041700000000073,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "1295",
+          "objective_bits": "13895890514566522097"
+        }
+      }
+    }
+  ]
+}

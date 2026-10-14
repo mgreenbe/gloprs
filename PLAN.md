@@ -8,6 +8,16 @@ when timing-neutral; do not trade trajectory or KKT agreement for speed.
 
 ## Current baseline
 
+- Two fresh serial, alternating M2-targeted `nmm0-50k` public runs at
+  `8d51e03` cover all 213 models with identical native/Rust statuses and
+  iteration counts and no timeouts. Aggregate Rust/native ratios are 0.9937x
+  and 0.9938x; sqrt(nnz)-weighted geometric ratios are 0.9824x and 0.9834x.
+  Excluding `qap12`, aggregate ratios are 1.0039x and 1.0020x. Five-trial
+  matched-stage triage confirms that the leading repeatable regressions are
+  simplex-solve costs, not parse or presolve: `cvs16r128-89` (~80 ms extra),
+  `rmatr100-p10` (~23 ms), `d6cube` (~16 ms), `graph20-20-1rand` (~14 ms), and
+  `milo-v12-6-r2-40-1` (~9 ms). The raw runs, build hashes, and intervention
+  ranking are in `baselines/phase8-nmm0-50k-performance.md`.
 - The M2-targeted, serial `nmm0-50k` run covers all 213 deduplicated models
   with matching status and iteration count: 1.010x aggregate and 1.023x
   sqrt(nnz)-weighted Rust/native public-solve time. The largest repeatable
@@ -184,21 +194,19 @@ when timing-neutral; do not trade trajectory or KKT agreement for speed.
 
 ## Remaining work
 
-1. Localize the largest repeatable *absolute* extra-corpus excesses with
-   paired, matched-input stage measurements before changing kernels:
-   `cvs16r128-89`, `neos-3216931-puriri`, `neos-1171737`, and
-   `graph20-20-1rand`. Recheck high-ratio small models such as `neos-950242`
-   with enough repetitions to separate signal from timer noise. The current
-   samples distribute time across triangular solves, update rows, ratio tests,
-   pricing, and edge norms; they do not identify a single universal bottleneck.
-   For `nmm0-50k`, start with matched native/Rust stage accounting on
-   `cvs16r128-89`, then `dfl001`, `d6cube`, `rmatr100-p10`, and
-   `graph20-20-1rand`; profile the remaining `neos-1445765` solve gap.
-2. Account for the remaining `fhnw-binpack4-48` whole-solve gap with matched
-   primal-phase and BTRAN/edge-norm stage timings. Do not infer a need to
-   rewrite LU from whole-solve samples: selected-view LU is already close to
-   parity. For every concrete discrepancy, compare the pinned C++ path and
-   Rust path, then repair representation or lifecycle differences first.
+1. Profile matched native/Rust simplex kernels for `cvs16r128-89` first,
+   followed by `rmatr100-p10`, `d6cube`, `graph20-20-1rand`, and
+   `milo-v12-6-r2-40-1`. Their parse/presolve stages are near or below parity,
+   and their public and matched-solve excesses recur in both full runs. Check
+   the implicated C++ and Rust control flow, sparse representation, and
+   workspace lifecycle before changing a kernel. `dfl001` has a smaller,
+   variable 0.4–1.5% gap; remeasure it before prioritizing. The remaining
+   `neos-1445765` solve excess is ~1 ms in the public path and is secondary.
+2. Recheck other extra-corpus outliers outside `nmm0-50k`, including
+   `neos-3216931-puriri` and `neos-1171737`, under the same paired-stage
+   protocol. The latest `nmm0-50k` public runs put `fhnw-binpack4-48` below
+   native time, so it is not a current intervention target absent fresh
+   contradictory measurements.
 3. Extend the new strict pivot-by-pivot native fixture beyond `neos-1445765`
    and `graph20-20-1rand` to the other selected extra-corpus outliers. The
    existing 164-model gate checks public outcomes, status, and iteration

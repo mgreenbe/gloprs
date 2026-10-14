@@ -1,5 +1,65 @@
 # NMM 0–50k: M2 performance triage
 
+## Fresh paired rerun at `8d51e03` (14 October 2026)
+
+Two independent serial passes covered all 213 deduplicated models. Each pass
+used one warmup per solver and three alternating native/Rust timed trials per
+model, taking each model's median before aggregation. All statuses and
+iteration counts match, the harness's objective tolerance passes, and no
+model reached the 20-second wall limit. MPS loading is excluded; presolve,
+simplex, and postsolve are included. The summary is:
+
+| Pass | Native sum | Rust sum | Rust/native | Median model | sqrt(nnz)-weighted geometric |
+|---|---:|---:|---:|---:|---:|
+| First | 24.156 s | 24.005 s | 0.9937x | 0.9743x | 0.9824x |
+| Repeat | 24.077 s | 23.927 s | 0.9938x | 0.9785x | 0.9834x |
+
+`qap12` takes roughly 9.6 s native and 9.4 s Rust. Excluding it, the
+aggregate is 1.0039x and 1.0020x in the two passes: close to parity, but
+not evidence that every smaller model is at parity. Raw trials and outcomes
+are in [first public run](phase8-nmm0-50k-public-2026-10-14.json) and
+[repeat public run](phase8-nmm0-50k-public-2026-10-14-repeat.json).
+
+The following public excesses recur in both passes; milliseconds are per
+solve, computed from model medians. An eight-model, five-trial
+[matched-stage run](phase8-nmm0-50k-stage-triage-2026-10-14.json) independently
+places these costs in the presolved simplex solve rather than parsing or
+presolve.
+
+| Priority | Model | nnz | Public ratio, two passes | Extra time, two passes | Matched-solve ratio | Intervention |
+|---|---|---:|---:|---:|---:|---|
+| 1 | `cvs16r128-89` | 14,576 | 1.049x / 1.046x | 82 / 79 ms | 1.043x | Largest stable absolute solver gap; profile simplex stages first. |
+| 2 | `rmatr100-p10` | 29,236 | 1.028x / 1.025x | 24 / 22 ms | 1.035x | Compare repeated numerical and pricing stages. |
+| 3 | `d6cube` | 43,888 | 1.027x / 1.028x | 16 / 17 ms | 1.023x | Compare long-solve numerical stage accounting. |
+| 4 | `graph20-20-1rand` | 19,314 | 1.094x / 1.096x | 14 / 15 ms | 1.095x | Highest substantial ratio; inspect distributed pivot kernels. |
+| 5 | `milo-v12-6-r2-40-1` | 14,814 | 1.086x / 1.086x | 9 / 9 ms | 1.087x | Profile for a shared cause with `graph`. |
+
+`dfl001` has a larger but less stable absolute excess (31 / 12 ms, public
+ratios 1.010x / 1.004x); five matched-stage trials give 1.015x, so measure
+more before attributing it to a specific kernel. `seymour`, `uct-subprob`,
+and `neos-5107597-kakapo` show smaller recurring gaps. `neos-1445765` is
+1.037x / 1.032x publicly, about 1 ms excess; its presolve is now at parity
+(0.995x matched), though its isolated presolved solve remains 1.118x. Very
+short cases with large ratios are lower priority until repeated timing can
+separate fixed overhead from timer noise.
+
+The pinned OR-Tools checkout was `100f66e6242ab8bf8d32feb8f3bf086db66ae2b5`
+and the gloprs source was `8d51e0390d7a598b9f444094002b7a1b9131b1cc`.
+The native library was current in its Release CMake build (`-O3 -DNDEBUG
+-mcpu=apple-m2`); both adapters were rebuilt at `-O2 -DNDEBUG
+-mcpu=apple-m2`. Rust examples were rebuilt in Release with
+`RUSTFLAGS='-C target-cpu=native'` on Apple M2 (Rust 1.95.0), one codegen unit,
+and ThinLTO. SHA-256 fingerprints: native library
+`1a2f5b7426bc01abb87ee6104095dc7bd4fb75dd43001637004bf2c601ac41f3`,
+public native/Rust adapters
+`399a6767b9e6822e37c00dcb62f2f8b6d46a09fa7bf8c4c9fba03e4dfd2abd44` /
+`40cb44f8a256c3f7e96108ab7e583f6c9d6cdabc2b4a260fc7fbc2fc2083e621`.
+Dataset manifest SHA-256:
+`f7e397964e5d26fa6897dab1d2fc65ae9c065c5783fabe4c1c7ce954522861f2`.
+
+The older sections below record earlier builds and measurements; their
+outlier rankings are superseded by this fresh run.
+
 The fresh serial public-solver comparison completed all 213 deduplicated
 instances. Native GLOP and gloprs agree on status, iteration count, and the
 harness's objective tolerance for every model. The sum of per-model median
