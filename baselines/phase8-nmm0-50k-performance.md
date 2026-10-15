@@ -1,5 +1,51 @@
 # NMM 0–50k: M2 performance triage
 
+## Fresh indexed-access follow-up (14 October 2026)
+
+At `1a9c753` (the bounds-access audit), the release public adapters were
+rebuilt for Apple M2 and run serially with one warmup and three alternating
+native/Rust trials per model. All 213 models completed with matching status
+and iteration count and no wall limit. The summed Rust/native ratio was
+**0.9757x**, the median model ratio **0.9580x**, and the sqrt(nnz)-weighted
+geometric ratio **0.9672x**. See the [full raw run](phase8-nmm0-50k-public-2026-10-14-bounds.json).
+This is one completed pass, not a new stable parity claim: a second pass
+encountered a nonterminal native `pilot` result against its pinned fixture
+and was discarded. Concurrent WindowServer/iTerm load was visible during
+these measurements.
+The pinned upstream checkout was `100f66e6242ab8bf8d32feb8f3bf086db66ae2b5`;
+the native public adapter SHA-256 was
+`399a6767b9e6822e37c00dcb62f2b8c4c9fba03e4dfd2abd44` and the Rust public adapter
+SHA-256 was `1aa0b00a72e27e0184be8396621856722d7642c921bb3921e7dc95a89ae4905e`.
+
+Seven-trial matched-stage [triage](phase8-nmm0-50k-stage-2026-10-14-bounds.json)
+identified solve, not presolve, as the main remaining cost on selected models:
+
+| Model | Native solve | Rust solve | Ratio | Excess |
+|---|---:|---:|---:|---:|
+| `cvs16r128-89` | 1.687 s | 1.752 s | 1.039x | 65 ms |
+| `graph20-20-1rand` | 147.3 ms | 157.6 ms | 1.070x | 10.3 ms |
+| `traininstance2` | 65.7 ms | 71.2 ms | 1.083x | 5.5 ms |
+| `milo-v12-6-r2-40-1` | 101.9 ms | 106.5 ms | 1.045x | 4.6 ms |
+| `d6cube` | 586.8 ms | 591.4 ms | 1.008x | 4.6 ms |
+| `uct-subprob` | 62.2 ms | 65.5 ms | 1.052x | 3.3 ms |
+| `neos-5107597-kakapo` | 55.3 ms | 58.4 ms | 1.056x | 3.1 ms |
+
+Paired `sample` profiles of `cvs` and `graph` put substantial time on both
+sides in triangular transposed solves, Harris ratio testing, update-row work,
+and pricing. No single dominant Rust-only stage emerged. One exact access
+difference was repaired: primal edge/Devex updates now read coefficients for
+`UpdateRow`'s own reported positions without a per-read bounds check, as
+upstream does. The [15-trial old/new Rust A/B](phase8-nmm0-50k-update-row-coeff-ab.json)
+was 0.994x on `cvs` but 1.005x on `graph` and 1.004x on `milo`. A fresh
+[nine-trial native-relative focus](phase8-nmm0-50k-update-row-coeff-focus.json)
+still measures 1.018x, 1.070x, and 1.037x respectively. The access change
+is retained for fidelity, not credited as a broad timing repair. Fast-96
+strict trajectories and the selected extra-model pivot fixture pass.
+
+The material `graph` gap remains open. A controlled, uncontended repeat of
+the full corpus and kernel-level matched probes are needed before declaring
+all selected instances at parity.
+
 ## LU permutation access follow-up (14 October 2026)
 
 Three matched-stage profiles of `cvs16r128-89`, `rmatr100-p10`, and

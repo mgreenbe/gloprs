@@ -411,6 +411,15 @@ impl UpdateRow {
 
     #[must_use]
     #[inline]
+    pub(crate) fn coefficient_of_reported_nonzero(&self, column: usize) -> f64 {
+        // SAFETY: the caller takes column from non_zero_positions(); every
+        // producer of that list writes only indices below the coefficients
+        // vector's retained matrix width, matching GLOP's GetCoefficient().
+        unsafe { *self.coefficients.get_unchecked(column) }
+    }
+
+    #[must_use]
+    #[inline]
     pub const fn num_operations(&self) -> i64 {
         self.num_operations
     }
@@ -925,6 +934,12 @@ mod tests {
             .copy_from_slice(&[0.0, 2.0, 0.0, 3.0]);
         update_row.rebuild_non_zeros(&relevant);
         assert_eq!(update_row.non_zero_positions(), &[1, 3]);
+        for &column in update_row.non_zero_positions() {
+            assert_eq!(
+                update_row.coefficient_of_reported_nonzero(column).to_bits(),
+                update_row.coefficient(column).to_bits()
+            );
+        }
         assert_eq!(update_row.non_zero_positions.as_ptr(), storage);
     }
 

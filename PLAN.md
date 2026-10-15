@@ -8,6 +8,19 @@ when timing-neutral; do not trade trajectory or KKT agreement for speed.
 
 ## Current baseline
 
+- A fresh M2-targeted 213-model `nmm0-50k` pass after the indexed-access
+  audit matches every completed status and iteration count at 0.976x total
+  Rust/native time, but a second pass was invalidated by a nonterminal native
+  `pilot` result under visible machine load. Seven-trial matched-stage runs
+  still put `cvs` at 1.039x, `graph` at 1.070x, and `traininstance2` at
+  1.083x native solve time. An unchecked read of `UpdateRow`'s own reported
+  coefficients aligns the primal edge/Devex loop with upstream; its paired
+  A/B effect is neutral except a ~0.6% `cvs` gain. Strict fast-96 and
+  extra-model pivot fixtures pass. See the latest addendum in
+  `baselines/phase8-nmm0-50k-performance.md`; `graph` and the other matched
+  solve gaps remain open, and the complete timing pass needs an uncontended
+  repeat.
+
 - An indexed-access audit compared hot numerical loops with pinned GLOP.
   Primal/dual edge-norm updates and column-wise update-row output now use
   documented unchecked access only after their dimensions are established;

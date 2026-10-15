@@ -1,0 +1,181 @@
+{
+  "machine": "macOS-15.6.1-arm64-arm-64bit-Mach-O",
+  "processor": "Apple M2",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "clang": "Apple clang version 17.0.0 (clang-1700.6.4.2)",
+  "gloprs_commit": "1a9c7538d0986d5ec467bc9818a8967b287ad8ee",
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "trials": 15,
+  "warmups": 1,
+  "presolve_repetitions": 3,
+  "solve_repetitions": 1,
+  "iteration_cap": null,
+  "wall_seconds": 20.0,
+  "corpus": "nmm0-50k",
+  "summary": {
+    "solve": {
+      "timed_models": 3,
+      "skipped_models": 0,
+      "native_total_seconds": 2.031671416,
+      "rust_total_seconds": 2.021508458,
+      "aggregate_ratio": 0.9949977354015203,
+      "median_model_ratio": 1.0036911599870768,
+      "sqrt_nnz_weighted_geometric_ratio": 1.0009022036181157
+    }
+  },
+  "results": [
+    {
+      "name": "cvs16r128-89",
+      "corpus": "miplib2017",
+      "nonzeros": 14576,
+      "solve": {
+        "native_seconds": 1.765595958,
+        "rust_seconds": 1.754266333,
+        "ratio": 0.9935831156903905,
+        "native_trials_seconds": [
+          1.762417209,
+          1.758735541,
+          1.765595958,
+          1.766317542,
+          1.770810583,
+          1.770664875,
+          1.7663080839999998,
+          1.763841292,
+          1.764362167,
+          1.7623387080000001,
+          1.80200175,
+          1.7690655419999999,
+          1.764320792,
+          1.770758583,
+          1.765476541
+        ],
+        "rust_trials_seconds": [
+          1.7524868329999999,
+          1.7533502090000002,
+          1.756448958,
+          1.751082042,
+          1.758299167,
+          1.753735625,
+          1.756021542,
+          1.75828,
+          1.750195958,
+          1.75456525,
+          1.753272459,
+          1.7551432500000002,
+          1.754266333,
+          1.7576059160000002,
+          1.752092167
+        ],
+        "native_median_absolute_deviation_seconds": 0.0031787489999999252,
+        "rust_median_absolute_deviation_seconds": 0.001779500000000045,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "19626",
+          "objective_bits": "13862079653046386688"
+        }
+      }
+    },
+    {
+      "name": "graph20-20-1rand",
+      "corpus": "miplib2017",
+      "nonzeros": 19314,
+      "solve": {
+        "native_seconds": 0.158905083,
+        "rust_seconds": 0.159676167,
+        "ratio": 1.0048524816540954,
+        "native_trials_seconds": [
+          0.159000291,
+          0.159608833,
+          0.158728792,
+          0.158724708,
+          0.158541792,
+          0.159290959,
+          0.158303834,
+          0.159417625,
+          0.159499416,
+          0.158905083,
+          0.158497541,
+          0.1589695,
+          0.159031083,
+          0.158798333,
+          0.158817083
+        ],
+        "rust_trials_seconds": [
+          0.158854834,
+          0.161409542,
+          0.159330834,
+          0.159063792,
+          0.158832959,
+          0.159676167,
+          0.159956042,
+          0.160431583,
+          0.159375167,
+          0.159746459,
+          0.15957325,
+          0.159160792,
+          0.160028583,
+          0.159934125,
+          0.160195584
+        ],
+        "native_median_absolute_deviation_seconds": 0.0001803750000000104,
+        "rust_median_absolute_deviation_seconds": 0.0003524159999999943,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "3092",
+          "objective_bits": "13853776141233422336"
+        }
+      }
+    },
+    {
+      "name": "milo-v12-6-r2-40-1",
+      "corpus": "miplib2017",
+      "nonzeros": 14814,
+      "solve": {
+        "native_seconds": 0.107170375,
+        "rust_seconds": 0.107565958,
+        "ratio": 1.0036911599870768,
+        "native_trials_seconds": [
+          0.107524583,
+          0.107276708,
+          0.107135583,
+          0.107049208,
+          0.106999875,
+          0.107269958,
+          0.107152708,
+          0.10726325,
+          0.107156,
+          0.106966209,
+          0.107170375,
+          0.107501292,
+          0.107456458,
+          0.107126708,
+          0.107529167
+        ],
+        "rust_trials_seconds": [
+          0.107656458,
+          0.107927708,
+          0.107565958,
+          0.107342417,
+          0.107481625,
+          0.107553584,
+          0.107634584,
+          0.107052666,
+          0.108321167,
+          0.107161125,
+          0.107580708,
+          0.107406584,
+          0.107599708,
+          0.107304334,
+          0.107972
+        ],
+        "native_median_absolute_deviation_seconds": 0.00010633300000000012,
+        "rust_median_absolute_deviation_seconds": 0.0001593740000000038,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "2346",
+          "objective_bits": "4686302049657140773"
+        }
+      }
+    }
+  ]
+}

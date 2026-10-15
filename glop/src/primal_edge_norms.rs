@@ -426,7 +426,7 @@ impl PrimalEdgeNorms {
             .map(|rows| rows.bind(&self.matrix, left_inverse_values));
         let mut lower_bounded_norms = 0_i64;
         for &column in update_row.non_zero_positions() {
-            let coefficient = update_row.coefficient(column);
+            let coefficient = update_row.coefficient_of_reported_nonzero(column);
             let scalar_product = if column >= first_slack {
                 self.direction_left_inverse
                     .value(ColIndex::from_usize(column - first_slack))
@@ -481,7 +481,8 @@ impl PrimalEdgeNorms {
         let leaving_norm = (entering_norm / pivot_magnitude).max(1.0);
         debug_assert_eq!(self.devex_weights.len(), self.matrix.num_cols().to_usize());
         for &column in update_row.non_zero_positions() {
-            let update_norm = update_row.coefficient(column).abs() * leaving_norm;
+            let update_norm =
+                update_row.coefficient_of_reported_nonzero(column).abs() * leaving_norm;
             // SAFETY: initialized Devex weights have one slot per matrix
             // column; UpdateRow positions are drawn from that same matrix.
             let weight = unsafe { self.devex_weights.get_unchecked_mut(column) };
