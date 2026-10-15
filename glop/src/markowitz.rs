@@ -523,14 +523,6 @@ impl ReusableColumnMemory {
         &mut self.columns[self.mapping[column]]
     }
 
-    fn take_column(&mut self, column: usize) -> SparseColumn {
-        std::mem::take(self.mutable_column(column))
-    }
-
-    fn restore_column(&mut self, column: usize, value: SparseColumn) {
-        *self.mutable_column(column) = value;
-    }
-
     fn clear_and_release_column(&mut self, column: usize) {
         let slot = self.mapping[column];
         debug_assert_ne!(slot, INVALID);
@@ -620,7 +612,10 @@ fn compute_column<'a, M: InputMatrix>(
 ) -> &'a SparseColumn {
     let first_time =
         permuted_lower.column(column).is_empty() && permuted_upper.column(column).is_empty();
-    let mut residual = permuted_lower.take_column(column);
+    // GLOP keeps this candidate in its reusable physical column throughout
+    // the solve/split. The lower and upper pools are distinct fields, so no
+    // temporary move out of the lower pool is necessary in Rust either.
+    let residual = permuted_lower.mutable_column(column);
     if candidates[column].needs_solve {
         if first_time {
             let source = matrix.column(column);
@@ -630,13 +625,13 @@ fn compute_column<'a, M: InputMatrix>(
                         .iter()
                         .map(|entry| (entry.index(), entry.coefficient()))
                 },
-                &mut residual,
+                residual,
                 row_permutation,
                 permuted_upper.mutable_column(column),
             );
         } else {
             lower_factor.permuted_lower_sparse_solve(
-                &mut residual,
+                residual,
                 row_permutation,
                 permuted_upper.mutable_column(column),
             );
@@ -647,11 +642,10 @@ fn compute_column<'a, M: InputMatrix>(
         // first time. In particular, an empty residual column is returned
         // immediately when its structural degree is zero.
         if residual.num_entries() == residual_degree && !candidates[column].needs_split {
-            permuted_lower.restore_column(column, residual);
-            return permuted_lower.column(column);
+            return residual;
         }
         if first_time {
-            copy_input_column(matrix, column, &mut residual);
+            copy_input_column(matrix, column, residual);
             *num_fp_operations += i64::try_from(residual.num_entries()).unwrap_or(i64::MAX);
         }
         *num_fp_operations += i64::try_from(residual.num_entries()).unwrap_or(i64::MAX);
@@ -661,20 +655,17 @@ fn compute_column<'a, M: InputMatrix>(
             permuted_upper.mutable_column(column),
         );
         candidates[column].needs_split = false;
-        permuted_lower.restore_column(column, residual);
-        return permuted_lower.column(column);
+        return residual;
     }
     candidates[column].needs_solve = false;
     candidates[column].needs_split = false;
-    permuted_lower.restore_column(column, residual);
     debug_assert!(
-        permuted_lower
-            .column(column)
+        residual
             .iter()
             .all(|entry| row_permutation[entry.index().to_usize()] == INVALID),
         "computed candidate column {column} retained a pivoted row"
     );
-    permuted_lower.column(column)
+    residual
 }
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]

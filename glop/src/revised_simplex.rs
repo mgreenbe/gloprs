@@ -1294,12 +1294,7 @@ impl RevisedSimplex {
                 self.update_row.as_mut().unwrap().invalidate();
             }
             refactorize = false;
-            self.direction(entering, &mut direction)?;
-            let direction_norm = direction
-                .values()
-                .as_slice()
-                .iter()
-                .fold(0.0_f64, |max, value| max.max(value.abs()));
+            let direction_norm = self.direction(entering, &mut direction)?;
             let info = self.variables_info.as_ref().unwrap();
             let leaving = choose_leaving_variable_row_with_workspace(
                 entering,
@@ -1553,13 +1548,7 @@ impl RevisedSimplex {
             } else {
                 -1.0
             };
-            self.direction(entering, &mut direction)?;
-            // GLOP obtains this norm while traversing the direction's
-            // structural support. `direction()` has materialized that support
-            // for the dense-sentinel case, so a full row scan here is redundant.
-            let direction_norm = direction.non_zeros().iter().fold(0.0_f64, |maximum, &row| {
-                maximum.max(direction.value(row).abs())
-            });
+            let direction_norm = self.direction(entering, &mut direction)?;
             let choice = choose_leaving_variable_row_with_workspace(
                 entering,
                 fake_reduced_cost,
@@ -3604,7 +3593,7 @@ impl RevisedSimplex {
         &self,
         entering: ColIndex,
         direction: &mut ScatteredColumn,
-    ) -> Result<(), FactorizationError> {
+    ) -> Result<f64, FactorizationError> {
         self.basis_factorization
             .as_ref()
             .unwrap()
@@ -3613,16 +3602,21 @@ impl RevisedSimplex {
                 self.compact_matrix.column(entering),
                 direction,
             )?;
-        // An empty position list is GLOP's dense-vector sentinel.  The ratio
-        // kernels consume an explicit sparse traversal, so materialize its
-        // support here when the selected basis-update representation took the
-        // dense solve path.
+        // GLOP computes this norm while traversing the direction once. An
+        // empty position list is its dense-vector sentinel; materialize the
+        // support for the ratio kernels during that same traversal.
+        let mut norm = 0.0_f64;
         if direction.non_zeros().is_empty() {
             let (values, non_zeros) = direction.mutable_parts();
             for (row, &value) in values.iter().enumerate() {
                 if value != 0.0 {
                     non_zeros.push(RowIndex::from_usize(row));
+                    norm = norm.max(value.abs());
                 }
+            }
+        } else {
+            for entry in direction.iter() {
+                norm = norm.max(entry.coefficient().abs());
             }
         }
         #[cfg(debug_assertions)]
@@ -3651,7 +3645,7 @@ impl RevisedSimplex {
                 self.num_iterations
             );
         }
-        Ok(())
+        Ok(norm)
     }
 
     fn run_primal_phase(
@@ -3819,7 +3813,7 @@ impl RevisedSimplex {
                 }
                 return Ok(());
             };
-            self.direction(entering, &mut direction)?;
+            let direction_norm = self.direction(entering, &mut direction)?;
             if self.diagnostic_capture_direction {
                 self.diagnostic_last_direction = Some(direction.clone());
             }
@@ -3906,12 +3900,6 @@ impl RevisedSimplex {
                 };
                 return Ok(());
             }
-            // `direction()` materializes support even after a dense-sentinel
-            // solve. GLOP obtains this norm while traversing that support;
-            // scanning every row once more is unnecessary on every pivot.
-            let direction_norm = direction.non_zeros().iter().fold(0.0_f64, |maximum, &row| {
-                maximum.max(direction.value(row).abs())
-            });
             let reduced = precise_reduced;
             let choice = if phase == SimplexPhase::Feasibility {
                 self.phase_one_ratio_test(
@@ -4374,13 +4362,8 @@ impl RevisedSimplex {
                 prices_initialized = false;
                 continue;
             }
-            self.direction(entering, &mut direction)?;
+            let direction_norm = self.direction(entering, &mut direction)?;
             let pivot = direction.value(leaving_row);
-            let direction_norm = direction
-                .values()
-                .as_slice()
-                .iter()
-                .fold(0.0_f64, |maximum, value| maximum.max(value.abs()));
             if pivot.abs() < self.parameters.small_pivot_threshold * direction_norm
                 && !reduced_costs_precise
             {
@@ -4742,13 +4725,8 @@ impl RevisedSimplex {
                 continue;
             }
 
-            self.direction(entering, &mut direction)?;
+            let direction_norm = self.direction(entering, &mut direction)?;
             let pivot = direction.value(leaving_row);
-            let direction_norm = direction
-                .values()
-                .as_slice()
-                .iter()
-                .fold(0.0_f64, |maximum, value| maximum.max(value.abs()));
             if pivot.abs() < self.parameters.small_pivot_threshold * direction_norm
                 && !reduced_costs_precise
             {

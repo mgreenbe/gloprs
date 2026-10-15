@@ -8,21 +8,20 @@ when timing-neutral; do not trade trajectory or KKT agreement for speed.
 
 ## Current baseline
 
-- A focused `traininstance2` campaign localized its repeatable excess to
-  presolved solve, not presolve. Packed rank-one gathers and dense writes now
-  follow upstream's unchecked access after a one-time safe RHS-length check;
-  solver-owned compact updates record their known basis dimension once. The
-  final 21-trial Rust A/B is 0.994x previous Rust on `traininstance2`, 0.991x
-  on `graph`, and neutral on `cvs`; strict fast-96 and extra-model pivot gates
-  pass. Native-relative `traininstance2` remains 1.073x matched solve and
-  1.035x public pipeline. Seven native/Rust presolved-state checkpoints,
-  including termination, match exactly. See
-  `baselines/phase8-nmm0-50k-performance.md`.
-  This target is not at parity; an iteration-cap sweep shows a small fixed
-  startup excess and a persistent per-pivot gap. Fat LTO only improves the
-  ratio to 1.068x while regressing `d6cube`, so thin LTO remains the default.
-  Continue localizing dense transpose and per-pivot costs with matched
-  numerical paths.
+- The continuing `traininstance2` campaign brought the 31-trial matched
+  presolved solve from 1.073x to **1.057x** native and the 21-trial public
+  pipeline from 1.035x to **1.025x**. Direction infinity norm now follows
+  GLOP's single support traversal; 21-trial Rust A/B solves improve
+  `traininstance2`, `graph`, and `cvs`. Markowitz candidate columns now stay
+  in their reusable physical slots as upstream does: isolated selected-view
+  LU improves 5.6% but is still **1.122x** native across 21 captured bases.
+  Harris bound reads use one checked index for equal-length arrays, with an
+  invalid-index regression; this is timing-neutral. Fast-96/extra-model
+  trajectories and 21 native/Rust presolved-state checkpoints pass. See
+  `baselines/phase8-nmm0-50k-performance.md`. This target is **not yet at
+  parity**. Continue profiling live per-pivot dense transpose/direction and
+  primal edge-norm work; isolated LU and initial FTRAN explain only part of
+  the remaining roughly 3.9 ms matched-solve excess.
 
 - A fresh M2-targeted 213-model `nmm0-50k` pass after the indexed-access
   audit matches every completed status and iteration count at 0.976x total

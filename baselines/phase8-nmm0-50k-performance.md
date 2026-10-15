@@ -1,5 +1,54 @@
 # NMM 0–50k: M2 performance triage
 
+## `traininstance2` direction and selected-LU follow-up
+
+GLOP's `ComputeDirection()` computes the infinity norm during its one support
+traversal. Rust previously materialized dense support, then rescanned it (or
+even all rows on two call paths). The port now returns the norm from that
+traversal, preserving dense row order and sparse support order. The
+[21-trial paired Rust A/B](phase8-traininstance2-direction-norm-ab.json)
+measures new/old at 0.986x on `traininstance2`, 0.994x on `graph20-20-1rand`,
+and 0.976x on `cvs16r128-89`.
+
+Twenty-one selected compact basis views captured during an ordinary presolved
+`traininstance2` solve exposed an increasing LU ratio at later pivots. In
+GLOP, `Markowitz::ComputeColumn()` mutates a candidate in its reusable
+physical column. Rust was moving that column out and restoring it on every
+visit; the port now borrows it in place. The
+[nine-trial paired Rust LU A/B](phase8-traininstance2-inplace-lu-ab.csv)
+improved 5.6% across these bases, while a
+[21-trial whole-solve A/B](phase8-traininstance2-inplace-column-ab.json)
+was neutral on `traininstance2` and `cvs`, and 0.997x on `graph`. The final
+[nine-trial native-relative selected-view LU results](phase8-traininstance2-selected-lu.csv)
+sum to **1.122x** Rust/native, down from
+[1.189x before the in-place change](phase8-traininstance2-selected-lu-before.csv).
+The captured probes live under `target/phase8-train2-factorization-probes/`
+and can be regenerated with `netlib_simplex_probe` in
+`--presolved-factorizations` mode.
+
+In the Harris candidate scan, one checked variable-value lookup now bounds
+unchecked lower/upper bound reads of the same index, after the equal lengths
+are asserted. An invalid-basis-column panic test covers the safety boundary.
+The 21-trial Rust A/B was timing-neutral on all three models; the edit is
+retained for port fidelity. Full workspace tests, strict Clippy, fast-96 and
+extra-model pivot fixtures, and 21 presolved-state fingerprints against native
+GLOP pass.
+
+The fresh [31-trial matched solve](phase8-traininstance2-current-solve.json)
+is 67.30 ms native versus 71.16 ms Rust on `traininstance2`, **1.057x**;
+`graph` is 1.054x. The [21-trial public pipeline](phase8-traininstance2-current-public.json)
+is 101.11 versus 103.67 ms, **1.025x**. Status, iteration count, and
+objective agree. Saved pre-next-pivot RHS probes put isolated BTRAN at about
+1.00x on 46 sampled solves and FTRAN at 1.17x on 70; all 10,472 startup
+FTRAN RHS sum to a 0.25 ms Rust excess despite a 1.61x ratio for these very
+cheap solves. These probes omit subsequent product-form updates and do not
+explain the remaining several milliseconds of live solve time. Parity remains
+open, especially in the live direction/transpose and edge-norm paths. A fresh
+seven-second paired stack sample still places dense transpose substitution
+among the largest costs on both sides; Rust spends a somewhat larger share
+there, but inlining and sampling prevent attributing the whole residual gap
+to that kernel without a matched live-stage timer.
+
 ## `traininstance2` rank-one follow-up
 
 A fresh 21-trial serial matched-stage [baseline](phase8-traininstance2-baseline-stages.json)

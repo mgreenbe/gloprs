@@ -35,6 +35,7 @@ pub struct PrimalRatioWorkspace {
 // GLOP instantiates the Harris first pass separately for each entering
 // direction. Keep the sign out of the per-entry loop in the Rust port too.
 #[allow(clippy::too_many_arguments)]
+#[allow(unsafe_code)]
 fn harris_candidates<const POSITIVE: bool>(
     direction: &ScatteredColumn,
     variable_values: &[f64],
@@ -60,16 +61,21 @@ fn harris_candidates<const POSITIVE: bool>(
         // Equal lengths are asserted before the Harris scan so the checked
         // value access establishes the index bound for all three arrays.
         let value = variable_values[column];
+        // SAFETY: choose_leaving_variable_row_with_workspace() checked that
+        // both bound arrays have the same length as variable_values, and the
+        // checked value lookup above established column < that length.
+        let lower = unsafe { *lower_bounds.get_unchecked(column) };
+        let upper = unsafe { *upper_bounds.get_unchecked(column) };
         let ratio = if POSITIVE {
             if coefficient > 0.0 {
-                (upper_bounds[column] - value) / coefficient
+                (upper - value) / coefficient
             } else {
-                (lower_bounds[column] - value) / coefficient
+                (lower - value) / coefficient
             }
         } else if coefficient > 0.0 {
-            (value - lower_bounds[column]) / coefficient
+            (value - lower) / coefficient
         } else {
-            (value - upper_bounds[column]) / coefficient
+            (value - upper) / coefficient
         };
         if ratio <= harris_ratio {
             candidates.push((row, ratio));
@@ -241,5 +247,34 @@ fn ratio_more_or_equally_stable(candidate: f64, current: f64) -> bool {
         candidate >= 0.0 && candidate <= current
     } else {
         candidate >= current
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "index out of bounds")]
+    fn checked_value_lookup_rejects_invalid_basis_column_before_unchecked_bounds() {
+        let mut direction = ScatteredColumn::new(RowIndex::new(1));
+        direction.set(RowIndex::new(0), 1.0);
+        let basis = RowToColMapping::from_vec(vec![ColIndex::new(4)]);
+        let values = [1.0, 0.0, 0.0, 0.0];
+        let lower = [0.0; 4];
+        let upper = [10.0; 4];
+        let _ = choose_leaving_variable_row(
+            ColIndex::new(0),
+            1.0,
+            &direction,
+            1.0,
+            &values,
+            &lower,
+            &upper,
+            &basis,
+            true,
+            &GlopParameters::default(),
+            &SharedRandom::new(1),
+        );
     }
 }
