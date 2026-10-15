@@ -1,0 +1,174 @@
+{
+  "machine": "macOS-15.6.1-arm64-arm-64bit-Mach-O",
+  "processor": "Apple M2",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "clang": "Apple clang version 17.0.0 (clang-1700.6.4.2)",
+  "gloprs_commit": "4294cc9a0d2f5bea973f8a855d522ab84794c9e9",
+  "native_binary_sha256": "399a6767b9e6822e37c00dcb62f2f8b6d46a09fa7bf8c4c9fba03e4dfd2abd44",
+  "rust_binary_sha256": "2c84d29b2775927acbec165854bbeb59176ccceca47a4ed903577c8e9acce7f3",
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "timing_scope": "serial public LPSolver solve; MPS parsing and output excluded",
+  "trials": 3,
+  "warmups": 1,
+  "wall_seconds": 60.0,
+  "modes": [
+    "default"
+  ],
+  "corpus": "extra",
+  "summary": {
+    "default": {
+      "comparable_models": 2,
+      "wall_limited_models": 0,
+      "native_total_seconds": 65.8557,
+      "rust_total_seconds": 62.015147999999996,
+      "aggregate_ratio": 0.9416823145149167,
+      "median_model_ratio": 0.9430697687994598,
+      "sqrt_nnz_weighted_geometric_ratio": 0.9427768557255761,
+      "same_path_length_count": 2
+    }
+  },
+  "results": [
+    {
+      "name": "satellites2-60-fs",
+      "corpus": "miplib2017",
+      "nonzeros": 125048,
+      "default": {
+        "native_seconds": 27.1722,
+        "rust_seconds": 25.840961667,
+        "native_trials_seconds": [
+          27.2593,
+          27.1722,
+          27.1649
+        ],
+        "rust_trials_seconds": [
+          25.876514375,
+          25.840961667,
+          25.750842208999998
+        ],
+        "native_status": "OPTIMAL",
+        "rust_status": "OPTIMAL",
+        "native_iterations": 68981,
+        "rust_iterations": 68981,
+        "native_objective_bits": 13852509503838224388,
+        "rust_objective_bits": 13852509503838224388,
+        "trial_outcomes": [
+          {
+            "native": [
+              "OPTIMAL",
+              68981,
+              13852509503838224388
+            ],
+            "rust": [
+              "OPTIMAL",
+              68981,
+              13852509503838224388
+            ]
+          },
+          {
+            "rust": [
+              "OPTIMAL",
+              68981,
+              13852509503838224388
+            ],
+            "native": [
+              "OPTIMAL",
+              68981,
+              13852509503838224388
+            ]
+          },
+          {
+            "native": [
+              "OPTIMAL",
+              68981,
+              13852509503838224388
+            ],
+            "rust": [
+              "OPTIMAL",
+              68981,
+              13852509503838224388
+            ]
+          }
+        ],
+        "wall_limited_trials": [
+          false,
+          false,
+          false
+        ],
+        "same_path_length": true,
+        "wall_limited": false,
+        "ratio": 0.951007340848367
+      }
+    },
+    {
+      "name": "fome12",
+      "corpus": "mittelmann-lpopt",
+      "nonzeros": 142528,
+      "default": {
+        "native_seconds": 38.6835,
+        "rust_seconds": 36.174186333,
+        "native_trials_seconds": [
+          38.6835,
+          38.4324,
+          40.4256
+        ],
+        "rust_trials_seconds": [
+          36.174186333,
+          36.16041225,
+          39.314024875
+        ],
+        "native_status": "OPTIMAL",
+        "rust_status": "OPTIMAL",
+        "native_iterations": 69604,
+        "rust_iterations": 69604,
+        "native_objective_bits": 4721317410177439457,
+        "rust_objective_bits": 4721317410177439457,
+        "trial_outcomes": [
+          {
+            "native": [
+              "OPTIMAL",
+              69604,
+              4721317410177439457
+            ],
+            "rust": [
+              "OPTIMAL",
+              69604,
+              4721317410177439457
+            ]
+          },
+          {
+            "rust": [
+              "OPTIMAL",
+              69604,
+              4721317410177439457
+            ],
+            "native": [
+              "OPTIMAL",
+              69604,
+              4721317410177439457
+            ]
+          },
+          {
+            "native": [
+              "OPTIMAL",
+              69604,
+              4721317410177439457
+            ],
+            "rust": [
+              "OPTIMAL",
+              69604,
+              4721317410177439457
+            ]
+          }
+        ],
+        "wall_limited_trials": [
+          false,
+          false,
+          false
+        ],
+        "same_path_length": true,
+        "wall_limited": false,
+        "ratio": 0.9351321967505526
+      }
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "machine": "macOS-15.6.1-arm64-arm-64bit-Mach-O",
+  "processor": "Apple M2",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "clang": "Apple clang version 17.0.0 (clang-1700.6.4.2)",
+  "gloprs_commit": "4294cc9a0d2f5bea973f8a855d522ab84794c9e9",
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "trials": 21,
+  "warmups": 1,
+  "presolve_repetitions": 3,
+  "solve_repetitions": 1,
+  "iteration_cap": null,
+  "wall_seconds": 20.0,
+  "corpus": "extra",
+  "summary": {
+    "solve": {
+      "timed_models": 1,
+      "skipped_models": 0,
+      "native_total_seconds": 0.283276084,
+      "rust_total_seconds": 0.27388575,
+      "aggregate_ratio": 0.9668509467251742,
+      "median_model_ratio": 0.9668509467251742,
+      "sqrt_nnz_weighted_geometric_ratio": 0.9668509467251742
+    }
+  },
+  "results": [
+    {
+      "name": "neos-1171737",
+      "corpus": "miplib2017",
+      "nonzeros": 58620,
+      "solve": {
+        "native_seconds": 0.283276084,
+        "rust_seconds": 0.27388575,
+        "ratio": 0.9668509467251742,
+        "native_trials_seconds": [
+          0.282454083,
+          0.281298209,
+          0.283276084,
+          0.282523625,
+          0.282232875,
+          0.284115834,
+          0.282855625,
+          0.283401916,
+          0.28321975,
+          0.283371375,
+          0.283291458,
+          0.28287325,
+          0.283238417,
+          0.284833375,
+          0.281429375,
+          0.283767625,
+          0.284932458,
+          0.283960333,
+          0.2832095,
+          0.283846,
+          0.284960125
+        ],
+        "rust_trials_seconds": [
+          0.272564958,
+          0.271456167,
+          0.273265625,
+          0.273770791,
+          0.27406225,
+          0.274331334,
+          0.273230125,
+          0.273343917,
+          0.274888958,
+          0.273769458,
+          0.275040792,
+          0.274139417,
+          0.273712833,
+          0.27388575,
+          0.273846042,
+          0.273625125,
+          0.275204709,
+          0.274144041,
+          0.273924792,
+          0.274919875,
+          0.274375791
+        ],
+        "native_median_absolute_deviation_seconds": 0.0005699160000000036,
+        "rust_median_absolute_deviation_seconds": 0.00044558399999999887,
+        "outcome": {
+          "status": "OPTIMAL",
+          "iterations": "3243",
+          "objective_bits": "13864437005976338432"
+        }
+      }
+    }
+  ]
+}

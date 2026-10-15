@@ -123,6 +123,10 @@ def main() -> None:
     args = parser.parse_args()
     native = ROOT / "target/native/mps_reader_reference_adapter"
     rust = ROOT / "target/debug/examples/mps_reader_trace"
+    subprocess.run(
+        ["cargo", "build", "-p", "gloprs-lp-data", "--example", "mps_reader_trace"],
+        cwd=ROOT, check=True,
+    )
     generator = random.Random(args.seed)
     focused = [
         "name LOWER\nROWS\n N OBJ\nENDATA\n",

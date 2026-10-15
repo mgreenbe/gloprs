@@ -44,8 +44,9 @@ cargo test --release -p gloprs-glop --test qap12_primal -- --ignored
 
 `phase8-extra-trajectories.json.gz` pins the complete direct dual-simplex
 pivot sequences and terminal bases for `neos-1445765`,
-`graph20-20-1rand`, `milo-v12-6-r2-40-1`, and `cvs16r128-89`. Regenerate it
-with an instrumented pinned-native adapter and check it with:
+`graph20-20-1rand`, `milo-v12-6-r2-40-1`, `cvs16r128-89`,
+`neos-1171737`, and `neos-3216931-puriri`. Regenerate it with an
+instrumented pinned-native adapter and check it with:
 
 ```text
 python3 tools/generate_phase8_extra_trajectories.py --binary <instrumented-native-adapter>
@@ -61,6 +62,14 @@ The [Phase 8 allocation audit](phase8-allocation-audit.md) compares Rust
 constructor and copy sites on solver hot paths with their pinned GLOP
 workspaces, records fixes and remaining view-copy opportunities, and links
 the associated differential and timing evidence.
+
+The [NMM 0–50k](phase8-nmm0-50k-performance.md) and
+[extra-corpus](phase8-extra-performance.md) reports contain Phase 8's final
+current-source public timings, binary fingerprints, per-model excesses,
+background-load caveats, and raw JSON links. The NMM closeout has two clean
+213-model passes; the extra-corpus run has 162 completed cases under 20
+seconds and two more in a separate 60-second long-tail check. A quiet
+15-pair recheck isolates the two small repeatable extra-corpus solve costs.
 
 The fixture generator requires a temporary diagnostic native build as described
 in `tools/generate_netlib_trajectory_fixture.py`. Validate gloprs against it

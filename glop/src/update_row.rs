@@ -86,6 +86,7 @@ impl MatrixSource<'_> {
 #[allow(clippy::struct_field_names)]
 pub struct UpdateRow {
     transposed_matrix: Rc<CompactSparseMatrix>,
+    transposed_rows_validated: bool,
     unit_row_left_inverse: ScatteredRow,
     filtered_non_zeros: Vec<usize>,
     non_zero_positions: Vec<usize>,
@@ -124,8 +125,15 @@ impl UpdateRow {
         num_rows: RowIndex,
         num_cols: ColIndex,
     ) -> Self {
+        // Validate the immutable transpose once, rather than checking every
+        // coefficient destination in each row-wise update. Invalid public
+        // inputs retain the checked path below.
+        let transposed_rows_validated =
+            CompactSparseMatrix::validated_rows(Rc::clone(&transposed_matrix), num_cols.to_usize())
+                .is_some();
         Self {
             transposed_matrix,
+            transposed_rows_validated,
             unit_row_left_inverse: ScatteredRow::new(ColIndex::new(num_rows.value())),
             filtered_non_zeros: Vec::new(),
             // GLOP keeps one slot per column and tracks the occupied prefix.
@@ -151,6 +159,11 @@ impl UpdateRow {
         let mut transposed = CompactSparseMatrix::default();
         transposed.populate_from_transpose(matrix);
         self.transposed_matrix = Rc::new(transposed);
+        self.transposed_rows_validated = CompactSparseMatrix::validated_rows(
+            Rc::clone(&self.transposed_matrix),
+            matrix.num_cols().to_usize(),
+        )
+        .is_some();
         self.unit_row_left_inverse = ScatteredRow::new(ColIndex::new(matrix.num_rows().value()));
         self.non_zero_positions
             .resize(matrix.num_cols().to_usize(), 0);
@@ -556,6 +569,15 @@ impl UpdateRow {
     }
 
     fn compute_row_wise(&mut self, relevant: &ColBitVec) {
+        if self.transposed_rows_validated {
+            self.compute_row_wise_inner::<true>(relevant);
+        } else {
+            self.compute_row_wise_inner::<false>(relevant);
+        }
+    }
+
+    #[allow(unsafe_code)]
+    fn compute_row_wise_inner<const VALIDATED: bool>(&mut self, relevant: &ColBitVec) {
         self.coefficients.fill(0.0);
         for &row in &self.filtered_non_zeros {
             let multiplier = self.left_inverse_value(row);
@@ -565,7 +587,15 @@ impl UpdateRow {
                 .iter()
             {
                 let column = column.to_usize();
-                let slot = &mut self.coefficients[column];
+                let slot = if VALIDATED {
+                    // SAFETY: construction/rebinding validated every row of
+                    // this immutable transpose against coefficients.len().
+                    // The dimension check in compute_update_row_from_source
+                    // also establishes that both widths still agree.
+                    unsafe { self.coefficients.get_unchecked_mut(column) }
+                } else {
+                    &mut self.coefficients[column]
+                };
                 *slot = multiplier.mul_add(value, *slot);
             }
         }
@@ -896,6 +926,30 @@ mod tests {
             ColIndex::new(2),
         );
         assert!(Rc::ptr_eq(&update_row.transposed_matrix, &transpose));
+        assert!(update_row.transposed_rows_validated);
+    }
+
+    #[test]
+    fn invalid_transpose_keeps_checked_row_wise_access() {
+        let mut transpose = CompactSparseMatrix::default();
+        transpose.reset(RowIndex::new(2));
+        transpose.add_entry_to_current_column(RowIndex::new(2), 3.0);
+        transpose.close_current_column();
+        let mut update_row = UpdateRow::new_from_transposed_compact(
+            Rc::new(transpose),
+            RowIndex::new(1),
+            ColIndex::new(2),
+        );
+        assert!(!update_row.transposed_rows_validated);
+        update_row.filtered_non_zeros.push(0);
+        update_row.unit_row_left_inverse.values_mut()[ColIndex::new(0)] = 1.0;
+        let relevant = ColBitVec::new(ColIndex::new(2));
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                update_row.compute_row_wise(&relevant);
+            }))
+            .is_err()
+        );
     }
 
     #[test]

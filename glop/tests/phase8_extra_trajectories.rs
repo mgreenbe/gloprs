@@ -42,7 +42,7 @@ struct ModelFixture {
 }
 
 #[test]
-#[ignore = "requires ../datasets/nmm0-50k; run in release mode"]
+#[ignore = "requires ../datasets/nmm0-50k and nmm50k-100k; run in release mode"]
 fn selected_extra_models_match_native_pivot_paths() {
     let mut decoder = GzDecoder::new(FIXTURE);
     let mut contents = String::new();
@@ -51,7 +51,7 @@ fn selected_extra_models_match_native_pivot_paths() {
     assert_eq!(fixture.upstream_commit, UPSTREAM_COMMIT);
     assert!(!fixture.parameters.use_scaling);
     assert!(fixture.parameters.use_dual_simplex);
-    assert_eq!(fixture.results.len(), 4);
+    assert_eq!(fixture.results.len(), 6);
 
     let dataset_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../datasets");
     let parameters = GlopParameters {

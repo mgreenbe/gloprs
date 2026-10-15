@@ -1,5 +1,60 @@
 # Phase 8: MIPLIB 2017 and Mittelmann LPopt timing baseline
 
+## Current-source public-pipeline check (15 October 2026)
+
+The rebuilt current-source Rust adapter and pinned native adapter were run
+serially with alternating order and three timed trials per side. The
+[166-model pass](phase8-extra-public-2026-10-15-final.json) used a 20-second
+limit: 162 models completed, with native/Rust summed times 70.906/67.754 s
+(0.956x), median model ratio 0.948x, and sqrt(nnz)-weighted geometric ratio
+0.954x. All 162 matched status, iteration count, and objective. Four hit the
+shorter limit: `rmatr200-p5`, `nug08-3rd`, `satellites2-60-fs`, and `fome12`.
+The latter two completed in a [focused 60-second-limit pass](phase8-extra-public-long-tail-2026-10-15.json)
+at 0.951x and 0.935x, again with matching outcomes. Thus the same 164
+models as the earlier 60-second baseline completed. Combining their medians
+gives native/Rust summed times 136.762/129.770 s (0.949x); this combined
+sum is a descriptive cross-run figure, not a separately timed single pass.
+Both adapters have the same SHA-256s as the current-source NMM closeout run
+recorded in `phase8-nmm0-50k-performance.md`.
+
+macOS media analysis and indexing intermittently consumed 1–2 CPU cores
+during the extra pass and long-tail recheck. These runs are valid for outcome
+agreement and broad triage, but the small per-model timing excesses require
+quiet-CPU focused repeats. The largest observed excesses in the 162-model
+pass were `neos-1171737` +6.09 ms (1.022x), `momentum1` +6.05 ms (1.008x),
+`graph20-20-1rand` +3.59 ms (1.023x), and `neos-1171448` +1.58 ms (1.010x).
+The six-model direct-dual fixture pins every pivot of `neos-1171737`, while
+the independent 164-model outcome validator passes on current code.
+
+A subsequent quiet-CPU [15-pair alternating recheck](phase8-extra-public-outlier-recheck-2026-10-15.json)
+measured `neos-1171737` at 1.022x (+6.10 ms), `graph` at 1.023x (+3.54 ms),
+`momentum1` at 1.002x (+1.80 ms), and `neos-1171448` at 1.002x (+0.28 ms).
+Thus the first two are small repeatable solve costs; the latter two apparent
+outliers in the loaded full pass were not stable. The four-model summed ratio
+was 1.009x. `graph`'s separate 15-pair stage check places its excess in the
+presolved simplex solve, not parsing or presolve. `neos-1171737`'s matched
+solve is 1.018x in the 21-pair native check after the row-wise update repair.
+
+## October 2026 outlier reconciliation
+
+A [seven-pair matched-stage rerun](phase8-extra-outliers-2026-10-14.json)
+found `neos-3216931-puriri` at parse 1.003x, presolve 0.908x, and solve
+0.998x native: it is no longer an active solve outlier. `neos-1171737` was
+parse 0.994x, presolve 0.928x, and solve 1.049x, with a stable 13.0 ms
+solve excess. A pinned-native/Rust profile localized the largest differing
+share to row-wise update-row accumulation. Validating the immutable transpose
+once and removing each redundant Rust destination check improved its
+[21-pair Rust A/B](phase8-update-row-ab-neos117.json) to 0.967x old Rust time.
+The [fresh 21-pair native-relative matched solve](phase8-update-row-native-neos117.json)
+is 1.018x (4.77 ms excess). The expanded six-model direct-dual fixture now
+pins every pivot for both of these models and passes in release mode.
+
+The public adapter was rebuilt separately after this kernel edit. A focused
+seven-pair public rerun measured `neos-1171737` at 1.015x and
+`neos-3216931-puriri` at 1.005x native; its raw JSON remains under `target/`
+until an uncontended full-corpus campaign. Do not mix these fresh numbers
+with the older full-corpus baseline below.
+
 ## Fresh public-pipeline rerun at `67e47af`
 
 The serial, alternating three-pair public-solver run was repeated after the

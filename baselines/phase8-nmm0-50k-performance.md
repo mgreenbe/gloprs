@@ -1,5 +1,120 @@
 # NMM 0–50k: M2 performance triage
 
+## Current-source closeout measurements (15 October 2026)
+
+Two fresh serial, alternating public-solver passes rebuilt the Rust adapter
+from the current source. Both used three timed trials per side, one warmup,
+and a 20-second per-run limit. MPS loading and output are excluded. The native
+and Rust adapter SHA-256s were respectively
+`399a6767b9e6822e37c00dcb62f2b8c4c9fba03e4dfd2abd44` and
+`2c84d29b2775927acbec165854bbeb59176ccceca47a4ed903577c8e9acce7f3`.
+
+| Pass | Native sum | Rust sum | Rust/native | Median model | sqrt(nnz)-weighted geometric |
+|---|---:|---:|---:|---:|---:|
+| [First](phase8-nmm0-50k-public-2026-10-15-final-a.json) | 24.126 s | 23.170 s | 0.9604x | 0.9358x | 0.9479x |
+| [Repeat](phase8-nmm0-50k-public-2026-10-15-final-b.json) | 23.958 s | 23.050 s | 0.9621x | 0.9315x | 0.9461x |
+
+All 213 models completed without a wall limit; all native/Rust statuses,
+iteration counts, and objective comparisons agreed on every timed trial.
+`graph20-20-1rand` was the only model with a repeatable excess over 1 ms:
+3.65 and 2.96 ms (1.024x and 1.020x). Across its six paired trials, native
+elapsed time ranged 150.950–152.109 ms and Rust 154.288–155.764 ms, so the
+excess exceeds within-side trial spread. `traininstance2` is now essentially
+tied in the public pipeline. A [15-pair stage check](phase8-nmm0-50k-stage-2026-10-15-final.json)
+locates `graph`'s gap in the presolved simplex solve (1.021x), while its MPS
+parse (0.977x) and presolve (0.918x) are faster than upstream. The other
+selected models' matched-solve ratios were 1.022x (`traininstance2`), 1.049x
+(`pg`), and 1.065x (`neos-1445765`), each with smaller absolute cost than
+`graph` in the full public timing. This residual is distributed pivot work,
+not a parse or presolve regression; its 2–3% scale is much smaller than the
+historical 7–11% graph solve gap.
+
+## Row-wise update-row audit (15 October 2026)
+
+The pinned native `UpdateRow::ComputeUpdatesRowWise()` writes directly into
+its matrix-sized coefficient row. A profile of `neos-1171737` implicated the
+corresponding Rust loop, which previously bounds-checked every sparse
+destination. Rust now validates the immutable transposed matrix once when
+binding it, uses direct indexed writes only for a validated transpose, and
+keeps checked access for invalid public inputs. A malformed-row regression
+covers the fallback. This preserves the native accumulation order and fused
+arithmetic.
+
+The [21-trial Rust A/B](phase8-update-row-ab-neos117.json) reduced matched
+presolved-solve time on `neos-1171737` by 3.3%; the
+[21-trial native comparison](phase8-update-row-native-neos117.json) is now
+1.018x Rust/native, down from the earlier 1.049x. A separate
+[four-model A/B](phase8-update-row-ab-nmm.json) measured 0.991x old Rust time
+on `graph20-20-1rand`, 1.000x on `traininstance2`, 1.008x on `pg`, and 1.023x
+on `neos-1445765`; retain the edit for its clear extra-corpus gain and direct
+upstream access pattern, while treating the two small slowdowns as unproven
+without a repeat. Strict fast-96 Netlib and six-model extra pivot fixtures,
+the 21 native-state checkpoints, and fast-96 public postsolve/KKT all pass.
+
+A [31-trial isolated parse check](phase8-selected-parse-2026-10-14.json)
+before the inline-field repair found `graph` and `traininstance2` MPS loading
+at 1.144x and 1.121x native, about 2.2 ms combined. Parsing is outside the
+public solve timer. Two new alternating 31-pair
+[parser runs](phase8-parse-inline-2026-10-15.json) and
+[repeat](phase8-parse-inline-2026-10-15-repeat.json) put `graph` at
+0.985x/0.994x and `traininstance2` at 0.962x/0.962x native after the
+no-allocation repair. Per-side median absolute deviations were only
+0.014–0.041 ms, although macOS background CPU load was present; this is a
+strong diagnostic signal but not a clean full-corpus performance gate.
+The correctly rebuilt public adapter's first full
+213-model pass was contaminated by background XProtect and metadata indexing
+consuming cores; its raw JSON is retained under `target/` but is **not** a
+parity baseline. A clean full rerun is required before closeout.
+
+## Full 213-model rerun after the transpose-loop repair
+
+Two serial, alternating public-pipeline runs at gloprs `4294cc9` used one
+warmup and three timed trials per side for each deduplicated model. The Apple
+M2 builds use Rust 1.95.0 with `-C target-cpu=native`, one codegen unit and
+ThinLTO; the pinned native OR-Tools library is
+`100f66e6242ab8bf8d32feb8f3bf086db66ae2b5`. The native library SHA-256
+remains `1a2f5b7426bc01abb87ee6104095dc7bd4fb75dd43001637004bf2c601ac41f3`;
+the dataset manifest SHA-256 remains
+`f7e397964e5d26fa6897dab1d2fc65ae9c065c5783fabe4c1c7ce954522861f2`.
+Both public adapters were rebuilt before the run. MPS loading and output are
+excluded from each timed public solve, which includes presolve, simplex, and
+postsolve. The command for each pass was:
+
+```text
+python3 tools/benchmark_phase5_netlib.py --corpus nmm0-50k --mode default --trials 3 --warmups 1 --wall-seconds 20 --output <artifact>
+```
+
+| Pass | Native sum | Rust sum | Rust/native | Median model | sqrt(nnz)-weighted geometric |
+|---|---:|---:|---:|---:|---:|
+| [First](phase8-nmm0-50k-public-2026-10-14-transpose.json) | 24.188 s | 23.100 s | 0.9550x | 0.9326x | 0.9455x |
+| [Repeat](phase8-nmm0-50k-public-2026-10-14-transpose-repeat.json) | 24.084 s | 22.996 s | 0.9548x | 0.9356x | 0.9474x |
+
+All 213 completed without a wall limit; native/Rust statuses and iteration
+counts matched, and each trial passed the harness's objective comparison
+(relative/absolute tolerance `1e-8`). Without `qap12`, the aggregate ratios
+are 0.9581x and 0.9585x. Rust was faster on 181 models in both passes; only
+one model had a repeatable excess above 1 ms:
+
+| Model | nnz | Native/Rust median, first | Rust/native, two passes | Excess, two passes |
+|---|---:|---:|---:|---:|
+| `graph20-20-1rand` | 19,314 | 152.5 / 155.2 ms | 1.018x / 1.017x | 2.71 / 2.61 ms |
+| `traininstance2` | 41,532 | 100.9 / 101.4 ms | 1.005x / 1.009x | 0.51 / 0.92 ms |
+| `pg` | 7,800 | 14.2 / 14.9 ms | 1.047x / 1.032x | 0.67 / 0.46 ms |
+| `neos-1445765` | 41,230 | 28.4 / 28.7 ms | 1.012x / 1.019x | 0.34 / 0.55 ms |
+
+A [seven-trial matched-stage check](phase8-nmm0-50k-stage-2026-10-14-transpose.json)
+on these models plus `milo` found solve ratios of 1.028x (`graph`), 1.023x
+(`traininstance2`), 1.044x (`pg`), 1.074x (`neos-1445765`), and 1.007x
+(`milo`). Graph's and traininstance2's presolve ratios were 0.946x and
+0.940x, respectively: their public excess is not a presolve regression.
+Their isolated MPS-parse ratios were 1.125x and 1.143x (0.68 and 1.75 ms
+extra), though parsing is outside the timed public pipeline. The stage run
+is a focused diagnostic, not a full-corpus stage benchmark. Graph remains
+the main repeated solve-time intervention; small parse and other extra-corpus
+gaps still need separate assessment. Aggregate performance parity is met for
+this corpus, but Phase 8's wider fidelity/coverage exit criterion is not yet
+fully closed.
+
 ## Non-unit lower-transpose solve: descending-loop fidelity
 
 The earlier focused lower-transpose benchmark exercised only unit diagonal

@@ -34,6 +34,36 @@ enum RowKind {
     Free,
 }
 
+// GLOP's MPSLineInfo stores its six field views in an InlinedVector. MPS
+// cards never need heap storage for their fields; keep the same bounded
+// representation rather than allocating a Vec for every parsed line.
+struct Fields<'a> {
+    slots: [&'a str; 6],
+    len: usize,
+}
+
+impl<'a> Fields<'a> {
+    fn new() -> Self {
+        Self {
+            slots: [""; 6],
+            len: 0,
+        }
+    }
+
+    fn push(&mut self, field: &'a str) -> bool {
+        if self.len == self.slots.len() {
+            return false;
+        }
+        self.slots[self.len] = field;
+        self.len += 1;
+        true
+    }
+
+    fn as_slice(&self) -> &[&'a str] {
+        &self.slots[..self.len]
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MpsError {
     line: usize,
@@ -181,15 +211,21 @@ impl Parser {
             && line.starts_with(' ')
             && self.section != Section::ObjSense;
         // Fixed-format data cards are parsed from their field boundaries;
-        // tokenizing them first only allocates and scans the card a second time.
-        let whitespace_tokens: Vec<&str> = if fixed_data_card {
-            Vec::new()
-        } else {
-            trimmed.split_whitespace().collect()
-        };
-        if self.format == MpsFormat::Free && whitespace_tokens.len() > 6 {
-            return Err(MpsError::new(line_number, "found too many fields"));
+        // tokenizing them first would scan each card a second time.
+        let mut whitespace_fields = Fields::new();
+        if !fixed_data_card {
+            for field in trimmed.split_whitespace() {
+                if !whitespace_fields.push(field) {
+                    if self.format == MpsFormat::Free {
+                        return Err(MpsError::new(line_number, "found too many fields"));
+                    }
+                    // Fixed-format section and objective-sense cards inspect
+                    // at most the first two fields, as before.
+                    break;
+                }
+            }
         }
+        let whitespace_tokens = whitespace_fields.as_slice();
         if whitespace_tokens.is_empty() && !fixed_data_card {
             return Ok(());
         }
@@ -207,23 +243,25 @@ impl Parser {
                     ));
                 }
             }
-            return self.start_section(line_number, &whitespace_tokens);
+            return self.start_section(line_number, whitespace_tokens);
         }
 
+        let fixed_tokens;
         let tokens = if fixed_data_card {
-            fixed_fields(line, self.section)
-                .ok_or_else(|| MpsError::new(line_number, "invalid fixed-format data card"))?
+            fixed_tokens = fixed_fields(line, self.section)
+                .ok_or_else(|| MpsError::new(line_number, "invalid fixed-format data card"))?;
+            fixed_tokens.as_slice()
         } else {
             whitespace_tokens
         };
 
         match self.section {
-            Section::ObjSense => self.parse_objective_sense(line_number, &tokens),
-            Section::Rows | Section::LazyRows => self.parse_row(line_number, &tokens),
-            Section::Columns => self.parse_column(line_number, &tokens),
-            Section::Rhs => self.parse_rhs(line_number, &tokens),
-            Section::Ranges => self.parse_range(line_number, &tokens),
-            Section::Bounds => self.parse_bound(line_number, &tokens),
+            Section::ObjSense => self.parse_objective_sense(line_number, tokens),
+            Section::Rows | Section::LazyRows => self.parse_row(line_number, tokens),
+            Section::Columns => self.parse_column(line_number, tokens),
+            Section::Rhs => self.parse_rhs(line_number, tokens),
+            Section::Ranges => self.parse_range(line_number, tokens),
+            Section::Bounds => self.parse_bound(line_number, tokens),
             Section::Indicators => Err(MpsError::new(
                 line_number,
                 "indicator constraints are unsupported by LinearProgram",
@@ -589,7 +627,7 @@ fn parse_number(line: usize, token: &str) -> Result<Fractional, MpsError> {
     Ok(value)
 }
 
-fn fixed_fields(line: &str, section: Section) -> Option<Vec<&str>> {
+fn fixed_fields(line: &str, section: Section) -> Option<Fields<'_>> {
     let bytes = line.as_bytes();
     let row_line = matches!(section, Section::Rows | Section::LazyRows);
     if bytes.len() < if row_line { 5 } else { 14 }
@@ -609,17 +647,26 @@ fn fixed_fields(line: &str, section: Section) -> Option<Vec<&str>> {
         Section::Bounds => &[(1, 3), (4, 12), (14, 22), (24, 36)],
         _ => return None,
     };
-    let mut fields: Vec<&str> = ranges
-        .iter()
-        .map(|&(start, end)| line.get(start..end.min(line.len())).map_or("", str::trim))
-        .collect();
-    while fields.last().is_some_and(|field| field.is_empty()) {
-        fields.pop();
+    let mut fields = Fields::new();
+    for &(start, end) in ranges {
+        let field = line.get(start..end.min(line.len())).map_or("", str::trim);
+        let inserted = fields.push(field);
+        debug_assert!(inserted);
+    }
+    while fields.len > 0 && fields.slots[fields.len - 1].is_empty() {
+        fields.len -= 1;
     }
     if section == Section::Rows {
-        fields.retain(|field| !field.is_empty());
+        let mut write = 0;
+        for read in 0..fields.len {
+            if !fields.slots[read].is_empty() {
+                fields.slots[write] = fields.slots[read];
+                write += 1;
+            }
+        }
+        fields.len = write;
     }
-    (!fields.is_empty()).then_some(fields)
+    (fields.len > 0).then_some(fields)
 }
 
 fn is_fixed_format(line: &str) -> bool {
@@ -641,6 +688,19 @@ fn is_fixed_format(line: &str) -> bool {
 #[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn free_cards_keep_six_inline_fields_and_reject_a_seventh() {
+        let six = "NAME TEST\nROWS\n N OBJ\n L ROW A B C D\nENDATA\n";
+        assert!(parse_mps_with_format(six, MpsFormat::Free).is_ok());
+        let seven = "NAME TEST\nROWS\n N OBJ\n L ROW A B C D E\nENDATA\n";
+        assert!(
+            parse_mps_with_format(seven, MpsFormat::Free)
+                .unwrap_err()
+                .to_string()
+                .contains("too many fields")
+        );
+    }
 
     #[test]
     fn parses_ranges_bounds_objective_offset_and_duplicate_entries() {

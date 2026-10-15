@@ -121,6 +121,7 @@ pub fn choose_leaving_variable_row(
 #[must_use]
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_lines)]
+#[allow(unsafe_code)]
 pub fn choose_leaving_variable_row_with_workspace(
     entering_column: ColIndex,
     reduced_cost: f64,
@@ -189,11 +190,15 @@ pub fn choose_leaving_variable_row_with_workspace(
     }
     let mut leaving_row = None;
     let mut pivot_magnitude = 0.0_f64;
+    let direction_values = direction.values().as_slice();
     for &(row, ratio) in &workspace.candidates {
         if ratio > harris_ratio {
             continue;
         }
-        let candidate_magnitude = direction.value(row).abs();
+        // SAFETY: candidate rows were obtained from the direction iterator
+        // in the first Harris pass, whose coefficient access checked each
+        // row against this same values array. The vector is unchanged here.
+        let candidate_magnitude = unsafe { *direction_values.get_unchecked(row.to_usize()) }.abs();
         if candidate_magnitude < pivot_magnitude {
             continue;
         }
@@ -228,7 +233,8 @@ pub fn choose_leaving_variable_row_with_workspace(
     {
         return LeavingChoice::Refactorize;
     }
-    let coefficient_positive = direction.value(row) > 0.0;
+    // SAFETY: the selected row is one of the first-pass candidates above.
+    let coefficient_positive = unsafe { *direction_values.get_unchecked(row.to_usize()) } > 0.0;
     let target = if (reduced_cost > 0.0) == coefficient_positive {
         upper_bounds[basis[row].to_usize()]
     } else {

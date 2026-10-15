@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import platform
@@ -67,6 +68,15 @@ def main() -> None:
         parser.error("wall-seconds must be positive and at most 3600")
     if options.wall_seconds != 20.0 and options.mode != "default":
         parser.error("nondefault wall limit is only supported for default pipeline")
+    if options.rust.resolve() == RUST.resolve():
+        # The public adapter is a different example from the matched-stage
+        # adapter. Build it here so a source edit cannot silently benchmark a
+        # stale executable; saved Rust A/B binaries remain untouched.
+        subprocess.run(
+            ["cargo", "build", "--release", "-p", "gloprs-glop", "--example",
+             "phase5_netlib_solution_trace"],
+            cwd=ROOT, check=True,
+        )
     phase7 = json.loads(PHASE7.read_text(encoding="utf-8"))
     expected = {case["name"]: case for case in phase7["results"]}
     selected = corpus_models(options.corpus)
@@ -179,6 +189,8 @@ def main() -> None:
         "rustc": version(["rustc", "--version"]),
         "clang": version(["clang++", "--version"]).splitlines()[0],
         "gloprs_commit": version(["git", "rev-parse", "HEAD"]),
+        "native_binary_sha256": hashlib.sha256(options.native.read_bytes()).hexdigest(),
+        "rust_binary_sha256": hashlib.sha256(options.rust.read_bytes()).hexdigest(),
         "upstream_commit": phase7["upstream_commit"],
         "timing_scope": "serial public LPSolver solve; MPS parsing and output excluded",
         "trials": options.trials,

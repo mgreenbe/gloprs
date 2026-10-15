@@ -20,7 +20,7 @@ DATASETS = ROOT.parent / "datasets"
 UPSTREAM = ROOT.parent / "or-tools"
 PINNED_COMMIT = "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5"
 MODELS = ("neos-1445765", "graph20-20-1rand", "milo-v12-6-r2-40-1",
-          "cvs16r128-89")
+          "cvs16r128-89", "neos-1171737", "neos-3216931-puriri")
 
 
 def main() -> None:
@@ -33,8 +33,14 @@ def main() -> None:
                             check=True, text=True, capture_output=True).stdout.strip()
     if commit != PINNED_COMMIT:
         raise RuntimeError(f"native checkout {commit} is not {PINNED_COMMIT}")
-    manifest = json.loads((DATASETS / "nmm0-50k/manifest.json").read_text())
-    by_name = {case["name"]: case for case in manifest["instances"]}
+    by_name = {}
+    for band in ("nmm0-50k", "nmm50k-100k"):
+        manifest = json.loads((DATASETS / band / "manifest.json").read_text())
+        for case in manifest["instances"]:
+            if case["name"] in MODELS:
+                if case["name"] in by_name:
+                    raise RuntimeError(f"duplicate fixture model {case['name']}")
+                by_name[case["name"]] = case
     results = []
     for name in MODELS:
         case = by_name[name]

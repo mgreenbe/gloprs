@@ -11,6 +11,7 @@ stages and postsolve.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import platform
@@ -90,6 +91,12 @@ def main() -> None:
             or not 0 < options.wall_seconds <= 3600
             or (options.iteration_cap is not None and options.iteration_cap < 0)):
         parser.error("invalid trial, warmup, or repetition count")
+    if options.rust.resolve() == RUST.resolve():
+        subprocess.run(
+            ["cargo", "build", "--release", "-p", "gloprs-glop", "--example",
+             "full_presolve_netlib"],
+            cwd=ROOT, check=True,
+        )
     selected = corpus_models(options.corpus)
     by_key = {model.key: model for model in selected}
     by_name = {model.name: model for model in selected
@@ -196,6 +203,8 @@ def main() -> None:
         "rustc": version(["rustc", "--version"]),
         "clang": version(["clang++", "--version"]).splitlines()[0],
         "gloprs_commit": version(["git", "rev-parse", "HEAD"]),
+        "native_binary_sha256": hashlib.sha256(options.native.read_bytes()).hexdigest(),
+        "rust_binary_sha256": hashlib.sha256(options.rust.read_bytes()).hexdigest(),
         "upstream_commit": version(["git", "-C", str(ROOT.parent / "or-tools"),
                                     "rev-parse", "HEAD"]),
         "trials": options.trials,

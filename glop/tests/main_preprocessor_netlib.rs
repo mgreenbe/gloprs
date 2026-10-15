@@ -68,7 +68,8 @@ fn fast_96_presolved_models_match_native_bit_for_bit() {
     assert_eq!(fixture.results.len(), 96);
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../datasets/netlib/mps");
     for case in &fixture.results {
-        let mut lp = parse_mps_file(root.join(format!("{}.mps", case.name))).unwrap();
+        let mut lp = parse_mps_file(root.join(format!("{}.mps", case.name)))
+            .unwrap_or_else(|error| panic!("{}: {error}", case.name));
         let parameters = GlopParameters::default();
         lp.remove_near_zero_entries(parameters.drop_magnitude);
         let mut preprocessor = MainLpPreprocessor::new();
