@@ -703,10 +703,9 @@ impl LuFactorization {
         } else {
             self.lower.hyper_sparse_solve(values, non_zeros);
         }
-        // Like GLOP, the position list is authoritative here. Leave Rust's
-        // auxiliary membership cache cleared so a later rank-one update can
-        // record a structurally reached zero that becomes numerically nonzero.
-        result.clear_sparse_mask();
+        // The membership cache was cleared before scattering the input.
+        // Neither symbolic reach nor numerical substitution writes it, so it
+        // remains clear without a second Rust-only pass over the result.
         Ok(())
     }
 

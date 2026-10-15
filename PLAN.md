@@ -23,6 +23,16 @@ when timing-neutral; do not trade trajectory or KKT agreement for speed.
   primal edge-norm work; isolated LU and initial FTRAN explain only part of
   the remaining roughly 3.9 ms matched-solve excess.
 
+- A follow-up FTRAN audit removed a Rust-only second clear of the scattered
+  membership mask after the lower solve: symbolic reach and substitution do
+  not write that mask, and it was cleared before scattering the input. A
+  21-trial paired `traininstance2` solve is effectively neutral (0.999x
+  new/old); a fresh 31-trial native-relative solve is 1.060x. Strict fast-96
+  and extra-model trajectories still pass. A focused
+  5,174-row lower-transpose microbenchmark is already faster in Rust at two
+  tested densities, so its sampled share alone is not grounds for rewriting
+  that numerical loop. The live solve gap remains open.
+
 - A fresh M2-targeted 213-model `nmm0-50k` pass after the indexed-access
   audit matches every completed status and iteration count at 0.976x total
   Rust/native time, but a second pass was invalidated by a nonterminal native
