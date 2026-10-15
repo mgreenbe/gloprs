@@ -12,7 +12,7 @@ import subprocess
 from lp_corpus import ROOT, models
 
 
-BASELINE = ROOT / "baselines/phase8-extra-public.json"
+BASELINE = ROOT / "baselines/extra-native-outcomes.json"
 RUST = ROOT / "target/release/examples/phase5_netlib_solution_trace"
 
 
@@ -26,20 +26,18 @@ def main() -> None:
     args = parser.parse_args()
     baseline = json.loads(BASELINE.read_text())
     wall_seconds = baseline["wall_seconds"]
-    if baseline["corpus"] != "extra" or baseline["trials"] < 3:
+    if baseline["corpus"] != "extra":
         raise ValueError("unexpected extra-corpus baseline metadata")
     by_key = {case.key: case for case in models("extra")}
     selected = []
     for entry in baseline["results"]:
         key = f"{entry['corpus']}/{entry['name']}"
-        if entry["default"]["wall_limited"]:
-            continue
         if args.models is None or key in args.models:
-            selected.append((key, by_key[key], entry["default"]))
+            selected.append((key, by_key[key], entry))
     if args.models is not None and {key for key, _, _ in selected} != set(args.models):
         parser.error("some requested models are unknown or wall-limited")
     for number_, (key, case, expected) in enumerate(selected, 1):
-        native = expected["trial_outcomes"][0]["native"]
+        native = expected["native"]
         result = subprocess.run([RUST, case.path, "phase7", str(wall_seconds)],
                                 check=True, capture_output=True, text=True,
                                 timeout=wall_seconds + 30)

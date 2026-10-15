@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Alternate saved release binaries for the counted-loop audit; retain raw trials."""
+"""Compare saved release binaries on numerical kernels or matched solves."""
 from __future__ import annotations
 import argparse
 import hashlib
@@ -10,7 +10,7 @@ import statistics
 import subprocess
 from pathlib import Path
 from benchmark_lower_transpose import factor_input
-from benchmark_phase8_stages import run as run_stage
+from benchmark_stages import run as run_stage
 from lp_corpus import models
 
 

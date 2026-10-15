@@ -1,74 +1,53 @@
-# Upstream reference
-
-`gloprs` targets the following immutable Google OR-Tools revision:
+# Native reference
 
 | Field | Value |
 |---|---|
 | Repository | <https://github.com/google/or-tools.git> |
-| Local reference checkout | `../or-tools` |
-| Branch at clone time | `stable` |
 | Commit | `100f66e6242ab8bf8d32feb8f3bf086db66ae2b5` |
-| Commit date | 2026-09-17T15:02:24+02:00 |
 | OR-Tools version | 9.15 |
+| Local checkout | `../or-tools` |
+| Native adapter build | `../or-tools/build-gloprs-solve` |
 | License | Apache-2.0 |
 
-The reference checkout is intentionally a sibling of this repository. Do not
-advance it while translating files. Any future upstream update must change the
-commit above explicitly, regenerate the source inventory, and receive its own
-differential-validation pass.
+The sibling checkout is a read-only reference for this project. An upstream
+update must explicitly change the pin, regenerate affected fixtures, and pass
+differential validation. Preserve source attribution and upstream path/commit
+references in translated modules.
 
-## Initial native toolchain
+## Building reference adapters
 
-| Tool | Version |
-|---|---|
-| CMake | 4.4.3 |
-| Ninja | 1.13.2 |
-| C++ compiler | Apple clang 17.0.0 (`clang-1700.6.4.2`) |
-
-## Native standalone build
-
-The pinned checkout was configured with:
-
-```text
-cmake -S . -B build-gloprs-reference -G Ninja \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_DEPS=ON \
-  -DBUILD_CXX=OFF \
-  -DBUILD_GLOP=ON \
-  -DBUILD_SAMPLES=ON \
-  -DBUILD_TESTING=ON \
-  -DINSTALL_BUILD_DEPS=OFF
-```
-
-The MPS-capable generic `solve` reference binary is built separately in
-`../or-tools/build-gloprs-solve` with `BUILD_CXX=ON`, all optional solver
-backends except GLOP disabled, and `USE_GUROBI=ON` only to satisfy generic
-OR-Tools model-builder symbols (the reference invocation explicitly selects
-GLOP and does not load Gurobi).
-
-The generic response omits basis statuses. Build the project-owned focused
-adapter against that pinned build, then run it through the normalized wrapper:
+Use a release OR-Tools build with GLOP and MPS support. The existing
+`build-gloprs-solve` configuration uses `BUILD_CXX=ON`, with other solver
+backends disabled. Its Gurobi option satisfies generic model-builder symbols;
+reference adapters explicitly invoke GLOP and do not load Gurobi.
+The adapter builder defaults to that directory and accepts `--upstream`,
+`--build`, `--source`, and `--output` overrides:
 
 ```text
 python3 tools/build_glop_reference_adapter.py
 python3 tools/run_glop_reference.py --summary ../datasets/netlib/mps/afiro.mps
 ```
 
-The adapter calls `glop::LPSolver` directly and reports GLOP's variable and
-constraint status arrays under `basis.variables` and `basis.constraints`.
-Both use the upstream names `BASIC`, `FIXED_VALUE`, `AT_LOWER_BOUND`,
-`AT_UPPER_BOUND`, and `FREE`.
+The focused adapter calls `glop::LPSolver` directly and includes variable and
+constraint basis statuses. Generic OR-Tools solver responses omit these statuses
+and are insufficient for full differential validation.
 
-The `simple_glop_program` target builds successfully. Its CTest entry passes
-and the executable reports the expected optimal objective value `4`. The
-standalone build does not include `mps_reader.cc`; the MPS-capable structured
-reference runner therefore uses the separate `build-gloprs-solve` build.
+For a minimal standalone GLOP build, the reference configuration is:
 
-## Scope notes
+```text
+cmake -S ../or-tools -B ../or-tools/build-gloprs-reference -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release -DBUILD_DEPS=ON -DBUILD_CXX=OFF \
+  -DBUILD_GLOP=ON -DBUILD_SAMPLES=ON -DBUILD_TESTING=ON \
+  -DINSTALL_BUILD_DEPS=OFF
+```
 
-The core source lives in `ortools/glop`. GLOP also directly depends on
-`ortools/lp_data` and selected facilities from `ortools/base`,
-`ortools/algorithms`, `ortools/graph`, `ortools/util`, and generated protobuf
-types. The Rust port will translate solver semantics while replacing Bazel,
-protobuf, Abseil, logging, status, and flag infrastructure with focused Rust
-equivalents.
+This minimal configuration supports core examples but does not include
+`mps_reader.cc`; use the MPS-capable build for the adapters above. Local native
+setup uses CMake, Ninja and a C++ compiler; the original reference used Apple
+Clang 17.0.0. Recheck numerical reduction and contraction behavior when changing
+compiler or target architecture.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for public-solver, stage, trajectory and
+KKT checks. The core correspondence is `ortools/glop` → `glop/src` and
+`ortools/lp_data` → `lp_data/src`; focused Rust support replaces protobuf,
+Abseil, logging and build infrastructure.

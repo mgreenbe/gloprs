@@ -28,7 +28,7 @@ BASELINE = ROOT / "baselines/phase5-netlib-solution-native.json.gz"
 QAP15_BASELINE = ROOT / "baselines/phase7-qap15-terminal-native.json.gz"
 PRESOLVE_BASELINE = ROOT / "baselines/main-preprocessor-netlib-native.json"
 MODEL_BASELINE = ROOT / "baselines/netlib-glop.json"
-REPORT = ROOT / "baselines/phase7-netlib-report.json"
+REPORT = ROOT / "target/netlib-audit.json"
 PIN = "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5"
 
 
@@ -234,8 +234,6 @@ def main() -> int:
                     rust_refactorizations = None
                 native_status = native[0].split()[0]
                 rust_status = rust[0].split()[0]
-                if name == "qap15" and native_status == rust_status == "OPTIMAL":
-                    case["known_issue"] = "P7-001"
                 if native_status == "PRIMAL_FEASIBLE" or rust_status == "PRIMAL_FEASIBLE":
                     issues.append("time_limited_incomparable")
                 else:
@@ -256,10 +254,6 @@ def main() -> int:
                                     rust_deterministic_time=actual)
                         if not close(expected, actual):
                             issues.append("deterministic_time")
-                            if name in ("d2q06c", "sierra"):
-                                case["known_issue"] = {
-                                    "d2q06c": "P7-002", "sierra": "P7-003",
-                                }[name]
             elif rust:
                 fields = rust[0].split()
                 case.update(rust_status=fields[0], rust_iterations=int(fields[1]))
@@ -289,19 +283,7 @@ def main() -> int:
     }
     args.report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     print(f"report: {args.report}")
-    allowed_qap15 = {"pivot_path_or_termination", "objective", "primal_infeasibility",
-                     "dual_infeasibility", "primal", "reduced_costs", "dual",
-                     "activities", "variable_basis", "constraint_basis",
-                     "deterministic_time", "refactorization_count"}
-    return 0 if all(
-        case["classifications"] == ["match"]
-        or (case["name"] == "qap15" and case.get("known_issue") == "P7-001"
-            and set(case["classifications"]).issubset(allowed_qap15)
-            and case.get("native_status") == case.get("rust_status") == "OPTIMAL"
-            and float(case.get("independent_primal_violation", float("inf"))) <= 1e-6
-            and float(case.get("maximum_dual_infeasibility", float("inf"))) <= 1e-6)
-        for case in results
-    ) else 1
+    return 0 if all(case["classifications"] == ["match"] for case in results) else 1
 
 
 if __name__ == "__main__":

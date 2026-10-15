@@ -1,0 +1,1483 @@
+{
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "corpus": "extra",
+  "wall_seconds": 60.0,
+  "results": [
+    {
+      "corpus": "miplib2017",
+      "name": "30n20b8",
+      "native": [
+        "OPTIMAL",
+        335,
+        4609733292061626065
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "50v-10",
+      "native": [
+        "OPTIMAL",
+        345,
+        4658549547473375384
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "air05",
+      "native": [
+        "OPTIMAL",
+        1796,
+        4672842397028095512
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "app1-1",
+      "native": [
+        "OPTIMAL",
+        1236,
+        13850489739430045955
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "assign1-5-8",
+      "native": [
+        "OPTIMAL",
+        187,
+        4640655512925598251
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "b1c1s1",
+      "native": [
+        "OPTIMAL",
+        2444,
+        4658522698637796965
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "beasleyC3",
+      "native": [
+        "OPTIMAL",
+        221,
+        4630886387722888567
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "binkar10_1",
+      "native": [
+        "OPTIMAL",
+        646,
+        4664019680112453167
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "bnatt400",
+      "native": [
+        "OPTIMAL",
+        1438,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "bnatt500",
+      "native": [
+        "OPTIMAL",
+        1823,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "bppc4-08",
+      "native": [
+        "OPTIMAL",
+        196,
+        4632457464333750765
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "brazil3",
+      "native": [
+        "OPTIMAL",
+        17329,
+        4611686018427387977
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "cbs-cta",
+      "native": [
+        "OPTIMAL",
+        6507,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "chromaticindex512-7",
+      "native": [
+        "OPTIMAL",
+        24337,
+        4613937818241073152
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "CMS750_4",
+      "native": [
+        "OPTIMAL",
+        10038,
+        4643000109586448384
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "cod105",
+      "native": [
+        "OPTIMAL",
+        2621,
+        13849212225539613844
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "comp07-2idx",
+      "native": [
+        "OPTIMAL",
+        7371,
+        4396111370639114240
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "comp21-2idx",
+      "native": [
+        "OPTIMAL",
+        4055,
+        4388423585337704448
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "cost266-UUE",
+      "native": [
+        "OPTIMAL",
+        1040,
+        4716177275880436626
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "csched007",
+      "native": [
+        "OPTIMAL",
+        412,
+        4643444340208174709
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "csched008",
+      "native": [
+        "OPTIMAL",
+        231,
+        4640220544191430656
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "cvs16r128-89",
+      "native": [
+        "OPTIMAL",
+        19626,
+        13862079653046386688
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "dano3_3",
+      "native": [
+        "OPTIMAL",
+        9089,
+        4648279802753254118
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "dano3_5",
+      "native": [
+        "OPTIMAL",
+        9089,
+        4648279802753254118
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "decomp2",
+      "native": [
+        "OPTIMAL",
+        2139,
+        13863205552953229312
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "drayage-100-23",
+      "native": [
+        "OPTIMAL",
+        678,
+        4667665531986247690
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "drayage-25-23",
+      "native": [
+        "OPTIMAL",
+        698,
+        4667665531986247690
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "dws008-01",
+      "native": [
+        "OPTIMAL",
+        814,
+        4648352532190461951
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "eil33-2",
+      "native": [
+        "OPTIMAL",
+        115,
+        4650347301335841110
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "enlight_hard",
+      "native": [
+        "OPTIMAL",
+        0,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "exp-1-500-5-5",
+      "native": [
+        "OPTIMAL",
+        227,
+        4673543181521872926
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "fastxgemm-n2r6s0t2",
+      "native": [
+        "OPTIMAL",
+        770,
+        4628293042053316608
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "fhnw-binpack4-4",
+      "native": [
+        "OPTIMAL",
+        489,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "fhnw-binpack4-48",
+      "native": [
+        "OPTIMAL",
+        3774,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "fiball",
+      "native": [
+        "OPTIMAL",
+        438,
+        4639026709160519677
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "gen-ip002",
+      "native": [
+        "OPTIMAL",
+        35,
+        13885416283727056644
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "gen-ip054",
+      "native": [
+        "OPTIMAL",
+        40,
+        4664160440707907386
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "glass-sc",
+      "native": [
+        "OPTIMAL",
+        437,
+        4624116119951352577
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "glass4",
+      "native": [
+        "OPTIMAL",
+        40,
+        4739994114899050495
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "gmu-35-40",
+      "native": [
+        "OPTIMAL",
+        430,
+        13925795320131108444
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "gmu-35-50",
+      "native": [
+        "OPTIMAL",
+        537,
+        13926227236558095445
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "graph20-20-1rand",
+      "native": [
+        "OPTIMAL",
+        3092,
+        13853776141233422336
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "graphdraw-domain",
+      "native": [
+        "OPTIMAL",
+        299,
+        4668192120002052107
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "h80x6320d",
+      "native": [
+        "OPTIMAL",
+        190,
+        4662577090155687891
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "ic97_potential",
+      "native": [
+        "OPTIMAL",
+        0,
+        4660724237026197504
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "icir97_tension",
+      "native": [
+        "OPTIMAL",
+        3,
+        4663651136979337216
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "irp",
+      "native": [
+        "OPTIMAL",
+        135,
+        4667890595553037987
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "istanbul-no-cutoff",
+      "native": [
+        "OPTIMAL",
+        4755,
+        4632389910339340206
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "leo1",
+      "native": [
+        "OPTIMAL",
+        271,
+        4735298787185161642
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "lotsize",
+      "native": [
+        "OPTIMAL",
+        709,
+        4689728827144679883
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "mad",
+      "native": [
+        "OPTIMAL",
+        32,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "markshare2",
+      "native": [
+        "OPTIMAL",
+        39,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "markshare_4_0",
+      "native": [
+        "OPTIMAL",
+        16,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "mas74",
+      "native": [
+        "OPTIMAL",
+        89,
+        4666988591979623126
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "mas76",
+      "native": [
+        "OPTIMAL",
+        71,
+        4675578350995998594
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "mc11",
+      "native": [
+        "OPTIMAL",
+        399,
+        4648566667266346931
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "mcsched",
+      "native": [
+        "OPTIMAL",
+        1903,
+        4685898062677628588
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "mik-250-20-75-4",
+      "native": [
+        "OPTIMAL",
+        0,
+        13902078130570529729
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "milo-v12-6-r2-40-1",
+      "native": [
+        "OPTIMAL",
+        2346,
+        4686302049657140785
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "momentum1",
+      "native": [
+        "OPTIMAL",
+        5668,
+        4679738733806329400
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "mzzv11",
+      "native": [
+        "OPTIMAL",
+        1742,
+        13895408390254799934
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "n5-3",
+      "native": [
+        "OPTIMAL",
+        278,
+        4658560010079806886
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-1171448",
+      "native": [
+        "OPTIMAL",
+        1495,
+        13867515638534111233
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-1171737",
+      "native": [
+        "OPTIMAL",
+        3243,
+        13864437005976338438
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-1445765",
+      "native": [
+        "OPTIMAL",
+        1295,
+        13895890514566522097
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-1456979",
+      "native": [
+        "OPTIMAL",
+        931,
+        4639622409865920513
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-1582420",
+      "native": [
+        "OPTIMAL",
+        3624,
+        4635863038408340236
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-2657525-crna",
+      "native": [
+        "OPTIMAL",
+        125,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-2978193-inde",
+      "native": [
+        "OPTIMAL",
+        1633,
+        13836000474455422400
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3004026-krka",
+      "native": [
+        "OPTIMAL",
+        958,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3024952-loue",
+      "native": [
+        "OPTIMAL",
+        2990,
+        4672018970222526461
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3046615-murg",
+      "native": [
+        "OPTIMAL",
+        0,
+        4640959416005296128
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3083819-nubu",
+      "native": [
+        "OPTIMAL",
+        288,
+        4708512465042878973
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3216931-puriri",
+      "native": [
+        "OPTIMAL",
+        20651,
+        4678316609034563326
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3381206-awhea",
+      "native": [
+        "OPTIMAL",
+        797,
+        4646012595524694183
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3627168-kasai",
+      "native": [
+        "OPTIMAL",
+        1091,
+        4696371641770092635
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3656078-kumeu",
+      "native": [
+        "IMPRECISE",
+        5481,
+        13894262001050111181
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-3754480-nidda",
+      "native": [
+        "OPTIMAL",
+        250,
+        13921349494221672423
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-4338804-snowy",
+      "native": [
+        "OPTIMAL",
+        454,
+        4654078788747919360
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-4387871-tavua",
+      "native": [
+        "OPTIMAL",
+        1770,
+        4621900095347251099
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-4738912-atrato",
+      "native": [
+        "OPTIMAL",
+        1213,
+        4724012220541049081
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-4954672-berkel",
+      "native": [
+        "OPTIMAL",
+        329,
+        4697691008410850118
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-5107597-kakapo",
+      "native": [
+        "OPTIMAL",
+        2575,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-5188808-nattai",
+      "native": [
+        "OPTIMAL",
+        1668,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-827175",
+      "native": [
+        "OPTIMAL",
+        26989,
+        4637581823245259407
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-911970",
+      "native": [
+        "OPTIMAL",
+        127,
+        4627240325640418753
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos-950242",
+      "native": [
+        "OPTIMAL",
+        4183,
+        4607182418800017408
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos17",
+      "native": [
+        "OPTIMAL",
+        116,
+        4559424937493451157
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos5",
+      "native": [
+        "OPTIMAL",
+        84,
+        4623507967449235456
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "neos859080",
+      "native": [
+        "OPTIMAL",
+        48,
+        4607182418800017408
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "net12",
+      "native": [
+        "OPTIMAL",
+        1776,
+        4625548514428837342
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "nexp-150-20-8-5",
+      "native": [
+        "OPTIMAL",
+        843,
+        4625823606948360235
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "ns1208400",
+      "native": [
+        "OPTIMAL",
+        1271,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "ns1830653",
+      "native": [
+        "OPTIMAL",
+        1092,
+        4663487309746798591
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "nu25-pr12",
+      "native": [
+        "OPTIMAL",
+        585,
+        4677483749171003392
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "p200x1188c",
+      "native": [
+        "OPTIMAL",
+        69,
+        4662965709224588133
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "peg-solitaire-a3",
+      "native": [
+        "OPTIMAL",
+        2325,
+        4607182418800017390
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "pg",
+      "native": [
+        "OPTIMAL",
+        1574,
+        13891098325325985028
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "pg5_34",
+      "native": [
+        "OPTIMAL",
+        1756,
+        13893677029532830225
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "piperout-08",
+      "native": [
+        "OPTIMAL",
+        6802,
+        4681548501029644980
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "piperout-27",
+      "native": [
+        "OPTIMAL",
+        7141,
+        4664385610746691582
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "pk1",
+      "native": [
+        "OPTIMAL",
+        53,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "qap10",
+      "native": [
+        "OPTIMAL",
+        9408,
+        4644558183140583618
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "radiationm18-12-05",
+      "native": [
+        "OPTIMAL",
+        707,
+        4670554558173282040
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "ran14x18-disj-8",
+      "native": [
+        "OPTIMAL",
+        542,
+        4659792777100733493
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "reblock115",
+      "native": [
+        "OPTIMAL",
+        2149,
+        13943924459555709700
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "rmatr100-p10",
+      "native": [
+        "OPTIMAL",
+        7866,
+        4645051240743820511
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "rocI-4-11",
+      "native": [
+        "OPTIMAL",
+        2876,
+        13935598866691729189
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "rococoB10-011000",
+      "native": [
+        "OPTIMAL",
+        773,
+        4665816185033384241
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "rococoC10-001000",
+      "native": [
+        "OPTIMAL",
+        422,
+        4664985142583819207
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "roll3000",
+      "native": [
+        "OPTIMAL",
+        846,
+        4667326324786271862
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "satellites2-60-fs",
+      "native": [
+        "OPTIMAL",
+        68981,
+        13852509503838224388
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "sct2",
+      "native": [
+        "OPTIMAL",
+        1196,
+        13865707758670081433
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "seymour",
+      "native": [
+        "OPTIMAL",
+        2634,
+        4645812158497802704
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "seymour1",
+      "native": [
+        "OPTIMAL",
+        2634,
+        4645812158497802704
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "sp150x300d",
+      "native": [
+        "OPTIMAL",
+        29,
+        4617192920792341676
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "supportcase18",
+      "native": [
+        "OPTIMAL",
+        149,
+        4631837750260026136
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "supportcase26",
+      "native": [
+        "OPTIMAL",
+        16,
+        4653379948662080248
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "supportcase40",
+      "native": [
+        "OPTIMAL",
+        6836,
+        4671923995336867840
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "swath1",
+      "native": [
+        "OPTIMAL",
+        497,
+        4644592147150578701
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "swath3",
+      "native": [
+        "OPTIMAL",
+        497,
+        4644592147150578701
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "timtab1",
+      "native": [
+        "OPTIMAL",
+        30,
+        4673616560617684991
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "tr12-30",
+      "native": [
+        "OPTIMAL",
+        700,
+        4669037878926229274
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "traininstance2",
+      "native": [
+        "OPTIMAL",
+        2682,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "traininstance6",
+      "native": [
+        "OPTIMAL",
+        2064,
+        0
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "trento1",
+      "native": [
+        "OPTIMAL",
+        9163,
+        4707322955913661181
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "uct-subprob",
+      "native": [
+        "OPTIMAL",
+        1724,
+        4642718634609737729
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "unitcal_7",
+      "native": [
+        "OPTIMAL",
+        22771,
+        4715969516962164557
+      ]
+    },
+    {
+      "corpus": "miplib2017",
+      "name": "wachplan",
+      "native": [
+        "OPTIMAL",
+        384,
+        13844628204490326016
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "bal8x12",
+      "native": [
+        "OPTIMAL",
+        17,
+        4646645001104065136
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "bk4x3",
+      "native": [
+        "OPTIMAL",
+        1,
+        4644366436035898027
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "brazil3",
+      "native": [
+        "OPTIMAL",
+        17329,
+        4611686018427387977
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "fome11",
+      "native": [
+        "OPTIMAL",
+        35124,
+        4716813810550068873
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "fome12",
+      "native": [
+        "OPTIMAL",
+        69604,
+        4721317410177439457
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "gr4x6",
+      "native": [
+        "OPTIMAL",
+        6,
+        4640732476805323162
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3700",
+      "native": [
+        "OPTIMAL",
+        165,
+        4696599254871799910
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3701",
+      "native": [
+        "OPTIMAL",
+        168,
+        4696508702137127303
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3702",
+      "native": [
+        "OPTIMAL",
+        156,
+        4696503721609223992
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3703",
+      "native": [
+        "OPTIMAL",
+        169,
+        4696272033947733323
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3704",
+      "native": [
+        "OPTIMAL",
+        182,
+        4696577732439164403
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3705",
+      "native": [
+        "OPTIMAL",
+        184,
+        4696608319563221439
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3706",
+      "native": [
+        "OPTIMAL",
+        163,
+        4696501126910142952
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3707",
+      "native": [
+        "OPTIMAL",
+        151,
+        4696279976505465405
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3708",
+      "native": [
+        "OPTIMAL",
+        187,
+        4696558169705568422
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n3709",
+      "native": [
+        "OPTIMAL",
+        156,
+        4696487658482331377
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n370a",
+      "native": [
+        "OPTIMAL",
+        160,
+        4696658643933840583
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n370b",
+      "native": [
+        "OPTIMAL",
+        172,
+        4696736714232134990
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n370c",
+      "native": [
+        "OPTIMAL",
+        152,
+        4696540200801335875
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n370d",
+      "native": [
+        "OPTIMAL",
+        152,
+        4696540200801335875
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "n370e",
+      "native": [
+        "OPTIMAL",
+        158,
+        4696507733961886803
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran10x10a",
+      "native": [
+        "OPTIMAL",
+        11,
+        4653224435187513424
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran10x10b",
+      "native": [
+        "OPTIMAL",
+        10,
+        4657965495178641716
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran10x10c",
+      "native": [
+        "OPTIMAL",
+        15,
+        4667384579543214317
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran10x12",
+      "native": [
+        "OPTIMAL",
+        10,
+        4657553739667796751
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran10x26",
+      "native": [
+        "OPTIMAL",
+        21,
+        4660700097871248897
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran12x12",
+      "native": [
+        "OPTIMAL",
+        23,
+        4655748066176388804
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran12x21",
+      "native": [
+        "OPTIMAL",
+        17,
+        4659161561495292226
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran13x13",
+      "native": [
+        "OPTIMAL",
+        27,
+        4658136953056665858
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran14x18",
+      "native": [
+        "OPTIMAL",
+        37,
+        4658852745869707147
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran16x16",
+      "native": [
+        "OPTIMAL",
+        15,
+        4659071516045781201
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran17x17",
+      "native": [
+        "OPTIMAL",
+        31,
+        4653059522555852446
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran4x64",
+      "native": [
+        "OPTIMAL",
+        23,
+        4666524124212328311
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran6x43",
+      "native": [
+        "OPTIMAL",
+        26,
+        4663588142685388121
+      ]
+    },
+    {
+      "corpus": "mittelmann-lpopt",
+      "name": "ran8x32",
+      "native": [
+        "OPTIMAL",
+        34,
+        4662150946306450220
+      ]
+    }
+  ]
+}

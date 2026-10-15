@@ -19,7 +19,7 @@ from lp_corpus import NMM_CORPORA, models as corpus_models
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE = ROOT / "target/native/phase5_netlib_solution_reference_adapter"
 RUST = ROOT / "target/release/examples/phase5_netlib_solution_trace"
-PHASE7 = ROOT / "baselines/phase7-netlib-report.json"
+REFERENCE = ROOT / "baselines/netlib-glop.json"
 
 
 def run(executable: Path, model: Path, mode: str,
@@ -77,8 +77,7 @@ def main() -> None:
              "phase5_netlib_solution_trace"],
             cwd=ROOT, check=True,
         )
-    phase7 = json.loads(PHASE7.read_text(encoding="utf-8"))
-    expected = {case["name"]: case for case in phase7["results"]}
+    reference = json.loads(REFERENCE.read_text(encoding="utf-8"))
     selected = corpus_models(options.corpus)
     by_key = {model.key: model for model in selected}
     by_name = {model.name: model for model in selected
@@ -130,11 +129,6 @@ def main() -> None:
                     break
             outcomes = trial_outcomes[-1]
             wall_limited = any(limited_trials)
-            if mode == "default" and case.corpus == "netlib" and not wall_limited:
-                reference = expected[case.name]
-                assert outcomes["native"][:2] == (
-                    reference["native_status"], reference["native_iterations"]
-                ), (name, outcomes, reference)
             results[mode] = {
                 "native_seconds": statistics.median(times["native"]),
                 "rust_seconds": statistics.median(times["rust"]),
@@ -191,7 +185,7 @@ def main() -> None:
         "gloprs_commit": version(["git", "rev-parse", "HEAD"]),
         "native_binary_sha256": hashlib.sha256(options.native.read_bytes()).hexdigest(),
         "rust_binary_sha256": hashlib.sha256(options.rust.read_bytes()).hexdigest(),
-        "upstream_commit": phase7["upstream_commit"],
+        "upstream_commit": reference["upstream_commit"],
         "timing_scope": "serial public LPSolver solve; MPS parsing and output excluded",
         "trials": options.trials,
         "warmups": options.warmups,

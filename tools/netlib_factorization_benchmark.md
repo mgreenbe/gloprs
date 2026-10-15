@@ -20,10 +20,10 @@ view layout without timing file loading:
 
 ```sh
 python3 tools/benchmark_netlib_factorizations.py \
-  --root target/phase8-qap15-direct-probes \
-  --selected-source target/phase8-qap15-direct-probes/qap15-source.mtx \
+  --root target/qap15-direct-probes \
+  --selected-source target/qap15-direct-probes/qap15-source.mtx \
   --models qap15 --repetitions 1 --warmups 0 --trials 3 \
-  --output target/phase8-qap15-selected-view-timings.csv
+  --output target/qap15-selected-view-timings.csv
 ```
 
 For a model that normally uses presolve, `netlib_simplex_probe` can capture
@@ -32,7 +32,7 @@ the selected compact views under the ordinary presolved solve parameters:
 ```sh
 target/release/examples/netlib_simplex_probe \
   ../datasets/miplib2017/mps/fhnw-binpack4-48.mps 120 \
-  target/phase8-fhnw-selected --presolved-factorizations
+  target/fhnw-selected --presolved-factorizations
 ```
 
 Build both release executables against the pinned upstream checkout:
@@ -63,13 +63,9 @@ For live-lifecycle comparisons, `--retain-factorization --chronological`
 reuses one LU object per solver and processes saved selections in numeric
 pivot order. `--pivot-threshold 0.9` reproduces the high threshold that the
 direct qap15 solve reaches after numerical imprecision; the default probe
-threshold is 0.01 and seriously understates the late live gap.
-`--evict-mib 32` evicts cache outside the timed region for a cache-sensitivity
-check. On the 823 qap15 selections spanning pivots 25,000–30,000, three
-retained chronological selected-view trials at threshold 0.9 measured
-1.112–1.113x Rust/native, versus near parity at 0.01. This identifies the
-high-threshold LU kernel as the late live bottleneck without attributing the
-entire solve interval to a single exact stage timer.
+threshold is 0.01. Choose the threshold to match the solver path being
+investigated. `--evict-mib 32` evicts cache outside the timed region for a
+cache-sensitivity check.
 The executable interfaces are also usable directly:
 
 ```sh
@@ -82,25 +78,3 @@ Each direct output row is tab-separated:
 The Python runner checks matching dimensions, nonzeros, and finite
 determinants before writing timings. Timings exclude file I/O, but include
 all numerical and symbolic factorization work and internal workspace resets.
-
-## Five-trial comparison, 2026-10-12
-
-On an Apple M2 with Rust 1.95.0 and Apple Clang 17, using release builds and
-the pinned OR-Tools commit `100f66e6242ab8bf8d32feb8f3bf086db66ae2b5`:
-
-```sh
-python3 tools/benchmark_netlib_factorizations.py \
-  --trials 5 --repetitions 1 --warmups 1 \
-  --output target/netlib-factorization-5trial.csv
-```
-
-All 2,593 matrices passed dimension, nonzero-count, and determinant checks in
-every trial. The paired Rust/native aggregate ratios were 1.095, 1.093,
-1.093, 1.088, and 1.114; summing per-matrix medians gives 36.720 s native
-versus 40.134 s Rust (1.093). `qap15` accounts for 31.451 s native versus
-34.939 s Rust (1.111) and more than the entire net gap; without `qap15`,
-the aggregate ratio is approximately 0.986. The remaining 96 models after
-also excluding `qap12` total about 1.68 s native versus 1.44 s Rust (0.86).
-Small-model individual ratios are noisy and should be interpreted by absolute
-time. The five-trial run is a controlled isolated-LU comparison, not an
-end-to-end simplex timing claim.

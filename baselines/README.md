@@ -1,131 +1,40 @@
-# Reference baselines
+# Pinned regression fixtures
 
-`netlib-glop.json` contains one normalized result for every problem in the
-shared `../datasets/netlib/manifest.json`, produced by the pinned native GLOP
-build at OR-Tools commit `100f66e6242ab8bf8d32feb8f3bf086db66ae2b5`.
+These files are inputs to maintained tests and native differential tools.
+They are not a benchmark archive. Fixtures target the immutable revision in
+[UPSTREAM.md](../UPSTREAM.md); never replace them silently to make a test pass.
 
-Regenerate it with:
+| Fixtures | Purpose | Regeneration tool under `tools/` |
+|---|---|---|
+| `netlib-glop.json` | Parsed model fingerprints, native solutions and bases | `generate_netlib_baselines.py` |
+| `netlib-dual-trajectories.json.gz` | Fast-96 ordered pivots and terminal state | `generate_netlib_trajectory_fixture.py` |
+| `netlib-perturbed-dual.json.gz` | Perturbed dual terminal state | `generate_perturbed_dual_fixture.py` |
+| `main-preprocessor-netlib-native.json` | Fast-96 bit-exact presolved models | `generate_main_preprocessor_netlib_fixture.py` |
+| `phase5-netlib-solution-native.json.gz` | Public postsolve vectors and bases | `generate_phase5_netlib_solution_fixture.py` |
+| `phase7-qap15-terminal-native.json.gz` | Long native qap15 terminal solution | `generate_phase7_qap15_terminal_fixture.py` |
+| `qap12-primal.json` | Large primal-path fingerprints | `generate_qap12_primal_fixture.py` |
+| `qap15-dual.json`, `qap15-clock-transition.json` | Capped dual path and clock boundary | `generate_qap15_dual_fixture.py` |
+| `phase4-{cases,native}.json` | Revised simplex branch regressions | `generate_phase4_fixture.py` |
+| `phase5-solve-{cases,native}.json` | Pipeline solve regressions | `generate_phase5_solve_fixture.py` |
+| `preprocessor-{cases,native}.json` | Transformation regressions | `generate_preprocessor_fixture.py` |
+| `preprocessor-basic-{cases,native}.json` | Basic preprocessing regressions | `generate_preprocessor_basic_fixture.py` |
+| `extra-lp-corpus.json` | Deduplicated, parser-verified external corpus selection | `generate_extra_lp_corpus.py` |
+| `phase8-extra-trajectories.json.gz` | Selected external-model pivot paths | `generate_phase8_extra_trajectories.py` |
+| `extra-native-outcomes.json` | Completed native external-corpus statuses, iterations and objective bits | See below |
 
-```text
-python3 tools/generate_netlib_baselines.py
-```
+Generators require shared datasets and the appropriate pinned native adapters.
+Inspect each tool's usage and diagnostic-build requirements before regenerating;
+some trajectory generators need a temporary instrumented native build.
 
-Each result is tied to the expanded MPS checksum and records status, objective,
-iterations, feasibility residuals, deterministic time, elapsed times, and peak
-resident memory. Each result also contains the final status of every structural
-variable and constraint slack in `basis.variables` and `basis.constraints`.
-The `model` object records parsed dimensions, matrix nonzeros, and a stable
-fingerprint covering all bounds and objective data.
-Wall-clock and memory measurements describe the platform recorded in the file
-and are expected to change on another machine. Published Netlib objectives are
-retained for comparison; differences are not silently treated as failures
-because the Netlib documentation records solver- and tolerance-dependent
-alternatives for several instances.
+`extra-native-outcomes.json` retains only native outcomes from the validated
+external-corpus campaign; it is consumed by `validate_extra_lp_baseline.py`.
+To refresh it, run `benchmark_solver.py --corpus extra` against the intended
+native revision, retain only nonlimited native outcomes, and review changed
+checksums, statuses, iteration counts and objective bits. Timing samples and
+Rust outcomes do not belong in this fixture.
 
-`netlib-dual-trajectories.json.gz` is the stricter native-GLOP fixture for the
-96 instances that finish quickly; `qap12` and `qap15` are deliberately omitted.
-For every model it records the terminal status, iteration and basis-update
-counts, ordered basis, bit patterns of primal values, reduced costs, and dual
-edge norms, and the complete sequence of entering columns, leaving basic
-columns, leaving rows, and iteration numbers. The fixture uses the same pinned
-OR-Tools revision and identifies every input by its expanded MPS checksum.
-
-`qap12-primal.json` separately pins the large, unscaled direct-primal qap12
-solve omitted from the fast-96 fixture. It records native status, iterations,
-and SHA-256 fingerprints of the complete pivot sequence, ordered basis, and
-reduced-cost bit patterns at the former pivot-21,502 divergence and at
-termination. `tools/generate_qap12_primal_fixture.py` regenerates it from a
-temporary pinned-native build that emits `NATIVE_PIVOT_DIAG` events without
-editing the upstream checkout. Run its opt-in release regression with:
-
-```text
-cargo test --release -p gloprs-glop --test qap12_primal -- --ignored
-```
-
-`phase8-extra-trajectories.json.gz` pins the complete direct dual-simplex
-pivot sequences and terminal bases for `neos-1445765`,
-`graph20-20-1rand`, `milo-v12-6-r2-40-1`, `cvs16r128-89`,
-`neos-1171737`, and `neos-3216931-puriri`. Regenerate it with an
-instrumented pinned-native adapter and check it with:
-
-```text
-python3 tools/generate_phase8_extra_trajectories.py --binary <instrumented-native-adapter>
-cargo test --release -p gloprs-glop --test phase8_extra_trajectories -- --ignored
-```
-
-For the same three presolved performance targets (`milo`, `graph`, and `cvs`),
-`python3 tools/validate_phase8_nmm_presolved_checkpoints.py` checks 14 pinned
-native/Rust capped-state fingerprints, including basis, values, reduced costs,
-deterministic clocks, and refactorization count.
-
-The [Phase 8 allocation audit](phase8-allocation-audit.md) compares Rust
-constructor and copy sites on solver hot paths with their pinned GLOP
-workspaces, records fixes and remaining view-copy opportunities, and links
-the associated differential and timing evidence.
-
-The [NMM 0–50k](phase8-nmm0-50k-performance.md) and
-[extra-corpus](phase8-extra-performance.md) reports contain Phase 8's final
-current-source public timings, binary fingerprints, per-model excesses,
-background-load caveats, and raw JSON links. The NMM closeout has two clean
-213-model passes; the extra-corpus run has 162 completed cases under 20
-seconds and two more in a separate 60-second long-tail check. A quiet
-15-pair recheck isolates the two small repeatable extra-corpus solve costs.
-
-The fixture generator requires a temporary diagnostic native build as described
-in `tools/generate_netlib_trajectory_fixture.py`. Validate gloprs against it
-with a fresh 20-second wall-clock limit for every model:
-
-```text
-cargo test --release -p gloprs-glop --test netlib_trajectories -- --ignored --nocapture
-```
-
-`netlib-perturbed-dual.json.gz` records pinned native GLOP's results for the
-same 96 models with dual cost perturbation enabled. It contains status,
-iteration and basis-update counts, ordered basis, and bit patterns of primal
-values, reduced costs, and dual edge norms. The input MPS checksum accompanies
-each result. Unlike the trajectory fixture, this adapter does not export native
-pivot events, so this fixture tests complete terminal states rather than pivot
-sequences. Regenerate it from the pinned native adapter and run its opt-in
-20-second-per-model regression with:
-
-```text
-python3 tools/build_glop_reference_adapter.py --source tools/dual_netlib_trace_reference_adapter.cc --output target/native/dual_netlib_trace_reference_adapter
-python3 tools/generate_perturbed_dual_fixture.py
-cargo test --release -p gloprs-glop --test netlib_perturbed_dual -- --ignored
-```
-
-`phase4-cases.json` and `phase4-native.json` are small, no-presolve branch
-fixtures for the revised-simplex driver. The cases specify the LP, parameter
-mode, and branch tags; the native fixture records pinned GLOP's status,
-iterations, objective, ordered basis, primal values, reduced costs, and
-unbounded rays. The integration test asserts that Rust actually visits each
-declared branch tag and matches the native result. It also fails if a new
-instrumented branch has no case. The [coverage ledger](phase4-coverage.md)
-distinguishes these exercised branches from the Phase-4 gaps that still need
-fixtures or implementation.
-
-Regenerate and test with:
-
-```text
-python3 tools/build_glop_reference_adapter.py --source tools/phase4_reference_adapter.cc --output target/native/phase4_reference_adapter
-python3 tools/generate_phase4_fixture.py
-cargo test -p gloprs-glop --test phase4_native_cases
-```
-
-- `iterator-audit-2026-10-15.md`: production iterator/counting-loop audit,
-  profiles, accepted and rejected experiments, paired timing artifacts, and
-  differential validation for the rank-one and pricing loop refinements.
-
-- `gaps-2026-10-15.md`: benchmark-mode graph/neos investigation, Harris
-  candidate-layout experiment, rejected row-wise prototypes, and full-corpus
-  retention evidence.
-
-- `nmm50k-100k-2026-10-15.md`: full 25-model native/Rust benchmark under
-  verified benchmark mode, five timed pairs, exact outcomes, and independent
-  slower-model rechecks.
-
-- `nmm100k-150k-2026-10-15.md`: 20-model campaign, 19 completed comparisons,
-  qap15 wall-limit handling, and six independent slower-model rechecks.
-
-- `neos950242-parity-2026-10-15.md`: retained transpose-cache lifetime repair,
-  target public parity, two full retention runs, and measured per-model costs.
+Phase labels in fixture filenames remain for compatibility with tests and
+generators. Historical porting plans, resolved-issue narratives and measurement
+campaigns are available in Git through `69d5ba7`. New exploratory output goes
+to `target/` or `benchmark-results/local/`; see
+[CONTRIBUTING.md](../CONTRIBUTING.md) for current validation commands.

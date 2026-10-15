@@ -9,3 +9,8 @@
 /benchmark-results/local/
 /profiles/
 
+
+# Python tooling caches.
+__pycache__/
+*.py[cod]
+.ruff_cache/
