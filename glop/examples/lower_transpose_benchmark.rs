@@ -11,16 +11,22 @@ fn main() {
     let count: usize = fields.next().unwrap().parse().unwrap();
     let repetitions: usize = fields.next().unwrap().parse().unwrap();
     let mut columns = vec![Vec::new(); n];
+    let mut diagonal = vec![1.0; n];
     for _ in 0..count {
         let row: usize = fields.next().unwrap().parse().unwrap();
         let column: usize = fields.next().unwrap().parse().unwrap();
         let value: f64 = fields.next().unwrap().parse().unwrap();
-        if row != column {
+        if row == column {
+            diagonal[column] = value;
+        } else {
             columns[column].push((row, value));
         }
     }
-    let lower =
-        TriangularMatrix::from_columns(&columns, &vec![1.0; n], Triangle::Lower, true).unwrap();
+    // Dispatch exactly as GLOP does: literal ones require no division.
+    #[allow(clippy::float_cmp)]
+    let unit_diagonal = diagonal.iter().all(|&value| value == 1.0);
+    let lower = TriangularMatrix::from_columns(&columns, &diagonal, Triangle::Lower, unit_diagonal)
+        .unwrap();
     let base: Vec<f64> = (0..n)
         .map(|row| 1.0 + f64::from(u32::try_from(row % 17).unwrap()) * 0.125)
         .collect();

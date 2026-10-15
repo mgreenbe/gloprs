@@ -8,6 +8,18 @@ when timing-neutral; do not trade trajectory or KKT agreement for speed.
 
 ## Current baseline
 
+- Dense lower-transpose substitution now uses GLOP's explicit descending
+  column loop instead of a Rust reversed range. Extending the focused
+  benchmark to non-unit diagonals exposed the relevant gap: at 5,174 rows
+  and low density, Rust/native moved from about 1.15x to 1.00x. A 21-trial
+  paired solve improved `traininstance2` to 0.968x, `graph` to 0.975x, and
+  `cvs` to 0.985x versus the previous Rust binary. Fresh native-relative
+  matched solves are **1.024x**, **1.030x**, and **0.990x**, respectively;
+  their three-model aggregate is 0.995x. Strict fast-96 and extra-model
+  pivot gates pass. See the new addendum and JSON fixtures in
+  `baselines/phase8-nmm0-50k-performance.md`. The remaining `traininstance2`
+  and `graph` gaps are smaller but not yet closed.
+
 - The continuing `traininstance2` campaign brought the 31-trial matched
   presolved solve from 1.073x to **1.057x** native and the 21-trial public
   pipeline from 1.035x to **1.025x**. Direction infinity norm now follows
@@ -28,10 +40,9 @@ when timing-neutral; do not trade trajectory or KKT agreement for speed.
   not write that mask, and it was cleared before scattering the input. A
   21-trial paired `traininstance2` solve is effectively neutral (0.999x
   new/old); a fresh 31-trial native-relative solve is 1.060x. Strict fast-96
-  and extra-model trajectories still pass. A focused
-  5,174-row lower-transpose microbenchmark is already faster in Rust at two
-  tested densities, so its sampled share alone is not grounds for rewriting
-  that numerical loop. The live solve gap remains open.
+  and extra-model trajectories still pass. That focused lower-transpose
+  check exercised only unit diagonals; the later non-unit case exposed the
+  live numerical-kernel gap described above.
 
 - A fresh M2-targeted 213-model `nmm0-50k` pass after the indexed-access
   audit matches every completed status and iteration count at 0.976x total

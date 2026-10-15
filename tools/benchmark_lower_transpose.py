@@ -19,9 +19,12 @@ NATIVE = ROOT / "target/native/lower_transpose_benchmark_reference_adapter"
 RUST = ROOT / "target/release/examples/lower_transpose_benchmark"
 
 
-def factor_input(n: int, density: float, repetitions: int) -> str:
+def factor_input(n: int, density: float, repetitions: int,
+                 non_unit_diagonal: bool) -> str:
     generator = random.Random(0x713A5E)
-    entries = [(column, column, 1.0) for column in range(n)]
+    entries = [(column, column,
+                1.0 + generator.uniform(0.0, 0.5) if non_unit_diagonal else 1.0)
+               for column in range(n)]
     for column in range(n):
         for row in range(column + 1, n):
             if generator.random() < density:
@@ -46,10 +49,12 @@ def main() -> None:
     parser.add_argument("--density", type=float, default=0.03)
     parser.add_argument("--repetitions", type=int, default=5000)
     parser.add_argument("--trials", type=int, default=7)
+    parser.add_argument("--non-unit-diagonal", action="store_true")
     parser.add_argument("--rust-binary", type=Path, default=RUST)
     args = parser.parse_args()
     for n in args.sizes:
-        data = factor_input(n, args.density, args.repetitions)
+        data = factor_input(n, args.density, args.repetitions,
+                            args.non_unit_diagonal)
         native_times: list[float] = []
         rust_times: list[float] = []
         for trial in range(args.trials + 1):
@@ -67,7 +72,9 @@ def main() -> None:
         native = statistics.median(native_times)
         rust = statistics.median(rust_times)
         print(
-            f"n={n} density={args.density} repetitions={args.repetitions} "
+            f"n={n} density={args.density} "
+            f"non_unit_diagonal={args.non_unit_diagonal} "
+            f"repetitions={args.repetitions} "
             f"native={native:.1f} ns rust={rust:.1f} ns ratio={rust/native:.3f} "
             f"ranges=[{min(native_times):.1f},{max(native_times):.1f}]/"
             f"[{min(rust_times):.1f},{max(rust_times):.1f}]",

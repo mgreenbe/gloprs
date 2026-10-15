@@ -1,5 +1,36 @@
 # NMM 0–50k: M2 performance triage
 
+## Non-unit lower-transpose solve: descending-loop fidelity
+
+The earlier focused lower-transpose benchmark exercised only unit diagonal
+factors, but the live direction path often uses the non-unit kernel. The
+benchmark now preserves input diagonal coefficients in its Rust triangular
+matrix and accepts `--non-unit-diagonal`. At 5,174 rows and density 0.0005,
+the old Rust kernel was 1.15x native across 15 alternating trials. Replacing
+its reversed range with GLOP's explicit descending-column loop, without
+changing entry order or arithmetic, reduced that ratio to 1.00x. At density
+0.003 the new ratio is also 1.00x; the unit-diagonal check remains faster in
+Rust. The non-unit benchmark command was:
+
+```text
+python3 tools/benchmark_lower_transpose.py --sizes 5174 --density 0.0005 --repetitions 200 --trials 15 --non-unit-diagonal
+```
+
+On an Apple M2 with release builds and 21 serial alternating trials per
+model, the [paired old/new Rust solve](phase8-transpose-loop-ab.json) gives
+new/old ratios of 0.968x (`traininstance2`), 0.975x (`graph20-20-1rand`),
+and 0.985x (`cvs16r128-89`). The
+[fresh native-relative solve](phase8-transpose-loop-native.json) gives 1.024x,
+1.030x, and 0.990x, respectively; combined elapsed time is 0.995x. The
+saved JSON includes per-trial dispersion, compiler versions, pinned upstream
+commit, and machine details. Both runs used
+`benchmark_phase8_stages.py --stage solve --corpus nmm0-50k` with the three
+named models and 21 trials. Status, iteration, and objective checks passed;
+the strict fast-96 and extra-model pivot gates passed separately. This closes
+most of the previously observed live solve gap without changing numerical
+trajectory. The remaining `traininstance2` and `graph` excesses need further
+localization.
+
 ## `traininstance2` direction and selected-LU follow-up
 
 GLOP's `ComputeDirection()` computes the infinity norm during its one support

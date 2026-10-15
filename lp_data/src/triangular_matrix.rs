@@ -1034,7 +1034,11 @@ impl TriangularMatrix {
         // RHS; starts has dimension + 1 entries and every loop column is
         // below dimension.
         let mut position = unsafe { *self.starts.get_unchecked(last_nonzero + 1) };
-        for column in (self.first_non_identity_column..=last_nonzero).rev() {
+        // GLOP's signed descending-column loop has no range-iterator state in
+        // the substitution hot path. The explicit stop also avoids underflow
+        // when the first non-identity column is zero.
+        let mut column = last_nonzero;
+        loop {
             // SAFETY: column stays below dimension, which bounds starts,
             // diagonal, and the already-validated RHS.
             let start = unsafe { *self.starts.get_unchecked(column) };
@@ -1072,6 +1076,10 @@ impl TriangularMatrix {
                 sum / unsafe { *self.diagonal.get_unchecked(column) }
             };
             unsafe { *rhs.get_unchecked_mut(column) = solved };
+            if column == self.first_non_identity_column {
+                break;
+            }
+            column -= 1;
         }
     }
 
@@ -1565,6 +1573,24 @@ mod tests {
                 .zip(expected)
                 .all(|(left, right)| (left - right).abs() < 1e-12)
         );
+    }
+
+    #[test]
+    fn nonunit_lower_transpose_skips_zero_tail_and_stops_at_identity_prefix() {
+        let columns = vec![vec![], vec![], vec![(3, 1.5)], vec![(4, -1.0)], vec![]];
+        let lower = TriangularMatrix::from_columns(
+            &columns,
+            &[1.0, 1.0, 2.0, 3.0, 4.0],
+            Triangle::Lower,
+            false,
+        )
+        .unwrap();
+        let mut rhs = [0.0, 0.0, 0.0, 6.0, 0.0];
+        lower.transpose_solve(&mut rhs).unwrap();
+        assert_eq!(rhs, [0.0, 0.0, -1.5, 2.0, 0.0]);
+        let mut zero = [0.0; 5];
+        lower.transpose_solve(&mut zero).unwrap();
+        assert_eq!(zero, [0.0; 5]);
     }
 
     #[test]
