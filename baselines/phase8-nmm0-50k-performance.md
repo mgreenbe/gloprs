@@ -18,12 +18,13 @@ python3 tools/benchmark_lower_transpose.py --sizes 5174 --density 0.0005 --repet
 
 On an Apple M2 with release builds and 21 serial alternating trials per
 model, the [paired old/new Rust solve](phase8-transpose-loop-ab.json) gives
-new/old ratios of 0.968x (`traininstance2`), 0.975x (`graph20-20-1rand`),
-and 0.985x (`cvs16r128-89`). The
-[fresh native-relative solve](phase8-transpose-loop-native.json) gives 1.024x,
-1.030x, and 0.990x, respectively; combined elapsed time is 0.995x. The
+new/old ratios of 0.967x (`traininstance2`), 0.976x (`graph20-20-1rand`),
+and 0.984x (`cvs16r128-89`). The
+[fresh native-relative solve](phase8-transpose-loop-native.json) gives 1.025x,
+1.032x, and 0.991x, respectively; combined elapsed time is 0.995x. The
 saved JSON includes per-trial dispersion, compiler versions, pinned upstream
-commit, and machine details. Both runs used
+commit, and machine details. The saved old Rust binary was built at
+`e9e013d`; the new binary contains `5d9f011`. Both runs used
 `benchmark_phase8_stages.py --stage solve --corpus nmm0-50k` with the three
 named models and 21 trials. Status, iteration, and objective checks passed;
 the strict fast-96 and extra-model pivot gates passed separately. This closes

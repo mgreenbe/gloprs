@@ -12,9 +12,9 @@ when timing-neutral; do not trade trajectory or KKT agreement for speed.
   column loop instead of a Rust reversed range. Extending the focused
   benchmark to non-unit diagonals exposed the relevant gap: at 5,174 rows
   and low density, Rust/native moved from about 1.15x to 1.00x. A 21-trial
-  paired solve improved `traininstance2` to 0.968x, `graph` to 0.975x, and
-  `cvs` to 0.985x versus the previous Rust binary. Fresh native-relative
-  matched solves are **1.024x**, **1.030x**, and **0.990x**, respectively;
+  paired solve improved `traininstance2` to 0.967x, `graph` to 0.976x, and
+  `cvs` to 0.984x versus the previous Rust binary. Fresh native-relative
+  matched solves are **1.025x**, **1.032x**, and **0.991x**, respectively;
   their three-model aggregate is 0.995x. Strict fast-96 and extra-model
   pivot gates pass. See the new addendum and JSON fixtures in
   `baselines/phase8-nmm0-50k-performance.md`. The remaining `traininstance2`
