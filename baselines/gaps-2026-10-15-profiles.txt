@@ -1,0 +1,224 @@
+graph20-20-1rand rust: 6-second / 1-ms process sample
+Sort by top of stack, same collapsed (when >= 5):
+        lp_data::triangular_matrix::TriangularMatrix::transpose_solve::h98a92d6fa69102dd  (in gaps-baseline-stage)        748
+        glop::primal_ratio_test::choose_leaving_variable_row_with_workspace::h2bee1de475829d89  (in gaps-baseline-stage)        554
+        glop::update_row::UpdateRow::compute_row_wise_hypersparse::h2826be8010c98f57  (in gaps-baseline-stage)        463
+        glop::reduced_costs::PrimalPrices::update_before_basis_pivot_from_values::h9195e78cf93afffb  (in gaps-baseline-stage)        430
+        glop::primal_edge_norms::PrimalEdgeNorms::update_edge_squared_norms::h2bf9d435d2ac9dd6  (in gaps-baseline-stage)        340
+        glop::revised_simplex::RevisedSimplex::run_primal_phase::h66c9232278ab44b3  (in gaps-baseline-stage)        299
+        glop::lu_factorization::LuFactorization::permute_scattered::hc28b9d54734d9166  (in gaps-baseline-stage)        243
+        glop::revised_simplex::RevisedSimplex::direction::h6afccdc45b4e5995  (in gaps-baseline-stage)        164
+        glop::rank_one_update::RankOneUpdateFactorization::left_solve::h0cce5924a15764f6  (in gaps-baseline-stage)        157
+        glop::markowitz::compute::h79c1d0f5b5ec58c7  (in gaps-baseline-stage)        141
+        glop::update_row::UpdateRow::compute_column_wise::h2cbbfdea535c5792  (in gaps-baseline-stage)        129
+        glop::rank_one_update::RankOneUpdateFactorization::left_solve_with_nonzeros::hc1a6dd1aff9fa7cd  (in gaps-baseline-stage)        112
+        glop::update_row::UpdateRow::compute_update_row_from_source::hc1f8de14065b4b94  (in gaps-baseline-stage)        111
+        glop::basis_representation::BasisRepresentation::right_solve_for_compact_problem_column::hda960923712631c7  (in gaps-baseline-stage)        104
+        glop::markowitz::compute_column::h8221600fd2d22a90  (in gaps-baseline-stage)        102
+        glop::rank_one_update::RankOneUpdateFactorization::right_solve_with_nonzeros::hc6800c9954c52bee  (in gaps-baseline-stage)        102
+        glop::reduced_costs::update_reduced_cost_values_before_basis_pivot::h6e93d9f5ef6a1986  (in gaps-baseline-stage)        81
+        _platform_memset  (in libsystem_platform.dylib)        61
+        glop::markowitz::MatrixNonZeroPattern::update::h3ebd24a7be5ef5b2  (in gaps-baseline-stage)        56
+        glop::primal_edge_norms::PrimalEdgeNorms::test_entering_edge_norm_precision::h7432a549d3edd0a3  (in gaps-baseline-stage)        51
+        glop::revised_simplex::RevisedSimplex::correct_errors_on_variable_values::hb7e84affec2d092f  (in gaps-baseline-stage)        46
+        glop::basis_representation::BasisRepresentation::replace_column_after_solve_impl::h620e259765e3015d  (in gaps-baseline-stage)        41
+        _platform_memmove  (in libsystem_platform.dylib)        38
+        lp_data::triangular_matrix::TriangularMatrix::compute_rows_to_consider_in_sorted_order::h2c7541fba58f94cc  (in gaps-baseline-stage)        36
+        glop::pricing::DynamicMaximum::get_maximum::hf220f8c1a0a39706  (in gaps-baseline-stage)        35
+        lp_data::scattered_vector::ScatteredVector$LT$I$GT$::clear_sparse_mask::he27b32867ba19820  (in gaps-baseline-stage)        35
+        glop::pricing::DynamicMaximum::update_top_k_parts::h38f7e99bf6b71795  (in gaps-baseline-stage)        33
+        lp_data::triangular_matrix::TriangularMatrix::permuted_lower_sparse_solve_scattered::h1b903786bf6bb71f  (in gaps-baseline-stage)        32
+        lp_data::lp_utils::squared_norm::hebf7926f820b0c59  (in gaps-baseline-stage)        31
+        lp_data::triangular_matrix::TriangularMatrix::transpose_into::hb01fc8f08bb20ad9  (in gaps-baseline-stage)        30
+        glop::markowitz::ColumnPriorityQueue::push_or_adjust::h2a83d0b0f68d2797  (in gaps-baseline-stage)        25
+        glop::markowitz::ColumnPriorityQueue::remove::h657aa61cf9721a19  (in gaps-baseline-stage)        23
+        glop::libcpp_sort::introsort::h72ce7942839461ee  (in gaps-baseline-stage)        19
+        lp_data::triangular_matrix::TriangularMatrix::compute_rows_to_consider_in_sorted_order::h3169140ac14a04ef  (in gaps-baseline-stage)        18
+        lp_data::triangular_matrix::TriangularMatrix::lower_solve_starting_at::h7cd88fcdbc578653  (in gaps-baseline-stage)        18
+        glop::markowitz::ReusableColumnMemory::mutable_column::h6d8b29e2da3add1d  (in gaps-baseline-stage)        14
+        lp_data::triangular_matrix::TriangularMatrix::close_current_column::hc4577c2169c60d52  (in gaps-baseline-stage)        13
+        glop::markowitz::MatrixNonZeroPattern::remove_column::hcc0cc93ccc133921  (in gaps-baseline-stage)        12
+        lp_data::sparse_vector::SparseVector$LT$I$GT$::move_entries_with_index_tags_to::hf6121fbe3cf70304  (in gaps-baseline-stage)        12
+        glop::basis_representation::BasisRepresentation::left_solve_for_unit_row::h0f2dfa0fbf5c27e6  (in gaps-baseline-stage)        10
+        lp_data::triangular_matrix::TriangularMatrix::add_triangular_column_with_given_diagonal::h57f8e3c01f7c389e  (in gaps-baseline-stage)        10
+        core::slice::sort::unstable::quicksort::quicksort::hc21fb77e03464070  (in gaps-baseline-stage)        9
+        glop::lu_factorization::LuFactorization::left_solve_upper_for_unit_row::hd53d37d99bb0d6f1  (in gaps-baseline-stage)        8
+        glop::revised_simplex::RevisedSimplex::initialize_equation_form::h3af168944832e7c9  (in gaps-baseline-stage)        7
+        glop::revised_simplex::RevisedSimplex::recompute_basic_objective::h863c0c9c4bd1ef0c  (in gaps-baseline-stage)        6
+        lp_data::scattered_vector::ScatteredVector$LT$I$GT$::clear_sparse_mask::h276383894a944563  (in gaps-baseline-stage)        6
+        glop::lu_factorization::LuFactorization::install_sparse_lu::h7ef7fade33be870a  (in gaps-baseline-stage)        5
+        glop::rank_one_update::RankOneUpdateFactorization::right_solve::h663878c3ad42688f  (in gaps-baseline-stage)        5
+        lp_data::triangular_matrix::TriangularMatrix::transpose_column_sum_reverse::hb79fcae726e8896e  (in gaps-baseline-stage)        5
+
+graph20-20-1rand native: 6-second / 1-ms process sample
+Sort by top of stack, same collapsed (when >= 5):
+        operations_research::glop::UpdateRow::ComputeUpdatesRowWiseHypersparse()  (in libortools.9.15.dylib)        443
+        operations_research::glop::PrimalPrices::UpdateEnteringCandidates<false, absl::lts_20250814::Span<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_> const>>(absl::lts_20250814::Span<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_> const> const&)  (in libortools.9.15.dylib)        421
+        operations_research::glop::RevisedSimplex::ComputeHarrisRatioAndLeavingCandidates<false>(double, operations_research::glop::SparseColumn*) const  (in libortools.9.15.dylib)        382
+        operations_research::glop::CompactSparseMatrix::ColumnScalarProduct(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, double> const&) const  (in libortools.9.15.dylib)        328
+        operations_research::glop::TriangularMatrix::TransposeLowerSolveInternal<false>(operations_research::glop::StrictITISpan<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double>) const  (in libortools.9.15.dylib)        326
+        operations_research::glop::PrimalEdgeNorms::UpdateEdgeSquaredNorms(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double> const&, operations_research::glop::UpdateRow const&)  (in libortools.9.15.dylib)        269
+        operations_research::glop::TriangularMatrix::TransposeUpperSolveInternal<false>(operations_research::glop::StrictITISpan<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double>) const  (in libortools.9.15.dylib)        259
+        operations_research::glop::LuFactorization::LeftSolveLWithNonZeros(operations_research::glop::ScatteredRow*, operations_research::glop::ScatteredColumn*) const  (in libortools.9.15.dylib)        257
+        operations_research::glop::RevisedSimplex::ComputeDirection(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>)  (in libortools.9.15.dylib)        209
+        operations_research::glop::TriangularMatrix::TransposeLowerSolveInternal<true>(operations_research::glop::StrictITISpan<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double>) const  (in libortools.9.15.dylib)        184
+        operations_research::glop::UpdateRow::ComputeUpdatesColumnWise()  (in libortools.9.15.dylib)        142
+        operations_research::glop::UpdateRow::ComputeUpdateRow(operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>)  (in libortools.9.15.dylib)        132
+        operations_research::glop::VariableValues::UpdateOnPivoting(operations_research::glop::ScatteredColumn const&, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, double)  (in libortools.9.15.dylib)        123
+        <deduplicated_symbol>  (in libortools.9.15.dylib)        104
+        operations_research::glop::ReducedCosts::UpdateReducedCosts(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double, operations_research::glop::UpdateRow*)  (in libortools.9.15.dylib)        88
+        operations_research::glop::CompactSparseMatrix::AddDenseColumnPrefix(operations_research::glop::StrictITISpan<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double const>, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>)  (in libortools.9.15.dylib)        86
+        operations_research::glop::RankOneUpdateFactorization::RightSolveWithNonZeros(operations_research::glop::ScatteredColumn*) const  (in libortools.9.15.dylib)        83
+        operations_research::glop::RevisedSimplex::ComputeHarrisRatioAndLeavingCandidates<true>(double, operations_research::glop::SparseColumn*) const  (in libortools.9.15.dylib)        80
+        operations_research::glop::ScalarProduct<operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, double>>(operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, double> const&, operations_research::glop::ScatteredColumn const&)  (in libortools.9.15.dylib)        76
+        operations_research::glop::SquaredNorm(operations_research::glop::ScatteredColumn const&)  (in libortools.9.15.dylib)        70
+        operations_research::glop::TriangularMatrix::PermutedComputeRowsToConsider(operations_research::glop::ColumnView const&, operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>> const&, std::vector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>>*, std::vector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>>*)  (in libortools.9.15.dylib)        69
+        operations_research::glop::RevisedSimplex::PrimalMinimize(operations_research::TimeLimit*)  (in libortools.9.15.dylib)        68
+        operations_research::glop::MatrixNonZeroPattern::InitializeFromMatrixSubset(operations_research::glop::CompactSparseMatrixView const&, operations_research::glop::StrictITISpan<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_> const>, operations_research::glop::StrictITISpan<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_> const>, std::vector<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>>*, std::vector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>>*)  (in libortools.9.15.dylib)        63
+        operations_research::glop::Markowitz::FindPivot(operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>> const&, operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>> const&, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>*, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>*, double*)  (in libortools.9.15.dylib)        58
+        operations_research::glop::TriangularMatrix::ComputeRowsToConsiderInSortedOrder(std::vector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>>*) const  (in libortools.9.15.dylib)        58
+        operations_research::glop::VariableValues::ComputeMaximumPrimalResidual() const  (in libortools.9.15.dylib)        41
+        _platform_memset  (in libsystem_platform.dylib)        39
+        operations_research::glop::RankOneUpdateFactorization::LeftSolve(operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, double>*) const  (in libortools.9.15.dylib)        39
+        operations_research::glop::TriangularMatrix::PermutedLowerSparseSolve(operations_research::glop::ColumnView const&, operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>> const&, operations_research::glop::SparseColumn*, operations_research::glop::SparseColumn*)  (in libortools.9.15.dylib)        39
+        operations_research::glop::MatrixNonZeroPattern::MergeInto(operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>)  (in libortools.9.15.dylib)        38
+        operations_research::glop::RankOneUpdateFactorization::LeftSolveWithNonZeros(operations_research::glop::ScatteredRow*) const  (in libortools.9.15.dylib)        36
+        operations_research::glop::RevisedSimplex::ChooseLeavingVariableRow(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, double, bool*, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>*, double*, double*)  (in libortools.9.15.dylib)        36
+        _platform_memmove  (in libsystem_platform.dylib)        31
+        std::vector<double>::assign(unsigned long, double const&)  (in libortools.9.15.dylib)        30
+        operations_research::glop::CompactSparseMatrix::PopulateFromTranspose(operations_research::glop::CompactSparseMatrix const&)  (in libortools.9.15.dylib)        27
+        operations_research::glop::CompactSparseMatrix::AddAndClearColumnWithNonZeros(operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double>*, std::vector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>>*)  (in libortools.9.15.dylib)        23
+        operations_research::glop::TriangularMatrix::AddTriangularColumnWithGivenDiagonalEntry(operations_research::glop::SparseColumn const&, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double)  (in libortools.9.15.dylib)        22
+        operations_research::glop::Markowitz::UpdateDegree(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, int)  (in libortools.9.15.dylib)        21
+        operations_research::glop::Markowitz::ComputeColumn(operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>> const&, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>)  (in libortools.9.15.dylib)        18
+        operations_research::glop::TriangularMatrix::LowerSolveStartingAt(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double>*) const  (in libortools.9.15.dylib)        16
+        operations_research::glop::MatrixNonZeroPattern::RemoveDeletedColumnsFromRow(operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>)  (in libortools.9.15.dylib)        13
+        operations_research::glop::MatrixNonZeroPattern::Update(operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::glop::SparseColumn const&)  (in libortools.9.15.dylib)        13
+        operations_research::glop::TriangularMatrix::HyperSparseSolve(operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double>*, std::vector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>>*) const  (in libortools.9.15.dylib)        12
+        std::__introsort<std::_ClassicAlgPolicy, std::__less<void, void>&, operations_research::glop::Markowitz::MatrixEntry*, false>(operations_research::glop::Markowitz::MatrixEntry*, operations_research::glop::Markowitz::MatrixEntry*, std::__less<void, void>&, std::iterator_traits<operations_research::glop::Markowitz::MatrixEntry*>::difference_type, bool)  (in libortools.9.15.dylib)        11
+        operations_research::glop::BasisFactorization::MiddleProductFormUpdate(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>)  (in libortools.9.15.dylib)        10
+        operations_research::glop::Markowitz::ExtractResidualSingletonColumns(operations_research::glop::CompactSparseMatrixView const&, operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>>*, operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>>*, int*)  (in libortools.9.15.dylib)        9
+        operations_research::glop::Markowitz::RemoveRowFromResidualMatrix(operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>)  (in libortools.9.15.dylib)        8
+        operations_research::glop::SparseMatrixWithReusableColumnMemory::mutable_column(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>)  (in libortools.9.15.dylib)        8
+        operations_research::glop::Markowitz::RemoveColumnFromResidualMatrix(operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>)  (in libortools.9.15.dylib)        7
+        mach_absolute_time  (in libsystem_kernel.dylib)        6
+        operations_research::glop::CompactSparseMatrix::AddDenseColumnWithNonZeros(operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double> const&, absl::lts_20250814::Span<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_> const>)  (in libortools.9.15.dylib)        6
+        operations_research::glop::Markowitz::UpdateResidualMatrix(operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>)  (in libortools.9.15.dylib)        6
+        operations_research::glop::RankOneUpdateFactorization::RightSolve(operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double>*) const  (in libortools.9.15.dylib)        6
+        operations_research::glop::TriangularMatrix::AddDiagonalOnlyColumn(double)  (in libortools.9.15.dylib)        6
+        operations_research::glop::LuFactorization::ComputeFactorization(operations_research::glop::CompactSparseMatrixView const&)  (in libortools.9.15.dylib)        5
+        operations_research::glop::LuFactorization::RightSolveLInternal<operations_research::glop::ColumnView>(operations_research::glop::ColumnView const&, operations_research::glop::ScatteredColumn*) const  (in libortools.9.15.dylib)        5
+        operations_research::glop::Markowitz::ExtractSingletonColumns(operations_research::glop::CompactSparseMatrixView const&, operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>>*, operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>>*, int*)  (in libortools.9.15.dylib)        5
+        operations_research::glop::TriangularMatrix::AddAndNormalizeTriangularColumn(operations_research::glop::SparseColumn const&, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double)  (in libortools.9.15.dylib)        5
+
+neos-1171737 rust: 6-second / 1-ms process sample
+Sort by top of stack, same collapsed (when >= 5):
+        glop::update_row::UpdateRow::compute_row_wise::hf956fe46e4629a8a  (in gaps-baseline-stage)        977
+        glop::primal_edge_norms::PrimalEdgeNorms::update_edge_squared_norms::h2bf9d435d2ac9dd6  (in gaps-baseline-stage)        641
+        lp_data::triangular_matrix::TriangularMatrix::transpose_solve::h98a92d6fa69102dd  (in gaps-baseline-stage)        617
+        glop::primal_ratio_test::choose_leaving_variable_row_with_workspace::h2bee1de475829d89  (in gaps-baseline-stage)        311
+        glop::rank_one_update::RankOneUpdateFactorization::left_solve::h0cce5924a15764f6  (in gaps-baseline-stage)        289
+        glop::reduced_costs::PrimalPrices::update_before_basis_pivot_from_values::h9195e78cf93afffb  (in gaps-baseline-stage)        257
+        glop::update_row::UpdateRow::compute_update_row_from_source::hc1f8de14065b4b94  (in gaps-baseline-stage)        177
+        glop::revised_simplex::RevisedSimplex::run_primal_phase::h66c9232278ab44b3  (in gaps-baseline-stage)        155
+        glop::lu_factorization::LuFactorization::permute_scattered::hc28b9d54734d9166  (in gaps-baseline-stage)        150
+        glop::rank_one_update::RankOneUpdateFactorization::right_solve_with_nonzeros::hc6800c9954c52bee  (in gaps-baseline-stage)        131
+        glop::markowitz::compute::h79c1d0f5b5ec58c7  (in gaps-baseline-stage)        126
+        glop::revised_simplex::RevisedSimplex::direction::h6afccdc45b4e5995  (in gaps-baseline-stage)        122
+        glop::basis_representation::BasisRepresentation::right_solve_for_compact_problem_column::hda960923712631c7  (in gaps-baseline-stage)        102
+        glop::markowitz::compute_column::h8221600fd2d22a90  (in gaps-baseline-stage)        92
+        glop::update_row::UpdateRow::compute_row_wise_hypersparse::h2826be8010c98f57  (in gaps-baseline-stage)        76
+        glop::rank_one_update::RankOneUpdateFactorization::left_solve_with_nonzeros::hc1a6dd1aff9fa7cd  (in gaps-baseline-stage)        75
+        glop::basis_representation::BasisRepresentation::replace_column_after_solve_impl::h620e259765e3015d  (in gaps-baseline-stage)        59
+        glop::reduced_costs::update_reduced_cost_values_before_basis_pivot::h6e93d9f5ef6a1986  (in gaps-baseline-stage)        56
+        glop::markowitz::MatrixNonZeroPattern::update::h3ebd24a7be5ef5b2  (in gaps-baseline-stage)        55
+        lp_data::triangular_matrix::TriangularMatrix::permuted_lower_sparse_solve_scattered::h1b903786bf6bb71f  (in gaps-baseline-stage)        52
+        glop::rank_one_update::RankOneUpdateFactorization::right_solve::h663878c3ad42688f  (in gaps-baseline-stage)        50
+        lp_data::triangular_matrix::TriangularMatrix::lower_solve_starting_at::h7cd88fcdbc578653  (in gaps-baseline-stage)        38
+        glop::pricing::DynamicMaximum::update_top_k_parts::h38f7e99bf6b71795  (in gaps-baseline-stage)        37
+        _platform_memset  (in libsystem_platform.dylib)        32
+        lp_data::triangular_matrix::TriangularMatrix::compute_rows_to_consider_in_sorted_order::h2c7541fba58f94cc  (in gaps-baseline-stage)        31
+        lp_data::triangular_matrix::TriangularMatrix::transpose_into::hb01fc8f08bb20ad9  (in gaps-baseline-stage)        31
+        _platform_memmove  (in libsystem_platform.dylib)        28
+        glop::pricing::DynamicMaximum::get_maximum::hf220f8c1a0a39706  (in gaps-baseline-stage)        27
+        glop::revised_simplex::RevisedSimplex::compute_reduced_costs_from_dual::h259af04ad3aa23f6  (in gaps-baseline-stage)        22
+        lp_data::lp_utils::squared_norm::hebf7926f820b0c59  (in gaps-baseline-stage)        20
+        lp_data::scattered_vector::ScatteredVector$LT$I$GT$::clear_sparse_mask::he27b32867ba19820  (in gaps-baseline-stage)        20
+        lp_data::triangular_matrix::TriangularMatrix::compute_rows_to_consider_in_sorted_order::h3169140ac14a04ef  (in gaps-baseline-stage)        19
+        glop::revised_simplex::RevisedSimplex::correct_errors_on_variable_values::hb7e84affec2d092f  (in gaps-baseline-stage)        18
+        glop::basis_representation::BasisRepresentation::left_solve_for_unit_row::h0f2dfa0fbf5c27e6  (in gaps-baseline-stage)        16
+        glop::markowitz::ColumnPriorityQueue::push_or_adjust::h2a83d0b0f68d2797  (in gaps-baseline-stage)        14
+        glop::libcpp_sort::introsort::h72ce7942839461ee  (in gaps-baseline-stage)        12
+        glop::primal_edge_norms::PrimalEdgeNorms::test_entering_edge_norm_precision::h7432a549d3edd0a3  (in gaps-baseline-stage)        12
+        lp_data::triangular_matrix::TriangularMatrix::add_triangular_column_with_given_diagonal::h57f8e3c01f7c389e  (in gaps-baseline-stage)        9
+        __bzero  (in libsystem_platform.dylib)        8
+        lp_data::triangular_matrix::TriangularMatrix::close_current_column::hc4577c2169c60d52  (in gaps-baseline-stage)        8
+        glop::lu_factorization::LuFactorization::compute_factorization_selected_compact_with_parameters::h790db6c8e83680e5  (in gaps-baseline-stage)        7
+        lp_data::triangular_matrix::TriangularMatrix::hyper_sparse_solve::hcc87a0ded2462f13  (in gaps-baseline-stage)        7
+        glop::markowitz::MatrixNonZeroPattern::remove_column::hcc0cc93ccc133921  (in gaps-baseline-stage)        6
+        glop::revised_simplex::RevisedSimplex::recompute_basic_objective::h863c0c9c4bd1ef0c  (in gaps-baseline-stage)        6
+        lp_data::triangular_matrix::TriangularMatrix::add_and_normalize_triangular_column::h8900d6499640a8db  (in gaps-baseline-stage)        6
+        lp_data::triangular_matrix::TriangularMatrix::permuted_lower_sparse_solve::h546fb3dc68cecb02  (in gaps-baseline-stage)        6
+        glop::revised_simplex::RevisedSimplex::initialize_equation_form::h3af168944832e7c9  (in gaps-baseline-stage)        5
+        lp_data::sparse_vector::SparseVector$LT$I$GT$::clean_up::hf5923f58f656a307  (in gaps-baseline-stage)        5
+
+neos-1171737 native: 6-second / 1-ms process sample
+Sort by top of stack, same collapsed (when >= 5):
+        operations_research::glop::UpdateRow::ComputeUpdatesRowWise()  (in libortools.9.15.dylib)        741
+        operations_research::glop::PrimalEdgeNorms::UpdateEdgeSquaredNorms(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double> const&, operations_research::glop::UpdateRow const&)  (in libortools.9.15.dylib)        675
+        operations_research::glop::CompactSparseMatrix::ColumnScalarProduct(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, double> const&) const  (in libortools.9.15.dylib)        440
+        operations_research::glop::PrimalPrices::UpdateEnteringCandidates<false, absl::lts_20250814::Span<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_> const>>(absl::lts_20250814::Span<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_> const> const&)  (in libortools.9.15.dylib)        329
+        operations_research::glop::TriangularMatrix::TransposeLowerSolveInternal<false>(operations_research::glop::StrictITISpan<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double>) const  (in libortools.9.15.dylib)        319
+        operations_research::glop::TriangularMatrix::TransposeUpperSolveInternal<false>(operations_research::glop::StrictITISpan<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double>) const  (in libortools.9.15.dylib)        214
+        operations_research::glop::LuFactorization::LeftSolveLWithNonZeros(operations_research::glop::ScatteredRow*, operations_research::glop::ScatteredColumn*) const  (in libortools.9.15.dylib)        160
+        operations_research::glop::RevisedSimplex::ComputeHarrisRatioAndLeavingCandidates<true>(double, operations_research::glop::SparseColumn*) const  (in libortools.9.15.dylib)        157
+        operations_research::glop::RevisedSimplex::ComputeDirection(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>)  (in libortools.9.15.dylib)        151
+        operations_research::glop::CompactSparseMatrix::AddDenseColumnPrefix(operations_research::glop::StrictITISpan<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double const>, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>)  (in libortools.9.15.dylib)        145
+        operations_research::glop::UpdateRow::ComputeUpdateRow(operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>)  (in libortools.9.15.dylib)        140
+        operations_research::glop::RevisedSimplex::ComputeHarrisRatioAndLeavingCandidates<false>(double, operations_research::glop::SparseColumn*) const  (in libortools.9.15.dylib)        117
+        operations_research::glop::TriangularMatrix::PermutedComputeRowsToConsider(operations_research::glop::ColumnView const&, operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>> const&, std::vector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>>*, std::vector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>>*)  (in libortools.9.15.dylib)        100
+        operations_research::glop::TriangularMatrix::TransposeLowerSolveInternal<true>(operations_research::glop::StrictITISpan<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double>) const  (in libortools.9.15.dylib)        100
+        operations_research::glop::UpdateRow::ComputeUpdatesRowWiseHypersparse()  (in libortools.9.15.dylib)        98
+        operations_research::glop::RankOneUpdateFactorization::RightSolveWithNonZeros(operations_research::glop::ScatteredColumn*) const  (in libortools.9.15.dylib)        91
+        <deduplicated_symbol>  (in libortools.9.15.dylib)        75
+        operations_research::glop::RankOneUpdateFactorization::LeftSolve(operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, double>*) const  (in libortools.9.15.dylib)        72
+        operations_research::glop::VariableValues::UpdateOnPivoting(operations_research::glop::ScatteredColumn const&, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, double)  (in libortools.9.15.dylib)        69
+        operations_research::glop::MatrixNonZeroPattern::InitializeFromMatrixSubset(operations_research::glop::CompactSparseMatrixView const&, operations_research::glop::StrictITISpan<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_> const>, operations_research::glop::StrictITISpan<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_> const>, std::vector<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>>*, std::vector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>>*)  (in libortools.9.15.dylib)        53
+        operations_research::glop::TriangularMatrix::ComputeRowsToConsiderInSortedOrder(std::vector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>>*) const  (in libortools.9.15.dylib)        52
+        operations_research::glop::Markowitz::FindPivot(operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>> const&, operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>> const&, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>*, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>*, double*)  (in libortools.9.15.dylib)        48
+        operations_research::glop::RankOneUpdateFactorization::RightSolve(operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double>*) const  (in libortools.9.15.dylib)        46
+        operations_research::glop::TriangularMatrix::LowerSolveStartingAt(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double>*) const  (in libortools.9.15.dylib)        42
+        operations_research::glop::ScalarProduct<operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, double>>(operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, double> const&, operations_research::glop::ScatteredColumn const&)  (in libortools.9.15.dylib)        38
+        operations_research::glop::SquaredNorm(operations_research::glop::ScatteredColumn const&)  (in libortools.9.15.dylib)        38
+        operations_research::glop::TriangularMatrix::PermutedLowerSparseSolve(operations_research::glop::ColumnView const&, operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>> const&, operations_research::glop::SparseColumn*, operations_research::glop::SparseColumn*)  (in libortools.9.15.dylib)        37
+        operations_research::glop::ReducedCosts::UpdateReducedCosts(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double, operations_research::glop::UpdateRow*)  (in libortools.9.15.dylib)        35
+        operations_research::glop::CompactSparseMatrix::AddAndClearColumnWithNonZeros(operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double>*, std::vector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>>*)  (in libortools.9.15.dylib)        34
+        operations_research::glop::MatrixNonZeroPattern::RemoveDeletedColumnsFromRow(operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>)  (in libortools.9.15.dylib)        29
+        operations_research::glop::RevisedSimplex::PrimalMinimize(operations_research::TimeLimit*)  (in libortools.9.15.dylib)        29
+        _platform_memset  (in libsystem_platform.dylib)        28
+        operations_research::glop::Markowitz::ExtractResidualSingletonColumns(operations_research::glop::CompactSparseMatrixView const&, operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>>*, operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>>*, int*)  (in libortools.9.15.dylib)        28
+        operations_research::glop::MatrixNonZeroPattern::MergeInto(operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>)  (in libortools.9.15.dylib)        27
+        _platform_memmove  (in libsystem_platform.dylib)        24
+        operations_research::glop::CompactSparseMatrix::PopulateFromTranspose(operations_research::glop::CompactSparseMatrix const&)  (in libortools.9.15.dylib)        22
+        operations_research::glop::Markowitz::UpdateDegree(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, int)  (in libortools.9.15.dylib)        20
+        operations_research::glop::VariableValues::ComputeMaximumPrimalResidual() const  (in libortools.9.15.dylib)        20
+        operations_research::glop::BasisFactorization::MiddleProductFormUpdate(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>)  (in libortools.9.15.dylib)        18
+        std::vector<double>::assign(unsigned long, double const&)  (in libortools.9.15.dylib)        18
+        operations_research::glop::RankOneUpdateFactorization::LeftSolveWithNonZeros(operations_research::glop::ScatteredRow*) const  (in libortools.9.15.dylib)        13
+        operations_research::glop::TriangularMatrix::AddTriangularColumnWithGivenDiagonalEntry(operations_research::glop::SparseColumn const&, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double)  (in libortools.9.15.dylib)        12
+        operations_research::glop::RevisedSimplex::ChooseLeavingVariableRow(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, double, bool*, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>*, double*, double*)  (in libortools.9.15.dylib)        11
+        operations_research::glop::Markowitz::RemoveColumnFromResidualMatrix(operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>)  (in libortools.9.15.dylib)        10
+        operations_research::glop::TriangularMatrix::AddAndNormalizeTriangularColumn(operations_research::glop::SparseColumn const&, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double)  (in libortools.9.15.dylib)        10
+        operations_research::glop::TriangularMatrix::HyperSparseSolve(operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double>*, std::vector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>>*) const  (in libortools.9.15.dylib)        10
+        std::__introsort<std::_ClassicAlgPolicy, std::__less<void, void>&, operations_research::glop::Markowitz::MatrixEntry*, false>(operations_research::glop::Markowitz::MatrixEntry*, operations_research::glop::Markowitz::MatrixEntry*, std::__less<void, void>&, std::iterator_traits<operations_research::glop::Markowitz::MatrixEntry*>::difference_type, bool)  (in libortools.9.15.dylib)        10
+        __bzero  (in libsystem_platform.dylib)        9
+        operations_research::glop::Markowitz::ComputeColumn(operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>> const&, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>)  (in libortools.9.15.dylib)        8
+        operations_research::glop::TriangularMatrix::AddTriangularColumn(operations_research::glop::ColumnView const&, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>)  (in libortools.9.15.dylib)        8
+        tiny_malloc_from_free_list  (in libsystem_malloc.dylib)        8
+        operations_research::glop::MatrixNonZeroPattern::Update(operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::glop::SparseColumn const&)  (in libortools.9.15.dylib)        7
+        operations_research::glop::PrimalPrices::UpdateEnteringCandidates<true, operations_research::Bitset64<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>>>(operations_research::Bitset64<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>> const&)  (in libortools.9.15.dylib)        7
+        operations_research::glop::InfinityNorm(operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double> const&)  (in libortools.9.15.dylib)        6
+        operations_research::glop::SparseVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::glop::VectorIterator<operations_research::glop::SparseColumnEntry>>::MoveTaggedEntriesTo(operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>> const&, operations_research::glop::SparseVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::glop::VectorIterator<operations_research::glop::SparseColumnEntry>>*)  (in libortools.9.15.dylib)        6
+        operations_research::glop::Markowitz::ExtractSingletonColumns(operations_research::glop::CompactSparseMatrixView const&, operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>>*, operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>>*, int*)  (in libortools.9.15.dylib)        5
+        operations_research::glop::ReducedCosts::ComputeReducedCosts()  (in libortools.9.15.dylib)        5
+        std::vector<double>::__append(unsigned long, double const&)  (in libortools.9.15.dylib)        5

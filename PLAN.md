@@ -63,3 +63,21 @@ binary fingerprints, and reusable benchmark harnesses in
 `baselines/iterator-audit-2026-10-15.md`. Ordinary exclusive ranges and compact
 zip iteration were not generally slower; do not replace iterators wholesale.
 Phase 8 remains complete with its existing validated implementation.
+
+## Targeted graph/neos investigation (15 October 2026)
+
+Benchmark mode was already on and verified against live worker/index/sleep
+state before measurements and again before the full corpus. Quiet-mode
+native-relative solve baselines remain 1.0192x graph / 1.0270x neos.
+A retained SparseColumn for Harris candidates improved focused solves, but
+its full 213-model A/B gate exposed a repeatable CVS slowdown (+1.85%,
++31.0 ms on an independent eleven-pair recheck). A boxed form also regressed
+CVS. Both were reverted; the signed-row-pointer and 32-bit filtered-row
+prototypes were rejected earlier for neos regressions.
+
+The full campaign completed all 213 models with five timed pairs apiece,
+no timeouts, and all 1,065 outcomes bit-exact against the baseline. A small
+0.23% aggregate gain did not override the per-model regression. Production
+code remains unchanged from `2f493f2`; results, fingerprints, profiles, and
+correctness gates are recorded in `baselines/gaps-2026-10-15.md`. Benchmark
+mode remains on as it was when this investigation began.

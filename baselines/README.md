@@ -115,3 +115,7 @@ cargo test -p gloprs-glop --test phase4_native_cases
 - `iterator-audit-2026-10-15.md`: production iterator/counting-loop audit,
   profiles, accepted and rejected experiments, paired timing artifacts, and
   differential validation for the rank-one and pricing loop refinements.
+
+- `gaps-2026-10-15.md`: benchmark-mode graph/neos investigation, Harris
+  candidate-layout experiment, rejected row-wise prototypes, and full-corpus
+  retention evidence.
