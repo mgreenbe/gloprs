@@ -1,0 +1,15 @@
+{
+  "baseline_commit": "77b83ac00413702b9e219a7399b3bb189523bc3e",
+  "changed_production_files": [
+    "glop/src/pricing.rs",
+    "glop/src/rank_one_update.rs"
+  ],
+  "binary_sha256": {
+    "before": "2c84d29b2775927acbec165854bbeb59176ccceca47a4ed903577c8e9acce7f3",
+    "after": "b5174be6729fb6c9320fe2d5299f4f8b0e2f237403e845c177a606ed3bd95880"
+  },
+  "isolated_binary_sha256": {
+    "rank-only": "4d8a7a0de22e6aeade95251909bf1bc561484a696c43b98795855f344e7fb390",
+    "pricing-only": "44f3caa9e0795a7774836d662b9b27a22d77da5183184a063f2a30bb2da09ed2"
+  }
+}

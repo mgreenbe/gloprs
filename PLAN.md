@@ -47,3 +47,19 @@ timing caveats, and earlier repairs are documented in
   campaign while media analysis and indexing stay idle. The current pass is
   sound for outcomes and broad triage, supplemented by the quiet focused
   recheck.
+
+
+## Follow-up: iterator and counted-loop audit (15 October 2026)
+
+Completed the core iterator audit and two full paired 213-model nmm0-50k
+public-pipeline campaigns (five timed pairs per model), followed by isolated
+builds and 11/15-pair outlier rechecks. Both candidate production rewrites were
+reverted: counted packed rank-one products regressed CMS750_4 and greenbea;
+counted pricing-heap construction regressed cvs16r128-89. Small aggregate gains
+(~0.33--0.34%) did not justify these repeatable per-model costs.
+
+Production code is unchanged from `77b83ac`. Preserve the audit, raw timings,
+binary fingerprints, and reusable benchmark harnesses in
+`baselines/iterator-audit-2026-10-15.md`. Ordinary exclusive ranges and compact
+zip iteration were not generally slower; do not replace iterators wholesale.
+Phase 8 remains complete with its existing validated implementation.

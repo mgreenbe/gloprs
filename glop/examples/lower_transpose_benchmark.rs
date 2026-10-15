@@ -4,6 +4,14 @@ use std::time::Instant;
 use lp_data::triangular_matrix::{Triangle, TriangularMatrix};
 
 fn main() {
+    let mode = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "transpose-lower".into());
+    let upper = matches!(mode.as_str(), "upper" | "transpose-upper");
+    assert!(matches!(
+        mode.as_str(),
+        "lower" | "upper" | "transpose-lower" | "transpose-upper"
+    ));
     let mut input = String::new();
     io::stdin().read_to_string(&mut input).unwrap();
     let mut fields = input.split_whitespace();
@@ -13,8 +21,11 @@ fn main() {
     let mut columns = vec![Vec::new(); n];
     let mut diagonal = vec![1.0; n];
     for _ in 0..count {
-        let row: usize = fields.next().unwrap().parse().unwrap();
-        let column: usize = fields.next().unwrap().parse().unwrap();
+        let mut row: usize = fields.next().unwrap().parse().unwrap();
+        let mut column: usize = fields.next().unwrap().parse().unwrap();
+        if upper {
+            std::mem::swap(&mut row, &mut column);
+        }
         let value: f64 = fields.next().unwrap().parse().unwrap();
         if row == column {
             diagonal[column] = value;
@@ -25,8 +36,17 @@ fn main() {
     // Dispatch exactly as GLOP does: literal ones require no division.
     #[allow(clippy::float_cmp)]
     let unit_diagonal = diagonal.iter().all(|&value| value == 1.0);
-    let lower = TriangularMatrix::from_columns(&columns, &diagonal, Triangle::Lower, unit_diagonal)
-        .unwrap();
+    let factor = TriangularMatrix::from_columns(
+        &columns,
+        &diagonal,
+        if upper {
+            Triangle::Upper
+        } else {
+            Triangle::Lower
+        },
+        unit_diagonal,
+    )
+    .unwrap();
     let base: Vec<f64> = (0..n)
         .map(|row| 1.0 + f64::from(u32::try_from(row % 17).unwrap()) * 0.125)
         .collect();
@@ -36,7 +56,11 @@ fn main() {
     let start = Instant::now();
     for repetition in 0..repetitions {
         rhs.copy_from_slice(&base);
-        lower.transpose_solve(&mut rhs).unwrap();
+        if mode.starts_with("transpose-") {
+            factor.transpose_solve(&mut rhs).unwrap();
+        } else {
+            factor.solve(&mut rhs).unwrap();
+        }
         checksum += rhs[repetition % n];
     }
     let nanos = start.elapsed().as_secs_f64() * 1.0e9;

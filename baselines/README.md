@@ -111,3 +111,7 @@ python3 tools/build_glop_reference_adapter.py --source tools/phase4_reference_ad
 python3 tools/generate_phase4_fixture.py
 cargo test -p gloprs-glop --test phase4_native_cases
 ```
+
+- `iterator-audit-2026-10-15.md`: production iterator/counting-loop audit,
+  profiles, accepted and rejected experiments, paired timing artifacts, and
+  differential validation for the rank-one and pricing loop refinements.
