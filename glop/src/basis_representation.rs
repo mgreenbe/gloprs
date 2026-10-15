@@ -1389,8 +1389,12 @@ impl BasisRepresentation {
                     });
                 }
                 self.basis.install(leaving_column, entering_column);
-                self.updates
-                    .update_from_compact(right_update, storage.column(index), u_dot_v);
+                // SAFETY: the retained right scratchpad and left compact
+                // storage are both indexed by this basis's dimension.
+                unsafe {
+                    self.updates
+                        .update_from_compact(right_update, storage.column(index), u_dot_v);
+                }
             }
             LeftUpdateSource::Scattered(left_update) => {
                 if !right_update_is_dense {

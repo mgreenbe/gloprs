@@ -1,5 +1,52 @@
 # NMM 0–50k: M2 performance triage
 
+## `traininstance2` rank-one follow-up
+
+A fresh 21-trial serial matched-stage [baseline](phase8-traininstance2-baseline-stages.json)
+put `traininstance2` at 1.087x native presolved-solve time (70.43 vs
+64.82 ms); parse was 1.135x and presolve 0.952x. Paired 8-second native/Rust
+stack samples showed dense transpose triangular solves as the largest shared
+cost, followed by permutation, direction, and Harris work. The samples alone
+do not establish whether every numerical branch matches on this model.
+
+One concrete port difference was the packed rank-one scalar product: Rust
+checked every RHS gather and dense update write, while upstream's compact
+columns read and write directly. The Rust factor now records a required RHS
+length when public updates are appended, or the known basis dimension once
+for solver-owned compact updates. Each solve checks this length before its
+documented unchecked inner accesses. A regression test verifies that short
+caller-supplied vectors still panic safely. Operation order and storage order
+are unchanged.
+
+The final [21-trial old/new Rust A/B](phase8-traininstance2-rank-one-ab.json)
+measures `traininstance2` at 0.994x, `graph20-20-1rand` at 0.991x, and
+`cvs16r128-89` at 0.999x. Tracking a maximum on *every* solver-owned compact
+entry instead of recording the basis dimension once had slowed `cvs` by
+about 0.9% and was replaced. A function-boundary experiment on dense
+transpose kernels and a four-row block-load experiment were timing-neutral
+or slower and were reverted.
+
+The fresh native-relative [31-trial solve](phase8-traininstance2-final-solve.json)
+is 67.26 ms native versus 72.18 ms Rust, **1.073x**. The
+[21-trial public pipeline](phase8-traininstance2-final-public.json) is
+101.21 versus 104.79 ms, **1.035x**. Status, iteration count, and objective
+match. New native/Rust presolved-state checkpoints at pivots 0, 1, 100, 500,
+1000, 2000, and 2682 agree on basis, values, reduced costs, clocks, and
+refactorization count; this is not an every-pivot trace. Full workspace tests,
+strict Clippy, fast-96 trajectories, and the selected extra-model pivot
+fixture pass. `traininstance2` is **not yet at
+parity**. The remaining solve cost needs more precise localization within
+the dense transpose and per-pivot paths; no speculative numerical rewrite
+was retained.
+
+An 11-trial matched iteration-cap sweep put the Rust/native solve ratio at
+1.177x after one pivot, 1.085x after 500, and 1.073x at termination. The
+remaining excess includes about 0.39 ms of fixed startup cost and persists
+throughout the pivot sequence. As a build-only experiment, fat LTO improved
+the matched `traininstance2` solve to 1.068x native in 31 trials, but it
+regressed `d6cube` by about 1.5% in the paired Rust A/B; the release profile
+therefore remains on thin LTO.
+
 ## Fresh indexed-access follow-up (14 October 2026)
 
 At `1a9c753` (the bounds-access audit), the release public adapters were
