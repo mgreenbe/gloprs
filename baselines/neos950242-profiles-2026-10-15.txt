@@ -1,0 +1,228 @@
+=== rust: repeated presolve, 6 sec at 1 ms ===
+Sort by top of stack, same collapsed (when >= 5):
+        glop::preprocessor::UnconstrainedVariablePreprocessor::run::h11a2bae8a07d410b  (in neos950242-before-stage)        429
+        tiny_malloc_from_free_list  (in libsystem_malloc.dylib)        390
+        tiny_free_no_lock  (in libsystem_malloc.dylib)        319
+        lp_data::sparse::SparseMatrix::populate_from_transpose::h141b70c13a36630e  (in neos950242-before-stage)        270
+        glop::preprocessor::ImpliedFreePreprocessor::run::hda3ba96878b84908  (in neos950242-before-stage)        263
+        free_tiny  (in libsystem_malloc.dylib)        246
+        tiny_free_list_add_ptr  (in libsystem_malloc.dylib)        237
+        tiny_free_list_remove_ptr  (in libsystem_malloc.dylib)        204
+        lp_data::matrix_utils::find_proportional_columns::h57d7092da2cfeefc  (in neos950242-before-stage)        200
+        glop::preprocessor::SingletonPreprocessor::run::h53196df1719333fe  (in neos950242-before-stage)        120
+        tiny_malloc_should_clear  (in libsystem_malloc.dylib)        120
+        tiny_free_detach_region  (in libsystem_malloc.dylib)        119
+        tiny_free_reattach_region  (in libsystem_malloc.dylib)        116
+        _malloc_zone_malloc  (in libsystem_malloc.dylib)        108
+        tiny_free_scan_madvise_free  (in libsystem_malloc.dylib)        105
+        _dyld_start  (in dyld)        104
+        _szone_free  (in libsystem_malloc.dylib)        99
+        glop::preprocessor::ForcingAndImpliedFreeConstraintPreprocessor::run::h85d71a0794be62fa  (in neos950242-before-stage)        92
+        _platform_memset  (in libsystem_platform.dylib)        88
+        madvise  (in libsystem_kernel.dylib)        87
+        lp_data::matrix_scaler::SparseMatrixScaler::scale::h1f692bf6217bf69f  (in neos950242-before-stage)        84
+        alloc::raw_vec::RawVecInner$LT$A$GT$::finish_grow::h965d5a810e583e6f  (in neos950242-before-stage)        81
+        lp_data::sparse::SparseMatrix::populate_from_zero::hb01669a2d66b47b9  (in neos950242-before-stage)        76
+        _platform_memmove  (in libsystem_platform.dylib)        70
+        lp_data::lp_data::LinearProgram::delete_rows::h0807f9299cca0a24  (in neos950242-before-stage)        65
+        get_tiny_previous_free_msize  (in libsystem_malloc.dylib)        61
+        szone_malloc_should_clear  (in libsystem_malloc.dylib)        58
+        lp_data::lp_data::LinearProgram::populate_from_dual::h4079cc75cbb591a1  (in neos950242-before-stage)        53
+        _free  (in libsystem_malloc.dylib)        49
+        core::slice::sort::unstable::quicksort::quicksort::h89dfe43b841a13b9  (in neos950242-before-stage)        49
+        __bzero  (in libsystem_platform.dylib)        45
+        rack_get_thread_index  (in libsystem_malloc.dylib)        45
+        core::slice::sort::shared::smallsort::small_sort_general::hbdd56a30934dcd94  (in neos950242-before-stage)        43
+        lp_data::lp_data::LinearProgram::create_new_variable::h75b0ccea95f653b8  (in neos950242-before-stage)        35
+        _tiny_check_and_zero_inline_meta_from_freelist  (in libsystem_malloc.dylib)        29
+        core::slice::sort::unstable::quicksort::quicksort::h023a6a9976348bd4  (in neos950242-before-stage)        27
+        glop::preprocessor::EmptyConstraintPreprocessor::run::h3ae572dcfdd4155a  (in neos950242-before-stage)        27
+        glop::preprocessor::DoubletonEqualityRowPreprocessor::run::hdad829bf9630796e  (in neos950242-before-stage)        24
+        tiny_madvise_free_range_no_lock  (in libsystem_malloc.dylib)        24
+        alloc::raw_vec::RawVecInner$LT$A$GT$::reserve::do_reserve_and_handle::h75e7fd5c0edaaa15  (in neos950242-before-stage)        23
+        lp_data::matrix_scaler::SparseMatrixScaler::scale_matrix_rows::hff128fe07ae8f2c9  (in neos950242-before-stage)        20
+        lp_data::lp_data::LinearProgram::delete_columns::h0e88ba736f46ec5c  (in neos950242-before-stage)        19
+        _RNvCsfLfy6EI15iL_7___rustc11___rdl_alloc  (in neos950242-before-stage)        18
+        DYLD-STUB$$_platform_memset  (in libsystem_malloc.dylib)        17
+        lp_data::sparse_vector::SparseVector$LT$I$GT$::add_multiple_to_sparse_vector_with_common_index::h435a5b5a2083756e  (in neos950242-before-stage)        16
+        hashbrown::raw::RawTable$LT$T$C$A$GT$::reserve_rehash::haa3cb96707586374  (in neos950242-before-stage)        15
+        lp_data::lp_data::LinearProgram::subtract_column_multiple_from_constraint_bounds::h91df1406d332a3c0  (in neos950242-before-stage)        15
+        glop::preprocessor::FreeConstraintPreprocessor::run::h55f258ee898c6182  (in neos950242-before-stage)        14
+        lp_data::lp_data::LinearProgram::scale_bounds::h7212838afe1a4151  (in neos950242-before-stage)        13
+        lp_data::sparse::SparseMatrix::delete_columns::h9855fdb27838e1c7  (in neos950242-before-stage)        13
+        DYLD-STUB$$free  (in neos950242-before-stage)        12
+        glop::preprocessor::ColumnsSaver::save_column_if_not_already_done::hbcaa362165d22c44  (in neos950242-before-stage)        12
+        DYLD-STUB$$malloc  (in neos950242-before-stage)        11
+        glop::preprocessor::DualizerPreprocessor::run::h132eef5ccb542904  (in neos950242-before-stage)        11
+        lp_data::lp_data::LinearProgram::remove_near_zero_entries::hf8f67723bad5fee7  (in neos950242-before-stage)        11
+        glop::preprocessor::ProportionalRowPreprocessor::run::h33727d4982f1fb6a  (in neos950242-before-stage)        10
+        _platform_memset_pattern16  (in libsystem_platform.dylib)        9
+        core::ptr::drop_in_place$LT$lp_data..lp_data..LinearProgram$GT$::h3df0b254d825d186  (in neos950242-before-stage)        9
+        lp_data::lp_data::LinearProgram::is_variable_binary::h98ffcec27f65282d  (in neos950242-before-stage)        9
+        core::ptr::drop_in_place$LT$lp_data..lp_data..LinearProgram$GT$::h58f24f0b3be03b27  (in neos950242-before-stage)        8
+        mach_msg2_trap  (in dyld)        7
+        hashbrown::map::HashMap$LT$K$C$V$C$S$C$A$GT$::get::h4bdd7e7c8c5c5f3a  (in neos950242-before-stage)        6
+        lp_data::lp_data::LinearProgram::scale_vectors_after_matrix::h5b29a0fbc399e5f4  (in neos950242-before-stage)        6
+        lp_data::lp_data::LinearProgram::set_variable_bounds::h40ee5116813035d3  (in neos950242-before-stage)        6
+        lp_data::mps_reader::parse_mps_as::h4bec081330f94fa4  (in neos950242-before-stage)        6
+        _$LT$$u5b$T$u5d$$u20$as$u20$alloc..slice..SpecCloneIntoVec$LT$T$C$A$GT$$GT$::clone_into::hd5582eec879099f2  (in neos950242-before-stage)        5
+        _RNvNtNtCsl8K0bEFm1U0_4core5slice6memchr14memchr_aligned  (in neos950242-before-stage)        5
+        alloc::raw_vec::RawVec$LT$T$C$A$GT$::grow_one::h851908288f360ac7  (in neos950242-before-stage)        5
+        glop::preprocessor::EmptyColumnPreprocessor::run::h868f2291ae382e9d  (in neos950242-before-stage)        5
+
+
+=== native: repeated presolve, 6 sec at 1 ms ===
+Sort by top of stack, same collapsed (when >= 5):
+        operations_research::glop::UnconstrainedVariablePreprocessor::Run(operations_research::glop::LinearProgram*)  (in libortools.9.15.dylib)        499
+        operations_research::glop::SparseMatrix::PopulateFromTranspose<operations_research::glop::SparseMatrix>(operations_research::glop::SparseMatrix const&)  (in libortools.9.15.dylib)        385
+        tiny_malloc_from_free_list  (in libsystem_malloc.dylib)        381
+        tiny_free_no_lock  (in libsystem_malloc.dylib)        379
+        operations_research::glop::ImpliedFreePreprocessor::Run(operations_research::glop::LinearProgram*)  (in libortools.9.15.dylib)        346
+        operations_research::glop::FindProportionalColumns(operations_research::glop::SparseMatrix const&, double)  (in libortools.9.15.dylib)        311
+        std::__introsort<std::_ClassicAlgPolicy, std::__less<void, void>&, operations_research::glop::(anonymous namespace)::ColumnFingerprint*, false>(operations_research::glop::(anonymous namespace)::ColumnFingerprint*, operations_research::glop::(anonymous namespace)::ColumnFingerprint*, std::__less<void, void>&, std::iterator_traits<operations_research::glop::(anonymous namespace)::ColumnFingerprint*>::difference_type, bool)  (in libortools.9.15.dylib)        285
+        free_tiny  (in libsystem_malloc.dylib)        229
+        operations_research::glop::ForcingAndImpliedFreeConstraintPreprocessor::Run(operations_research::glop::LinearProgram*)  (in libortools.9.15.dylib)        169
+        tiny_malloc_should_clear  (in libsystem_malloc.dylib)        111
+        _platform_memset  (in libsystem_platform.dylib)        107
+        madvise  (in libsystem_kernel.dylib)        98
+        _szone_free  (in libsystem_malloc.dylib)        92
+        operations_research::glop::SingletonPreprocessor::MakeConstraintAnEqualityIfPossible(operations_research::glop::SparseMatrix const&, operations_research::glop::MatrixEntry, operations_research::glop::LinearProgram*)  (in libortools.9.15.dylib)        85
+        <deduplicated_symbol>  (in libortools.9.15.dylib)        81
+        _platform_memmove  (in libsystem_platform.dylib)        68
+        operations_research::glop::SparseMatrix::ComputeMinAndMaxMagnitudes(double*, double*) const  (in libortools.9.15.dylib)        68
+        _free  (in libsystem_malloc.dylib)        66
+        szone_malloc_should_clear  (in libsystem_malloc.dylib)        66
+        operations_research::glop::SparseMatrix::DeleteRows(operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::glop::Permutation<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>> const&)  (in libortools.9.15.dylib)        54
+        get_tiny_previous_free_msize  (in libsystem_malloc.dylib)        53
+        rack_get_thread_index  (in libsystem_malloc.dylib)        48
+        std::vector<operations_research::glop::SparseColumn>::__emplace_back_slow_path<operations_research::glop::SparseColumn>(operations_research::glop::SparseColumn&&)  (in libortools.9.15.dylib)        45
+        std::vector<operations_research::glop::SparseColumn>::__append(unsigned long, operations_research::glop::SparseColumn const&)  (in libortools.9.15.dylib)        44
+        _tiny_check_and_zero_inline_meta_from_freelist  (in libsystem_malloc.dylib)        42
+        operations_research::glop::SparseMatrixScaler::Scale(operations_research::glop::GlopParameters_ScalingAlgorithm)  (in libortools.9.15.dylib)        42
+        operations_research::glop::LinearProgram::PopulateFromDual(operations_research::glop::LinearProgram const&, operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>>*)  (in libortools.9.15.dylib)        40
+        operations_research::glop::SparseMatrixScaler::EquilibrateRows()  (in libortools.9.15.dylib)        40
+        operator new(unsigned long)  (in libc++abi.dylib)        39
+        operations_research::glop::SparseMatrix::DeleteColumns(operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, bool> const&)  (in libortools.9.15.dylib)        35
+        __bzero  (in libsystem_platform.dylib)        33
+        operations_research::glop::LinearProgram::DeleteRows(operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, bool> const&)  (in libortools.9.15.dylib)        33
+        operations_research::glop::SparseMatrixScaler::ScaleRowsGeometrically()  (in libortools.9.15.dylib)        33
+        malloc_type_malloc  (in libsystem_malloc.dylib)        29
+        operations_research::glop::SparseVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::glop::VectorIterator<operations_research::glop::SparseColumnEntry>>::AddMultipleToSparseVectorInternal(bool, double, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, double, operations_research::glop::SparseVector<operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>, operations_research::glop::VectorIterator<operations_research::glop::SparseColumnEntry>>*) const  (in libortools.9.15.dylib)        28
+        operations_research::glop::DoubletonEqualityRowPreprocessor::Run(operations_research::glop::LinearProgram*)  (in libortools.9.15.dylib)        27
+        operations_research::glop::LinearProgram::ResizeRowsIfNeeded(operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>)  (in libortools.9.15.dylib)        26
+        operations_research::glop::SingletonPreprocessor::Run(operations_research::glop::LinearProgram*)  (in libortools.9.15.dylib)        24
+        operations_research::glop::LinearProgram::CreateNewVariable()  (in libortools.9.15.dylib)        23
+        DYLD-STUB$$operator delete[](void*)  (in libortools.9.15.dylib)        22
+        operations_research::glop::SparseMatrix::AppendEmptyColumn()  (in libortools.9.15.dylib)        22
+        operations_research::glop::InfinityNorm(operations_research::glop::SparseColumn const&)  (in libortools.9.15.dylib)        20
+        tiny_free_list_add_ptr  (in libsystem_malloc.dylib)        20
+        tiny_free_scan_madvise_free  (in libsystem_malloc.dylib)        20
+        operations_research::glop::EmptyConstraintPreprocessor::Run(operations_research::glop::LinearProgram*)  (in libortools.9.15.dylib)        19
+        tiny_free_detach_region  (in libsystem_malloc.dylib)        19
+        DYLD-STUB$$operator delete(void*)  (in libc++abi.dylib)        17
+        std::vector<double>::assign(unsigned long, double const&)  (in libortools.9.15.dylib)        17
+        operations_research::glop::LinearProgram::DeleteColumns(operations_research::glop::StrictITIVector<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, bool> const&)  (in libortools.9.15.dylib)        15
+        operations_research::glop::LinearProgram::SetObjectiveCoefficient(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, double)  (in libortools.9.15.dylib)        15
+        DYLD-STUB$$operator new(unsigned long)  (in libc++abi.dylib)        13
+        DYLD-STUB$$operator new[](unsigned long)  (in libortools.9.15.dylib)        13
+        std::vector<std::basic_string<char>>::push_back[abi:ne200100](std::basic_string<char>&&)  (in libortools.9.15.dylib)        13
+        tiny_free_list_remove_ptr  (in libsystem_malloc.dylib)        13
+        tiny_free_reattach_region  (in libsystem_malloc.dylib)        12
+        DYLD-STUB$$_platform_memset  (in libsystem_malloc.dylib)        11
+        operations_research::glop::LinearProgram::GetSparseColumn(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>) const  (in libortools.9.15.dylib)        10
+        operations_research::glop::SingletonPreprocessor::DeleteSingletonColumnInEquality(operations_research::glop::SparseMatrix const&, operations_research::glop::MatrixEntry, operations_research::glop::LinearProgram*)  (in libortools.9.15.dylib)        10
+        operations_research::glop::SparseMatrix::Reset(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, operations_research::StrongIndex<operations_research::glop::RowIndex_index_tag_>)  (in libortools.9.15.dylib)        10
+        DYLD-STUB$$free  (in libc++abi.dylib)        9
+        DYLD-STUB$$malloc_type_malloc  (in libc++abi.dylib)        9
+        operations_research::glop::DualizerPreprocessor::Run(operations_research::glop::LinearProgram*)  (in libortools.9.15.dylib)        9
+        operations_research::glop::LinearProgram::GetObjectiveCoefficientForMinimizationVersion(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>) const  (in libortools.9.15.dylib)        9
+        std::vector<double>::__append(unsigned long, double const&)  (in libortools.9.15.dylib)        9
+        operations_research::glop::SparseMatrix::num_entries() const  (in libortools.9.15.dylib)        8
+        std::vector<std::basic_string<char>>::__assign_with_size[abi:ne200100]<std::basic_string<char>*, std::basic_string<char>*>(std::basic_string<char>*, std::basic_string<char>*, long)  (in libortools.9.15.dylib)        8
+        mach_msg2_trap  (in dyld)        7
+        operations_research::glop::FreeConstraintPreprocessor::Run(operations_research::glop::LinearProgram*)  (in libortools.9.15.dylib)        7
+        operations_research::glop::ProportionalRowPreprocessor::Run(operations_research::glop::LinearProgram*)  (in libortools.9.15.dylib)        7
+        operations_research::glop::ScalingPreprocessor::Run(operations_research::glop::LinearProgram*)  (in libortools.9.15.dylib)        6
+        std::vector<operations_research::glop::SparseColumn>::__assign_with_size[abi:ne200100]<operations_research::glop::SparseColumn*, operations_research::glop::SparseColumn*>(operations_research::glop::SparseColumn*, operations_research::glop::SparseColumn*, long)  (in libortools.9.15.dylib)        6
+        tiny_madvise_free_range_no_lock  (in libsystem_malloc.dylib)        6
+        DYLD-STUB$$memmove  (in libortools.9.15.dylib)        5
+        FileLineIterator::ReadNextLine()  (in libortools.9.15.dylib)        5
+        _platform_memset_pattern16  (in libsystem_platform.dylib)        5
+        absl::lts_20250814::container_internal::raw_hash_set<absl::lts_20250814::container_internal::FlatHashMapPolicy<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>, int>, absl::lts_20250814::hash_internal::Hash<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>>>::find_or_prepare_insert<operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_>>(operations_research::StrongIndex<operations_research::glop::ColIndex_index_tag_> const&)  (in libortools.9.15.dylib)        5
+        operations_research::glop::LinearProgram::RemoveNearZeroEntries(double)  (in libortools.9.15.dylib)        5
+        operations_research::glop::LinearProgram::ScaleBounds()  (in libortools.9.15.dylib)        5
+        operations_research::glop::LinearProgram::ScaleObjective(operations_research::glop::GlopParameters_CostScalingAlgorithm)  (in libortools.9.15.dylib)        5
+
+
+=== after: repeated presolve, 6 sec at 1 ms ===
+Sort by top of stack, same collapsed (when >= 5):
+        glop::preprocessor::UnconstrainedVariablePreprocessor::run::h11a2bae8a07d410b  (in full_presolve_netlib)        593
+        lp_data::sparse::SparseMatrix::populate_from_transpose::h141b70c13a36630e  (in full_presolve_netlib)        351
+        glop::preprocessor::ImpliedFreePreprocessor::run::hda3ba96878b84908  (in full_presolve_netlib)        347
+        lp_data::matrix_utils::find_proportional_columns::h57d7092da2cfeefc  (in full_presolve_netlib)        288
+        tiny_malloc_from_free_list  (in libsystem_malloc.dylib)        266
+        tiny_free_no_lock  (in libsystem_malloc.dylib)        233
+        free_tiny  (in libsystem_malloc.dylib)        181
+        glop::preprocessor::SingletonPreprocessor::run::h53196df1719333fe  (in full_presolve_netlib)        164
+        tiny_free_list_remove_ptr  (in libsystem_malloc.dylib)        154
+        tiny_free_list_add_ptr  (in libsystem_malloc.dylib)        148
+        glop::preprocessor::ForcingAndImpliedFreeConstraintPreprocessor::run::h85d71a0794be62fa  (in full_presolve_netlib)        146
+        madvise  (in libsystem_kernel.dylib)        145
+        _platform_memmove  (in libsystem_platform.dylib)        113
+        lp_data::matrix_scaler::SparseMatrixScaler::scale::h1f692bf6217bf69f  (in full_presolve_netlib)        113
+        tiny_free_reattach_region  (in libsystem_malloc.dylib)        99
+        tiny_free_detach_region  (in libsystem_malloc.dylib)        97
+        tiny_malloc_should_clear  (in libsystem_malloc.dylib)        95
+        _malloc_zone_malloc  (in libsystem_malloc.dylib)        88
+        lp_data::lp_data::LinearProgram::delete_rows::h0807f9299cca0a24  (in full_presolve_netlib)        88
+        lp_data::lp_data::LinearProgram::populate_from_dual::h4079cc75cbb591a1  (in full_presolve_netlib)        81
+        tiny_free_scan_madvise_free  (in libsystem_malloc.dylib)        79
+        _szone_free  (in libsystem_malloc.dylib)        75
+        __bzero  (in libsystem_platform.dylib)        67
+        core::slice::sort::unstable::quicksort::quicksort::h89dfe43b841a13b9  (in full_presolve_netlib)        67
+        _platform_memset  (in libsystem_platform.dylib)        62
+        get_tiny_previous_free_msize  (in libsystem_malloc.dylib)        55
+        core::slice::sort::shared::smallsort::small_sort_general::hbdd56a30934dcd94  (in full_presolve_netlib)        52
+        _free  (in libsystem_malloc.dylib)        47
+        alloc::raw_vec::RawVecInner$LT$A$GT$::finish_grow::h965d5a810e583e6f  (in full_presolve_netlib)        45
+        lp_data::lp_data::LinearProgram::create_new_variable::h75b0ccea95f653b8  (in full_presolve_netlib)        45
+        rack_get_thread_index  (in libsystem_malloc.dylib)        41
+        szone_malloc_should_clear  (in libsystem_malloc.dylib)        41
+        core::slice::sort::unstable::quicksort::quicksort::h023a6a9976348bd4  (in full_presolve_netlib)        40
+        lp_data::sparse_vector::SparseVector$LT$I$GT$::add_multiple_to_sparse_vector_with_common_index::h435a5b5a2083756e  (in full_presolve_netlib)        40
+        lp_data::sparse::SparseMatrix::populate_from_zero::hb01669a2d66b47b9  (in full_presolve_netlib)        37
+        lp_data::lp_data::LinearProgram::delete_columns::h0e88ba736f46ec5c  (in full_presolve_netlib)        35
+        glop::preprocessor::EmptyConstraintPreprocessor::run::h3ae572dcfdd4155a  (in full_presolve_netlib)        29
+        lp_data::matrix_scaler::SparseMatrixScaler::scale_matrix_rows::hff128fe07ae8f2c9  (in full_presolve_netlib)        23
+        _tiny_check_and_zero_inline_meta_from_freelist  (in libsystem_malloc.dylib)        21
+        tiny_madvise_free_range_no_lock  (in libsystem_malloc.dylib)        21
+        _RNvCsfLfy6EI15iL_7___rustc11___rdl_alloc  (in full_presolve_netlib)        20
+        lp_data::lp_data::LinearProgram::scale_bounds::h7212838afe1a4151  (in full_presolve_netlib)        19
+        lp_data::sparse::SparseMatrix::delete_columns::h9855fdb27838e1c7  (in full_presolve_netlib)        18
+        _platform_memset_pattern16  (in libsystem_platform.dylib)        17
+        DYLD-STUB$$_platform_memset  (in libsystem_malloc.dylib)        16
+        glop::preprocessor::FreeConstraintPreprocessor::run::h55f258ee898c6182  (in full_presolve_netlib)        16
+        glop::preprocessor::DoubletonEqualityRowPreprocessor::run::hdad829bf9630796e  (in full_presolve_netlib)        15
+        lp_data::lp_data::LinearProgram::remove_near_zero_entries::hf8f67723bad5fee7  (in full_presolve_netlib)        15
+        lp_data::lp_data::LinearProgram::subtract_column_multiple_from_constraint_bounds::h91df1406d332a3c0  (in full_presolve_netlib)        15
+        DYLD-STUB$$malloc  (in full_presolve_netlib)        14
+        glop::preprocessor::ColumnsSaver::save_column_if_not_already_done::hbcaa362165d22c44  (in full_presolve_netlib)        14
+        alloc::raw_vec::RawVecInner$LT$A$GT$::reserve::do_reserve_and_handle::h75e7fd5c0edaaa15  (in full_presolve_netlib)        13
+        glop::preprocessor::ProportionalRowPreprocessor::run::h33727d4982f1fb6a  (in full_presolve_netlib)        12
+        hashbrown::raw::RawTable$LT$T$C$A$GT$::reserve_rehash::haa3cb96707586374  (in full_presolve_netlib)        11
+        _$LT$$u5b$T$u5d$$u20$as$u20$alloc..slice..SpecCloneIntoVec$LT$T$C$A$GT$$GT$::clone_into::hd5582eec879099f2  (in full_presolve_netlib)        10
+        core::ptr::drop_in_place$LT$lp_data..lp_data..LinearProgram$GT$::h58f24f0b3be03b27  (in full_presolve_netlib)        10
+        lp_data::lp_data::LinearProgram::is_variable_binary::h98ffcec27f65282d  (in full_presolve_netlib)        10
+        lp_data::lp_data::LinearProgram::set_variable_bounds::h40ee5116813035d3  (in full_presolve_netlib)        10
+        DYLD-STUB$$free  (in full_presolve_netlib)        8
+        _RNvXs4_NtCs1OjIl8oxbrv_5alloc6stringNtB5_6StringNtNtCsl8K0bEFm1U0_4core5clone5Clone5clone  (in full_presolve_netlib)        8
+        glop::preprocessor::DualizerPreprocessor::run::h132eef5ccb542904  (in full_presolve_netlib)        8
+        lp_data::lp_data::LinearProgram::scale_objective::heb52dff415475b6d  (in full_presolve_netlib)        8
+        core::slice::sort::shared::pivot::median3_rec::h8212a74c813e0074  (in full_presolve_netlib)        7
+        glop::preprocessor::EmptyColumnPreprocessor::run::h868f2291ae382e9d  (in full_presolve_netlib)        7
+        hashbrown::map::HashMap$LT$K$C$V$C$S$C$A$GT$::get::h4bdd7e7c8c5c5f3a  (in full_presolve_netlib)        6
+        lp_data::lp_data::LinearProgram::set_coefficient::hfc91b2a82d1355b7  (in full_presolve_netlib)        6
+        tiny_size  (in libsystem_malloc.dylib)        6
+        _$LT$lp_data..sparse_vector..SparseVector$LT$I$GT$$u20$as$u20$core..clone..Clone$GT$::clone::h650802d4c1f62796  (in full_presolve_netlib)        5
+        alloc::raw_vec::RawVec$LT$T$C$A$GT$::grow_one::h851908288f360ac7  (in full_presolve_netlib)        5
+

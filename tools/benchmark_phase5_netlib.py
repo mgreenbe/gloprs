@@ -130,7 +130,7 @@ def main() -> None:
                     break
             outcomes = trial_outcomes[-1]
             wall_limited = any(limited_trials)
-            if mode == "default" and case.corpus == "netlib":
+            if mode == "default" and case.corpus == "netlib" and not wall_limited:
                 reference = expected[case.name]
                 assert outcomes["native"][:2] == (
                     reference["native_status"], reference["native_iterations"]

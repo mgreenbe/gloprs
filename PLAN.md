@@ -81,3 +81,37 @@ no timeouts, and all 1,065 outcomes bit-exact against the baseline. A small
 code remains unchanged from `2f493f2`; results, fingerprints, profiles, and
 correctness gates are recorded in `baselines/gaps-2026-10-15.md`. Benchmark
 mode remains on as it was when this investigation began.
+
+## NMM 50k–100k baseline (15 October 2026)
+
+Completed all 25 models against pinned native GLOP under verified benchmark
+mode, five timed pairs per model, one warmup, 60-second solve limits. All 125
+status/iteration/objective-bit pairs matched exactly; no timeouts. Rust/native
+aggregate time is 0.95058x, median model 0.96124x. A separate 15-pair recheck
+confirmed baseline gaps on piperout-27 (1.02016x, +3.86 ms) and
+neos-1171737 (1.02972x, +8.16 ms), with all 30 outcome pairs exact. No solver
+changes were made. See `baselines/nmm50k-100k-2026-10-15.md` and raw trials.
+
+## NMM 100k–150k baseline (15 October 2026)
+
+Processed all 20 models: 19 completed, qap15 limited at 60 seconds on both
+solvers. All 95 completed timed pairs were exact on status/iterations/objective
+bits. Rust/native aggregate 0.95186x, median model 0.96418x, excluding qap15.
+A 15-pair recheck confirmed six slower cases; leading gaps are neos-950242
+(1.15330x, +10.76 ms) and fit2d (1.02580x, +28.17 ms). All 90 recheck pairs
+were exact. The harness now skips completed Netlib fixture assertions for
+wall-limited cases; the full run was restarted after that correction. No
+solver changes. See `baselines/nmm100k-150k-2026-10-15.md`.
+
+## neos-950242 parity repair (15 October 2026)
+
+Retained the upstream doubleton-equality transpose-cache lifetime: changed
+passes now return stale storage for lazy rebuilding instead of dropping its
+sparse-column allocations. Target final native/Rust public medians are
+71.680/68.041 ms (0.94922x), closing the earlier 15.3% deficit. Two full
+213-model five-pair nmm0-50k campaigns completed without limits, all 1,065
+outcomes exact each; final aggregate 0.99529x. Small per-model costs remain,
+notably CMS750_4 around 1%; retained for concrete upstream storage fidelity,
+large target gain, and full-corpus aggregate benefit. Workspace, Clippy,
+fast-96 public postsolve/KKT, target presolve bits, and 21 pinned checkpoints
+pass. See `baselines/neos950242-parity-2026-10-15.md`.

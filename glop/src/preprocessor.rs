@@ -1935,6 +1935,8 @@ impl DoubletonEqualityRowPreprocessor {
         }
         if self.column_deletion_helper.is_empty() {
             lp.restore_owned_transpose_sparse_matrix(original_transpose);
+        } else {
+            lp.recycle_owned_transpose_sparse_matrix(original_transpose);
         }
         lp.delete_columns(&self.column_deletion_helper.deleted);
         lp.delete_rows(&self.row_deletion_helper.deleted);

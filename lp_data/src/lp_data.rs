@@ -417,6 +417,13 @@ impl LinearProgram {
         self.transpose_matrix_is_consistent.set(true);
     }
 
+    /// Returns stale transpose storage after a pass changes the primary matrix.
+    /// Rebuilding the cache reuses its sparse-column allocations, as in GLOP.
+    pub fn recycle_owned_transpose_sparse_matrix(&mut self, transpose: SparseMatrix) {
+        *self.transpose_matrix.get_mut() = transpose;
+        self.transpose_matrix_is_consistent.set(false);
+    }
+
     pub fn use_transpose_matrix_as_reference(&mut self) {
         debug_assert_eq!(
             self.transpose_matrix.get_mut().num_rows().value(),
@@ -1906,6 +1913,27 @@ impl ProblemSolution {
 #[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recycled_transpose_rebuilds_after_primary_matrix_changes() {
+        let mut model = LinearProgram::new();
+        let col = model.create_new_variable();
+        let row = model.create_new_constraint();
+        model.set_coefficient(row, col, 2.0);
+        model.clean_up();
+        let transpose = model.take_mutable_transpose_sparse_matrix();
+        model.set_coefficient(row, col, 3.0);
+        model.clean_up();
+        model.recycle_owned_transpose_sparse_matrix(transpose);
+        assert!(!model.transpose_matrix_is_consistent.get());
+        assert_eq!(
+            model
+                .transpose_sparse_matrix()
+                .look_up_value(RowIndex::new(col.value()), ColIndex::new(row.value())),
+            3.0
+        );
+        assert!(model.transpose_matrix_is_consistent.get());
+    }
 
     #[test]
     fn deleting_rows_and_columns_compacts_metadata_without_changing_order() {

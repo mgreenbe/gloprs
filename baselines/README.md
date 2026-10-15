@@ -119,3 +119,13 @@ cargo test -p gloprs-glop --test phase4_native_cases
 - `gaps-2026-10-15.md`: benchmark-mode graph/neos investigation, Harris
   candidate-layout experiment, rejected row-wise prototypes, and full-corpus
   retention evidence.
+
+- `nmm50k-100k-2026-10-15.md`: full 25-model native/Rust benchmark under
+  verified benchmark mode, five timed pairs, exact outcomes, and independent
+  slower-model rechecks.
+
+- `nmm100k-150k-2026-10-15.md`: 20-model campaign, 19 completed comparisons,
+  qap15 wall-limit handling, and six independent slower-model rechecks.
+
+- `neos950242-parity-2026-10-15.md`: retained transpose-cache lifetime repair,
+  target public parity, two full retention runs, and measured per-model costs.
