@@ -21,8 +21,8 @@ adapters and Rust diagnostics:
 ```text
 python3 tools/build_glop_reference_adapter.py --source tools/phase5_netlib_solution_reference_adapter.cc --output target/native/phase5_netlib_solution_reference_adapter
 python3 tools/build_glop_reference_adapter.py --source tools/full_presolve_netlib_reference_adapter.cc --output target/native/full_presolve_netlib_reference_adapter
-cargo build --release -p gloprs-cli
-cargo build --release -p gloprs-glop --example phase5_netlib_solution_trace --example full_presolve_netlib
+cargo build --release
+cargo build --release --example phase5_netlib_solution_trace --example full_presolve_netlib
 python3 tools/audit_netlib.py
 ```
 
@@ -33,12 +33,12 @@ inconclusive. Use `--models afiro ...` for a focused run. The full run includes
 long qap solves. Strict pivot and original-model feasibility checks include:
 
 ```text
-cargo test --release -p gloprs-glop --test netlib_trajectories -- --ignored
-cargo test --release -p gloprs-glop --test phase8_extra_trajectories -- --ignored
-cargo test --release -p gloprs-glop --test main_preprocessor_netlib -- --ignored
-cargo test --release -p gloprs-glop --test phase5_netlib_solution fast_96_public_postsolve_matches_native -- --ignored
-cargo test --release -p gloprs-glop --test qap12_primal -- --ignored
-cargo test --release -p gloprs-glop --test qap15_presolved_trajectory -- --ignored
+cargo test --release -p gloprs --test netlib_trajectories -- --ignored
+cargo test --release -p gloprs --test phase8_extra_trajectories -- --ignored
+cargo test --release -p gloprs --test main_preprocessor_netlib -- --ignored
+cargo test --release -p gloprs --test phase5_netlib_solution fast_96_public_postsolve_matches_native -- --ignored
+cargo test --release -p gloprs --test qap12_primal -- --ignored
+cargo test --release -p gloprs --test qap15_presolved_trajectory -- --ignored
 python3 tools/validate_phase8_nmm_presolved_checkpoints.py
 ```
 
@@ -76,7 +76,7 @@ are LP relaxations. Use `--models corpus/name ...` to disambiguate names.
 `benchmark_memory.py` measures macOS peak memory, `profile_stages.py` takes
 serial native/Rust stack samples, and `benchmark_kernel_ab.py` compares saved
 kernel binaries. Other `benchmark_*.py` tools isolate individual kernels;
-`cargo bench -p gloprs-glop --bench basis_kernels` runs the Rust kernel suite.
+`cargo bench -p gloprs --bench basis_kernels` runs the Rust kernel suite.
 See [factorization probes](tools/netlib_factorization_benchmark.md) and
 [simplex probes](tools/netlib_simplex_probes.md) for captured numerical inputs.
 
@@ -86,3 +86,9 @@ per-model costs. Profiles, abandoned experiments and trial output belong under
 `target/` or `benchmark-results/local/`. Past parity evidence and measurements
 are preserved in Git through commit `69d5ba7`; old timings are not promises
 about a different compiler or machine.
+
+CLI output is compared byte-for-byte with native-captured fixtures in
+`tests/fixtures/cli`. Run `cargo test -p gloprs --test cli_output`; use
+`-- --include-ignored` to include afiro with the shared dataset present.
+Fixture provenance and native regeneration commands are documented in
+[tests/fixtures/cli/README.md](tests/fixtures/cli/README.md).

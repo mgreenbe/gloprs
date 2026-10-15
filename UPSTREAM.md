@@ -48,6 +48,6 @@ Clang 17.0.0. Recheck numerical reduction and contraction behavior when changing
 compiler or target architecture.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for public-solver, stage, trajectory and
-KKT checks. The core correspondence is `ortools/glop` → `glop/src` and
+KKT checks. The core correspondence is `ortools/glop` → `src` and
 `ortools/lp_data` → `lp_data/src`; focused Rust support replaces protobuf,
 Abseil, logging and build infrastructure.

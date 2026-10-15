@@ -1,0 +1,9 @@
+{
+  "upstream_commit": "100f66e6242ab8bf8d32feb8f3bf086db66ae2b5",
+  "formatting_reference": "ortools/linear_solver/solve.cc (labels/precision), ortools/lp_data/lp_data.cc (inspect)",
+  "solve_scope": "selected summary fields; GLOP API status names; no timing/logs",
+  "models": {
+    "model": "373ab8a001bb72e5832f56d0b831868bb7de37b755802d847d0b7e35b0692ab6",
+    "afiro": "fd3562804ff19382a9cd8bcb22ec81bffd24a4143a2290783831d8c64516a24b"
+  }
+}

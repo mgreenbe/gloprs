@@ -1,0 +1,7 @@
+File        : 'model.mps'
+Dimension   : 1 x 2
+Status      : OPTIMAL
+Objective   : -1.100000000000000e+01
+Iterations  : 0
+Primal error: 0.000000000000000e+00
+Dual error  : 0.000000000000000e+00

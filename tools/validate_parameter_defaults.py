@@ -6,7 +6,7 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 PROTO = (ROOT.parent / "or-tools/ortools/glop/parameters.proto").read_text()
-RUST = (ROOT / "glop/src/parameters.rs").read_text()
+RUST = (ROOT / "src/parameters.rs").read_text()
 
 FIELDS = re.findall(
     r"optional\s+(\w+)\s+(\w+)\s*=\s*\d+\s*\[default\s*=\s*([^]]+)\]",

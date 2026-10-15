@@ -60,7 +60,7 @@ def main() -> int:
     )
     for name in names:
         try:
-            command = [str(args.binary), "solve"]
+            command = [str(args.binary), "--raw", "--machine"]
             if args.dual:
                 command.append("--dual")
             command.append(str(DATASET_ROOT / "mps" / f"{name}.mps"))

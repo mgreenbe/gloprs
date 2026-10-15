@@ -73,7 +73,7 @@ def main() -> None:
         # adapter. Build it here so a source edit cannot silently benchmark a
         # stale executable; saved Rust A/B binaries remain untouched.
         subprocess.run(
-            ["cargo", "build", "--release", "-p", "gloprs-glop", "--example",
+            ["cargo", "build", "--release", "-p", "gloprs", "--example",
              "phase5_netlib_solution_trace"],
             cwd=ROOT, check=True,
         )

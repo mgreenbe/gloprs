@@ -1,0 +1,18 @@
+Number of rows                               : 1
+Number of variables in file                  : 2
+Number of entries (non-zeros)                : 2
+Number of entries in the objective           : 2
+Number of entries in the right-hand side     : 1
+Number of <= constraints                     : 1
+Number of >= constraints                     : 0
+Number of = constraints                      : 0
+Number of range constraints                  : 0
+Number of non-negative variables             : 0
+Number of boxed variables                    : 2
+Number of free variables                     : 0
+Number of fixed variables                    : 0
+Number of other variables                    : 0
+Number of integer variables                  : 0
+Number of binary variables                   : 0
+Number of non-binary integer variables       : 0
+Number of continuous variables               : 2

@@ -1,0 +1,7 @@
+File        : 'afiro.mps'
+Dimension   : 27 x 32
+Status      : OPTIMAL
+Objective   : -4.647531428571430e+02
+Iterations  : 5
+Primal error: 2.114974861910923e-14
+Dual error  : 5.551115123125783e-17

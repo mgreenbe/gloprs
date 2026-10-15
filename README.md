@@ -7,29 +7,105 @@ and making the solver easier to use.
 
 ## Use the solver
 
-```text
-cargo run --release -p gloprs-glop --example public_lp
-cargo run --release -p gloprs-glop --example public_mps -- MODEL.mps
-cargo run --release -p gloprs-cli -- solve --default MODEL.mps
+Install the `gloprs` executable on your PATH:
+
+```sh
+cargo install --path .
 ```
 
-For the Rust API, build a `lp_data::lp_data::LinearProgram`, call `clean_up()`,
-and pass it to `glop::lp_solver::LPSolver::solve_result()`. The result borrows
-solution vectors, statuses, statistics, and certificates from the solver.
-Check its status before using numerical values. `export_basis()` and
-`import_basis()` support warm starts; disable preprocessing when importing a
-basis, as native GLOP recommends.
+With Netlib's `afiro.mps` in the current directory, solve it with:
 
-The CLI also supports `solve --dual MODEL.mps`, raw simplex with
-`solve MODEL.mps`, and model fingerprints with `inspect --tsv MODEL.mps`.
+```sh
+gloprs afiro.mps
+```
+
+```text
+File        : 'afiro.mps'
+Dimension   : 27 x 32
+Status      : OPTIMAL
+Objective   : -4.647531428571430e+02
+Iterations  : 5
+Primal error: 2.114974861910923e-14
+Dual error  : 5.551115123125783e-17
+```
+
+Inspect the model's statistics without solving it:
+
+```sh
+gloprs inspect afiro.mps
+```
+
+```text
+Number of rows                               : 27
+Number of variables in file                  : 32
+Number of entries (non-zeros)                : 83
+Number of entries in the objective           : 5
+Number of entries in the right-hand side     : 7
+Number of <= constraints                     : 19
+Number of >= constraints                     : 0
+Number of = constraints                      : 8
+Number of range constraints                  : 0
+Number of non-negative variables             : 32
+Number of boxed variables                    : 0
+Number of free variables                     : 0
+Number of fixed variables                    : 0
+Number of other variables                    : 0
+Number of integer variables                  : 0
+Number of binary variables                   : 0
+Number of non-binary integer variables       : 0
+Number of continuous variables               : 32
+```
+
+These outputs were captured from actual release-build runs on Netlib's AFIRO
+instance. Floating-point output and iteration counts may vary with platform or
+solver version. The model is not bundled with this repository; use your own copy
+of `afiro.mps`, or substitute its full path in the commands.
+
+To run without installing, place `afiro.mps` in the repository root and run:
+
+```sh
+cargo run --release -- afiro.mps
+cargo run --release -- inspect afiro.mps
+```
+
+Or use `cargo build --release` and run `./target/release/gloprs` directly.
+API examples are available with `cargo run --release --example public_lp`
+and `cargo run --release --example public_mps -- afiro.mps`.
+
+The Rust API is exported directly from the package root:
+
+```rust
+use gloprs::{LinearProgram, LPSolver, ProblemStatus, parse_mps_file};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let model: LinearProgram = parse_mps_file("afiro.mps")?;
+    let mut solver = LPSolver::new();
+    let result = solver.solve(&model);
+    if result.status == ProblemStatus::Optimal {
+        println!("Objective: {}", result.objective_value);
+    }
+    Ok(())
+}
+```
+
+See [API.md](API.md) for the public types, configuration, result lifetimes,
+error handling, and warm starts. Full Rust documentation is available with
+`cargo doc --no-deps --open`.
+
+Solving uses the default preprocessing and scaling pipeline. Use
+`gloprs --dual afiro.mps` to select dual simplex, or `gloprs --raw afiro.mps`
+to disable preprocessing and scaling (`--raw --dual` combines both). The former
+`--default` flag and `solve` subcommand remain accepted for compatibility.
+Use `gloprs --machine afiro.mps` for the compact machine-readable solve line,
+and `gloprs inspect --tsv afiro.mps` for tab-separated model fingerprints.
 MIP models are solved as LP relaxations; integrality is not enforced.
 Unsupported nondefault parameters are rejected with a named diagnostic.
 
 ## Workspace
 
 - `lp_data/`: models, sparse structures, MPS parsing and transformations.
-- `glop/`: numerical kernels, preprocessing and public solver API.
-- `cli/`: command-line solver and model inspection.
+- `src/`: the `gloprs` library and executable, numerical kernels and preprocessing.
+- `examples/`, `tests/`, `benches/`: API examples, regressions and benchmarks.
 - `tools/`: native reference adapters, regression validation and benchmarks.
 - `baselines/`: pinned correctness fixtures, not an experiment archive.
 

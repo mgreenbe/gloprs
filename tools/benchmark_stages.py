@@ -93,7 +93,7 @@ def main() -> None:
         parser.error("invalid trial, warmup, or repetition count")
     if options.rust.resolve() == RUST.resolve():
         subprocess.run(
-            ["cargo", "build", "--release", "-p", "gloprs-glop", "--example",
+            ["cargo", "build", "--release", "-p", "gloprs", "--example",
              "full_presolve_netlib"],
             cwd=ROOT, check=True,
         )

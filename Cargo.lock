@@ -95,15 +95,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gloprs-cli"
-version = "0.1.0"
-dependencies = [
- "gloprs-glop",
- "gloprs-lp-data",
-]
-
-[[package]]
-name = "gloprs-glop"
+name = "gloprs"
 version = "0.1.0"
 dependencies = [
  "flate2",
